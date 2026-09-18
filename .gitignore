@@ -1,0 +1,24 @@
+# 环境变量与本地配置
+.env
+.env.local
+.env.*.local
+
+# Cloudflare Wrangler 缓存
+.wrangler/
+.dev.vars
+
+# 依赖与包管理
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 编辑器与系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*
