@@ -21,6 +21,7 @@ const ICON_PATHS = {
     user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
     'log-out': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
     link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="1"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
     home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
 };
 
@@ -38,6 +39,35 @@ export function icon(name, filled = false) {
     }
     svg.innerHTML = ICON_PATHS[name] || '';
     return svg;
+}
+
+export function copyText(text) {
+    const str = String(text || '');
+    if (!str) return Promise.resolve(false);
+
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(str).then(() => true).catch(() => fallbackCopy(str));
+    }
+    return Promise.resolve(fallbackCopy(str));
+}
+
+function fallbackCopy(text) {
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-1000px';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+    } catch {
+        return false;
+    }
 }
 
 export function closeAllMenus() {
@@ -106,6 +136,18 @@ export function SongRow(song, handlers = {}) {
     }
     if (onAddDownloadList) {
         menuItems.push({ icon: 'plus', text: '添加下载队列', handler: onAddDownloadList });
+    }
+    if (song.id) {
+        menuItems.push({
+            icon: 'copy',
+            text: '复制内容 ID',
+            handler: (s) => {
+                copyText(s.id).then((ok) => {
+                    if (ok) Toast('已复制内容 ID：' + s.id, 'success', 1600);
+                    else Toast('复制失败', 'danger', 1600);
+                });
+            },
+        });
     }
 
     const menuPanel = el('div', { class: 'song-menu-panel' });
@@ -224,6 +266,22 @@ export function CollectionCard(item, handlers = {}) {
         onOpen?.(item);
     });
     menuPanel.appendChild(openBtn);
+
+    if (item.id) {
+        const copyBtn = el('button', { class: 'song-menu-item' },
+            icon('copy'),
+            el('span', { text: '复制内容 ID' })
+        );
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeAllMenus();
+            copyText(item.id).then((ok) => {
+                if (ok) Toast('已复制内容 ID：' + item.id, 'success', 1600);
+                else Toast('复制失败', 'danger', 1600);
+            });
+        });
+        menuPanel.appendChild(copyBtn);
+    }
 
     const menuTrigger = el('button', {
         class: 'collection-card__more',
