@@ -17,6 +17,7 @@ import {
     handleDownloadLyric,
 } from './src/views.js';
 import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown } from './src/components.js';
+import { initRouter } from './src/router.js';
 
 const api = new Meting(config);
 const player = new Player(api, config);
@@ -475,6 +476,13 @@ function bindBackButton() {
 
     backBtn.addEventListener('click', () => {
         const s = store.get().search;
+        if (!s.detail && !s.keyword) return;
+
+        const depth = (window.history.state && window.history.state.__depth) || 0;
+        if (depth > 0) {
+            window.history.back();
+            return;
+        }
 
         if (s.detail) {
             if (s.detail.prevDetail) {
@@ -1097,6 +1105,7 @@ bindQueueVisibility();
 bindAccountButton();
 ctx.openAccountModal = openAccountModal;
 
+initRouter(ctx);
 bindRouter();
 
 window.__app = ctx;
