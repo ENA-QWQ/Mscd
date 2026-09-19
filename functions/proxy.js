@@ -64,7 +64,7 @@ export async function onRequest(context) {
     const fetchInit = {
         method: request.method === 'HEAD' ? 'HEAD' : 'GET',
         headers: fetchHeaders,
-        redirect: 'follow',
+        redirect: 'manual',
     };
 
     let upstreamRes;
@@ -72,6 +72,10 @@ export async function onRequest(context) {
         upstreamRes = await fetch(targetUrl.toString(), fetchInit);
     } catch (e) {
         return jsonError('Fetch error: ' + (e && e.message ? e.message : String(e)), 502);
+    }
+
+    if ([301, 302, 303, 307, 308].includes(upstreamRes.status)) {
+        return jsonError('Redirects to another URL are not allowed.', 502);
     }
 
     const responseHeaders = new Headers();
@@ -111,8 +115,14 @@ function jsonError(message, status) {
 }
 
 function isLocalAddress(hostname) {
-    if (!hostname) return false;
-    if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|::1)$/i.test(hostname)) return true;
-    if (/^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(hostname)) return true;
+    if (!hostname) return true;
+    const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (host === 'localhost' || host.endsWith('.localhost')) return true;
+    if (/^(0|127)\.\d+\.\d+\.\d+$/.test(host)) return true;
+    if (/^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)\d+\.\d+/.test(host)) return true;
+    if (/^0x[0-9a-f]+$/.test(host) || /^\d+$/.test(host)) return true;
+    if (host === '::' || host === '::1' || /^0*:0*:0*:0*:0*:0*:0*:0*1?$/.test(host)) return true;
+    if (/^::ffff:/.test(host)) return true;
+    if (/^(fe[89ab][0-9a-f]:|f[cd][0-9a-f]{2}:)/.test(host)) return true;
     return false;
 }
