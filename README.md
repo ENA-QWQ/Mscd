@@ -1,3 +1,12 @@
+<div align="center">
+<img src="https://readme-typing-svg.demolab.com?font=Poiret+One&size=90&duration=1200&pause=0&repeat=false&color=2D2D2D&center=true&vCenter=true&width=600&height=140&lines=MSCD" alt="MSCD" />
+<br />
+<a href="https://github.com/ENA-QWQ/cloudmusic_downloader/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-2d2d2d?style=flat-square" alt="License" /></a>
+<a href="https://pages.cloudflare.com/"><img src="https://img.shields.io/badge/Deploy-Cloudflare%20Pages-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Pages" /></a>
+<img src="https://img.shields.io/badge/Build-None-brightgreen?style=flat-square" alt="No Build" />
+<img src="https://img.shields.io/badge/Module-ES%20Modules-F7DF1E?style=flat-square&logo=javascript&logoColor=black" alt="ES Modules" />
+</div>
+
 # MSCD
 
 基于 Meting API / NeteaseCloudMusicApi 兼容接口的纯前端音乐播放与下载器，部署于 Cloudflare Pages，使用 Pages Functions 作为边缘代理层。
