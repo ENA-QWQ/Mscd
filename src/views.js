@@ -139,7 +139,7 @@ function openDownloadSettingsModal(ctx, options) {
     });
 }
 
-function openDownloadOptionsModal(song, ctx, mode = 'now') {
+export function openDownloadOptionsModal(song, ctx, mode = 'now') {
     const { store } = ctx;
     const isAddMode = mode === 'addToList';
     const settings = store.get().settings;
@@ -168,7 +168,7 @@ function openDownloadOptionsModal(song, ctx, mode = 'now') {
     });
 }
 
-function openBatchAddModal(songs, ctx, mode) {
+export function openBatchAddModal(songs, ctx, mode) {
     const { store } = ctx;
     const settings = store.get().settings;
 
@@ -245,7 +245,7 @@ async function startSingleDownload(song, quality, ctx) {
     }
 }
 
-async function handleDownloadLyric(song, ctx) {
+export async function handleDownloadLyric(song, ctx) {
     const { downloader } = ctx;
     try {
         await downloader.downloadLyric(song);
@@ -293,6 +293,7 @@ export function SearchView(ctx) {
     const { store, player, api } = ctx;
     const root = el('div', { class: 'search-view' });
     let lastSearch = null;
+    let homeInstance = null;
 
     function openArtistDetail(meta) {
         return ctx.searchActions.openArtist(meta.id, meta);
@@ -854,6 +855,10 @@ export function SearchView(ctx) {
         lastSearch = search;
 
         if (search.detail) {
+            if (homeInstance) {
+                homeInstance.destroy?.();
+                homeInstance = null;
+            }
             tabsEl = null;
             bodyEl = null;
             root.innerHTML = '';
@@ -865,17 +870,26 @@ export function SearchView(ctx) {
             return;
         }
 
+        if (!search.keyword) {
+            if (!homeInstance) {
+                homeInstance = HomeContent(ctx);
+            }
+            tabsEl = null;
+            bodyEl = null;
+            root.innerHTML = '';
+            root.appendChild(homeInstance.node);
+            store.setVisibleTracks([]);
+            return;
+        }
+
+        if (homeInstance) {
+            homeInstance.destroy?.();
+            homeInstance = null;
+        }
+
         if (!tabsEl) {
             root.innerHTML = '';
             ensureShell();
-        }
-
-        if (!search.keyword) {
-            tabsEl.classList.add('hidden');
-            bodyEl.innerHTML = '';
-            bodyEl.appendChild(EmptyState('输入关键词开始搜索', 'search'));
-            store.setVisibleTracks([]);
-            return;
         }
 
         tabsEl.classList.remove('hidden');
@@ -895,7 +909,13 @@ export function SearchView(ctx) {
 
     return {
         node: root,
-        destroy: () => unsubscribe(),
+        destroy: () => {
+            if (homeInstance) {
+                homeInstance.destroy?.();
+                homeInstance = null;
+            }
+            unsubscribe();
+        },
     };
 }
 
@@ -2789,7 +2809,7 @@ export function SettingsView(ctx) {
     };
 }
 
-function openParseModal(ctx) {
+export function openParseModal(ctx) {
     const { api, searchActions } = ctx;
 
     const TYPE_OPTIONS = [
@@ -2929,7 +2949,7 @@ function openParseModal(ctx) {
     });
 }
 
-export function HomeView(ctx) {
+function HomeContent(ctx) {
     const { store } = ctx;
     const root = el('div', { class: 'home-view' });
 
@@ -2945,7 +2965,6 @@ export function HomeView(ctx) {
         el('div', { class: 'home-action__text', text: '搜索内容' })
     );
     searchBtn.addEventListener('click', () => {
-        store.update({ view: 'search' });
         requestAnimationFrame(() => {
             const input = document.getElementById('search-input');
             if (input) {

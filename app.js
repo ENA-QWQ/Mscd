@@ -4,7 +4,6 @@ import { store } from './src/store.js';
 import { Player } from './src/player.js';
 import { Downloader } from './src/downloader.js';
 import {
-    HomeView,
     SearchView,
     QueueView,
     DownloadsView,
@@ -12,6 +11,10 @@ import {
     SettingsView,
     LikedView,
     MyPlaylistsView,
+    openParseModal,
+    openDownloadOptionsModal,
+    openBatchAddModal,
+    handleDownloadLyric,
 } from './src/views.js';
 import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown } from './src/components.js';
 
@@ -179,6 +182,24 @@ const searchActions = {
         }
     },
 
+    resetToHome() {
+        const input = document.getElementById('search-input');
+        if (input) input.value = '';
+        store.update({
+            search: {
+                keyword: '',
+                type: '1',
+                page: 1,
+                total: 0,
+                results: emptyResults(),
+                selected: new Set(),
+                loading: false,
+                error: null,
+                detail: null,
+            },
+        });
+    },
+
     async openDetail(kind, meta, options = {}) {
         const s = store.get().search;
         const keepPrevDetail = options.keepPrevDetail === true;
@@ -257,6 +278,7 @@ const searchActions = {
                     albumsPage: 1,
                     loading: true,
                     error: null,
+                    prevDetail: s.detail || null,
                 },
             },
         });
@@ -381,6 +403,7 @@ const searchActions = {
 };
 
 const ctx = { api, store, player, downloader, config, searchActions };
+ctx.openParseModal = () => openParseModal(ctx);
 
 function bindSidebar() {
     const nav = document.getElementById('side-nav');
@@ -452,16 +475,25 @@ function bindBackButton() {
 
     backBtn.addEventListener('click', () => {
         const s = store.get().search;
-        if (!s.detail) return;
-        if (s.detail.prevDetail) {
-            store.update({ search: { ...s, detail: s.detail.prevDetail } });
-        } else {
-            store.update({ search: { ...s, detail: null } });
+
+        if (s.detail) {
+            if (s.detail.prevDetail) {
+                store.update({ search: { ...s, detail: s.detail.prevDetail } });
+            } else {
+                store.update({ search: { ...s, detail: null } });
+            }
+            return;
+        }
+
+        if (s.keyword) {
+            searchActions.resetToHome();
         }
     });
 
     store.subscribe((state) => {
-        backBtn.classList.toggle('hidden', !state.search.detail);
+        const s = state.search;
+        const show = state.view === 'search' && (!!s.detail || !!s.keyword);
+        backBtn.classList.toggle('hidden', !show);
     });
 }
 
@@ -486,6 +518,8 @@ function bindPlayerBar() {
     const nextBtn = document.getElementById('next-btn');
     const modeBtn = document.getElementById('mode-btn');
     const queueBtn = document.getElementById('queue-btn');
+    const downloadAudioBtn = document.getElementById('download-audio-btn');
+    const downloadLyricBtn = document.getElementById('download-lyric-btn');
     const progressEl = document.getElementById('player-progress');
     const progressBar = document.getElementById('player-progress-bar');
     const currentEl = document.getElementById('player-current');
@@ -532,6 +566,30 @@ function bindPlayerBar() {
         store.update({ view: 'queue' });
     });
 
+    if (downloadAudioBtn) {
+        downloadAudioBtn.addEventListener('click', () => {
+            const q = store.get().queue;
+            const currentSong = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+            if (!currentSong) {
+                Toast('当前没有播放歌曲', 'warning', 1600);
+                return;
+            }
+            openDownloadOptionsModal(currentSong, ctx, 'now');
+        });
+    }
+
+    if (downloadLyricBtn) {
+        downloadLyricBtn.addEventListener('click', () => {
+            const q = store.get().queue;
+            const currentSong = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+            if (!currentSong) {
+                Toast('当前没有播放歌曲', 'warning', 1600);
+                return;
+            }
+            handleDownloadLyric(currentSong, ctx);
+        });
+    }
+
     progressEl.addEventListener('click', (e) => {
         const rect = progressEl.getBoundingClientRect();
         const percent = (e.clientX - rect.left) / rect.width;
@@ -567,6 +625,9 @@ function bindPlayerBar() {
     store.subscribe((state) => {
         const q = state.queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+
+        if (downloadAudioBtn) downloadAudioBtn.disabled = !song;
+        if (downloadLyricBtn) downloadLyricBtn.disabled = !song;
 
         if (song) {
             titleEl.textContent = song.title || '未知歌曲';
@@ -785,6 +846,14 @@ function bindAccountButton() {
 
     function render() {
         host.innerHTML = '';
+
+        const parseBtn = document.createElement('button');
+        parseBtn.className = 'ena-btn ena-btn--icon parse-btn';
+        parseBtn.title = '内容 ID 解析';
+        parseBtn.appendChild(icon('link'));
+        parseBtn.addEventListener('click', () => ctx.openParseModal());
+        host.appendChild(parseBtn);
+
         const account = store.get().account;
         host.appendChild(AccountButton({
             account,
@@ -887,28 +956,9 @@ function bindMultiSelectBar() {
         }
 
         if (action === 'add-download') {
-            const downloads = [...store.get().downloads];
-            const seen = new Set(downloads.map((d) => d.id).filter(Boolean));
-            let added = 0;
-            for (const song of selection) {
-                if (!song.id || seen.has(song.id)) continue;
-                downloads.push(song);
-                seen.add(song.id);
-                added++;
-            }
-            if (!added) {
-                Toast('所选歌曲已全部在下载列表中', 'warning', 1600);
-                return;
-            }
-            store.update({ downloads });
-            store.persist();
-            Toast(`已添加 ${added} 首到下载列表`, 'success', 1600);
-            store.clearSelection();
+            openBatchAddModal(selection, ctx, 'append');
         } else if (action === 'replace-download') {
-            store.update({ downloads: [...selection] });
-            store.persist();
-            Toast(`已替换下载列表（${selection.length} 首）`, 'success', 1600);
-            store.clearSelection();
+            openBatchAddModal(selection, ctx, 'replace');
         } else if (action === 'add-playlist') {
             const q = store.get().queue;
             const tracks = [...q.tracks];
@@ -993,9 +1043,6 @@ function mountView(viewName) {
 
     let instance;
     switch (viewName) {
-        case 'home':
-            instance = HomeView(ctx);
-            break;
         case 'search':
             instance = SearchView(ctx);
             break;

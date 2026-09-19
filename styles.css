@@ -1118,6 +1118,12 @@ body.has-selection .player-bar {
     box-shadow: 0 12px 40px rgba(0, 0, 0, .18);
     clip-path: inset(0 0 100% 0);
     transition: clip-path .3s var(--ease);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.ena-modal__panel::-webkit-scrollbar {
+    display: none;
 }
 
 .ena-modal.is-open .ena-modal__panel {
@@ -3643,6 +3649,10 @@ body.has-selection .multi-select-bar {
         display: none;
     }
 
+    .top-bar-actions .parse-btn {
+        display: none;
+    }
+
     .top-bar-left {
         flex-shrink: 0;
         gap: 0;
@@ -4522,12 +4532,21 @@ body.has-selection .multi-select-bar {
     }
 }
 
+.search-view {
+    min-height: 100%;
+}
+
+.search-view:has(> .home-view) {
+    display: flex;
+    flex-direction: column;
+}
+
 .home-view {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 100%;
+    flex: 1;
     padding: 40px 20px;
     text-align: center;
 }

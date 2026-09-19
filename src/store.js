@@ -9,7 +9,7 @@ const STORAGE_KEY = 'meting-app-state';
 
 function createInitialState() {
     return {
-        view: 'home',
+        view: 'search',
 
         account: {
             uid: '',
