@@ -353,6 +353,7 @@ body.queue-empty:not(.has-selection) .layout {
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     overflow: visible;
+    min-width: 0;
     transition: transform .35s var(--ease), opacity .3s var(--ease);
 }
 
@@ -3507,6 +3508,7 @@ body.has-selection .multi-select-bar {
         justify-content: space-between;
         gap: 8px;
         padding: 0 10px;
+        min-width: 0;
     }
 
     .player-info {
@@ -5136,11 +5138,12 @@ body.playback-open {
     }
 
     .playback-overlay__inner {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr);
         gap: 12px;
         height: calc(100% - 52px);
         padding: 0 16px 12px;
+        min-width: 0;
     }
 
     .playback-overlay__left {
@@ -5149,7 +5152,8 @@ body.playback-open {
         align-items: center;
         gap: 12px;
         left: 0;
-        overflow: visible;
+        overflow: hidden;
+        min-width: 0;
     }
 
     .playback-cover {
@@ -5170,6 +5174,7 @@ body.playback-open {
         text-align: left;
         flex: 1;
         min-width: 0;
+        overflow: hidden;
         gap: 2px;
     }
 
@@ -5179,6 +5184,8 @@ body.playback-open {
 
     .playback-title-row {
         gap: 6px;
+        min-width: 0;
+        overflow: hidden;
     }
 
     .playback-artist {
