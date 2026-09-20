@@ -18,6 +18,7 @@ import {
 } from './src/views.js';
 import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown } from './src/components.js';
 import { initRouter } from './src/router.js';
+import { initPlaybackView } from './src/playback-view.js';
 
 const api = new Meting(config);
 const player = new Player(api, config);
@@ -1106,6 +1107,7 @@ bindAccountButton();
 ctx.openAccountModal = openAccountModal;
 
 initRouter(ctx);
+initPlaybackView(ctx);
 bindRouter();
 
 window.__app = ctx;

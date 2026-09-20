@@ -57,6 +57,8 @@ function createInitialState() {
 
         visibleTracks: [],
 
+        playbackOpen: false,
+
         downloadTasks: [],
 
         downloadProgress: {
