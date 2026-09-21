@@ -4831,17 +4831,69 @@ body.playback-open {
     transition: background-image .4s var(--ease);
 }
 
+.playback-overlay__glow {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+    filter: blur(80px);
+    opacity: .75;
+}
+
+.playback-overlay__glow-blob {
+    position: absolute;
+    width: 60vw;
+    height: 60vw;
+    max-width: 720px;
+    max-height: 720px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity .8s var(--ease), background .8s var(--ease);
+    animation: glow-drift 22s ease-in-out infinite;
+}
+
+.playback-overlay__glow-blob:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.playback-overlay__glow-blob:nth-child(2) {
+    animation-delay: -7s;
+    animation-duration: 26s;
+}
+
+.playback-overlay__glow-blob:nth-child(3) {
+    animation-delay: -14s;
+    animation-duration: 30s;
+}
+
+@keyframes glow-drift {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+    33% {
+        transform: translate(-42%, -58%) scale(1.12);
+    }
+    66% {
+        transform: translate(-58%, -42%) scale(0.94);
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
 .playback-overlay__scrim {
     position: absolute;
     inset: 0;
     background: var(--bg-overlay);
-    z-index: 1;
+    z-index: 2;
     pointer-events: none;
 }
 
 .playback-overlay__top {
     position: relative;
-    z-index: 3;
+    z-index: 4;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -4864,7 +4916,7 @@ body.playback-open {
 
 .playback-overlay__inner {
     position: relative;
-    z-index: 2;
+    z-index: 3;
     display: grid;
     grid-template-columns: 380px minmax(0, 1fr);
     gap: 48px;

@@ -9,6 +9,14 @@ export function initPlaybackView(ctx) {
     const { store, player } = ctx;
 
     const bg = el('div', { class: 'playback-overlay__bg' });
+
+    const glowBlobs = [
+        el('div', { class: 'playback-overlay__glow-blob' }),
+        el('div', { class: 'playback-overlay__glow-blob' }),
+        el('div', { class: 'playback-overlay__glow-blob' }),
+    ];
+    const glow = el('div', { class: 'playback-overlay__glow' }, ...glowBlobs);
+
     const scrim = el('div', { class: 'playback-overlay__scrim' });
 
     const closeBtn = el('button', {
@@ -42,7 +50,7 @@ export function initPlaybackView(ctx) {
 
     const inner = el('div', { class: 'playback-overlay__inner' }, leftEl, rightEl);
 
-    const overlay = el('div', { class: 'playback-overlay' }, bg, scrim, topBar, inner);
+    const overlay = el('div', { class: 'playback-overlay' }, bg, glow, scrim, topBar, inner);
 
     document.body.appendChild(overlay);
 
@@ -58,6 +66,7 @@ export function initPlaybackView(ctx) {
     let dragStartY = 0;
     let dragStartScrollY = 0;
     let switchingTimer = null;
+    let glowToken = 0;
 
     function createCoverPlaceholder() {
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -87,11 +96,137 @@ export function initPlaybackView(ctx) {
         }
     }
 
+    function resetGlow() {
+        for (const blob of glowBlobs) {
+            blob.style.background = '';
+            blob.style.opacity = '0';
+        }
+    }
+
+    function proxiedCover(url) {
+        if (!url) return '';
+        if (!ctx.config || !ctx.config.proxy) return url;
+        return ctx.config.proxy + encodeURIComponent(url);
+    }
+
+    function extractPalette(imgUrl) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                try {
+                    const size = 32;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = size;
+                    canvas.height = size;
+                    const cx = canvas.getContext('2d');
+                    cx.drawImage(img, 0, 0, size, size);
+                    const data = cx.getImageData(0, 0, size, size).data;
+
+                    const buckets = new Map();
+                    const step = 8;
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        const a = data[i + 3];
+                        if (a < 128) continue;
+
+                        const max = Math.max(r, g, b);
+                        const min = Math.min(r, g, b);
+                        const sat = max === 0 ? 0 : (max - min) / max;
+                        const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                        if (sat < 0.15) continue;
+                        if (lum < 0.1 || lum > 0.92) continue;
+
+                        const key = `${Math.round(r / step) * step},${Math.round(g / step) * step},${Math.round(b / step) * step}`;
+                        const entry = buckets.get(key) || { r: 0, g: 0, b: 0, count: 0, sat: 0 };
+                        entry.r += r;
+                        entry.g += g;
+                        entry.b += b;
+                        entry.count += 1;
+                        entry.sat += sat;
+                        buckets.set(key, entry);
+                    }
+
+                    const list = [];
+                    for (const entry of buckets.values()) {
+                        list.push({
+                            r: Math.round(entry.r / entry.count),
+                            g: Math.round(entry.g / entry.count),
+                            b: Math.round(entry.b / entry.count),
+                            count: entry.count,
+                            sat: entry.sat / entry.count,
+                        });
+                    }
+                    list.sort((a, b) => (b.count * b.sat) - (a.count * a.sat));
+
+                    const picked = [];
+                    for (const c of list) {
+                        let tooClose = false;
+                        for (const p of picked) {
+                            const dr = c.r - p.r;
+                            const dg = c.g - p.g;
+                            const db = c.b - p.b;
+                            if (Math.sqrt(dr * dr + dg * dg + db * db) < 60) {
+                                tooClose = true;
+                                break;
+                            }
+                        }
+                        if (!tooClose) picked.push(c);
+                        if (picked.length >= 3) break;
+                    }
+
+                    while (picked.length < 3) {
+                        picked.push({ r: 120, g: 120, b: 120 });
+                    }
+
+                    resolve(picked);
+                } catch {
+                    resolve([]);
+                }
+            };
+            img.onerror = () => resolve([]);
+            img.src = proxiedCover(imgUrl);
+        });
+    }
+
+    async function updateGlow(picUrl) {
+        const token = ++glowToken;
+        const palette = await extractPalette(picUrl);
+        if (token !== glowToken) return;
+
+        if (!palette.length) {
+            resetGlow();
+            return;
+        }
+
+        const positions = [
+            { x: '20%', y: '25%' },
+            { x: '78%', y: '35%' },
+            { x: '50%', y: '80%' },
+        ];
+
+        palette.forEach((c, i) => {
+            const blob = glowBlobs[i];
+            if (!blob) return;
+            const pos = positions[i] || positions[0];
+            const color = `rgba(${c.r}, ${c.g}, ${c.b}, 0.75)`;
+            blob.style.background = `radial-gradient(circle at center, ${color} 0%, rgba(${c.r}, ${c.g}, ${c.b}, 0) 70%)`;
+            blob.style.left = pos.x;
+            blob.style.top = pos.y;
+            blob.style.opacity = '1';
+        });
+    }
+
     function renderBg(song) {
         if (song && song.pic) {
             bg.style.backgroundImage = `url("${song.pic}")`;
+            updateGlow(song.pic);
         } else {
             bg.style.backgroundImage = '';
+            glowToken++;
+            resetGlow();
         }
     }
 
@@ -153,6 +288,8 @@ export function initPlaybackView(ctx) {
             });
             lyricLines.appendChild(row);
         });
+
+        requestAnimationFrame(updateSpacerHeight);
     }
 
     function scrollLineIntoCenter(row, smooth) {
@@ -311,8 +448,6 @@ export function initPlaybackView(ctx) {
     player.on('timeupdate', handleTimeUpdate);
     player.on('trackchange', (song) => handleSongChange(song));
 
-    window.addEventListener('resize', updateSpacerHeight);
-
     let lastSongKey = '';
 
     store.subscribe((state) => {
@@ -334,6 +469,8 @@ export function initPlaybackView(ctx) {
         }
     });
 
+    window.addEventListener('resize', updateSpacerHeight);
+
     const playerInfo = document.querySelector('.player-info');
     if (playerInfo) {
         playerInfo.style.cursor = 'pointer';
@@ -348,6 +485,7 @@ export function initPlaybackView(ctx) {
         node: overlay,
         destroy: () => {
             if (switchingTimer) clearTimeout(switchingTimer);
+            if (followTimer) clearTimeout(followTimer);
             window.removeEventListener('resize', updateSpacerHeight);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         },
