@@ -430,9 +430,16 @@ export function initPlaybackView(ctx) {
         isDragging = false;
     }
 
-    closeBtn.addEventListener('click', () => {
+    function closePlayback() {
+        const depth = (window.history.state && window.history.state.__depth) || 0;
+        if (depth > 0) {
+            window.history.back();
+            return;
+        }
         store.update({ playbackOpen: false });
-    });
+    }
+
+    closeBtn.addEventListener('click', closePlayback);
 
     lyricEl.addEventListener('wheel', onWheel, { passive: false });
     lyricEl.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -441,7 +448,7 @@ export function initPlaybackView(ctx) {
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && store.get().playbackOpen) {
-            store.update({ playbackOpen: false });
+            closePlayback();
         }
     });
 

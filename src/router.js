@@ -8,9 +8,14 @@ function parseUrl() {
     const id = seg[1] || '';
     const params = new URLSearchParams(query || '');
 
+    if (name === 'song') {
+        if (!id) return { kind: 'home' };
+        return { kind: 'playback', songId: decodeURIComponent(id) };
+    }
+
     if (name === 'artist' || name === 'album' || name === 'playlist') {
         if (!id) return { kind: 'home' };
-        return { kind: 'detail', type: name, id };
+        return { kind: 'detail', type: name, id: decodeURIComponent(id) };
     }
 
     if (name === 'search') {
@@ -32,11 +37,18 @@ function parseUrl() {
 }
 
 function buildUrl(state) {
+    if (state.playbackOpen) {
+        const q = state.queue;
+        const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+        const id = song?.id;
+        if (id) return `#/song/${encodeURIComponent(id)}`;
+    }
+
     const detail = state.search.detail;
     if (detail && detail.id) {
-        if (detail.kind === 'artist') return `#/artist/${detail.id}`;
-        if (detail.kind === 'album') return `#/album/${detail.id}`;
-        if (detail.kind === 'playlist') return `#/playlist/${detail.id}`;
+        if (detail.kind === 'artist') return `#/artist/${encodeURIComponent(detail.id)}`;
+        if (detail.kind === 'album') return `#/album/${encodeURIComponent(detail.id)}`;
+        if (detail.kind === 'playlist') return `#/playlist/${encodeURIComponent(detail.id)}`;
     }
 
     if (state.view === 'search') {
@@ -61,15 +73,62 @@ export function initRouter(ctx) {
     const { store, searchActions } = ctx;
     let suppress = false;
 
-    function applyFromUrl() {
+    async function openPlaybackById(id) {
+        const { api, player } = ctx;
+        const state = store.get();
+        const q = state.queue;
+        const index = q.tracks.findIndex((t) => String(t.id) === String(id));
+
+        if (index >= 0) {
+            if (
+                index === q.currentIndex &&
+                player.audio &&
+                player.audio.src &&
+                !player.audio.paused
+            ) {
+                store.update({ playbackOpen: true });
+                return true;
+            }
+            store.update({ playbackOpen: true });
+            await player.loadAndPlay(index, false);
+            return true;
+        }
+
+        try {
+            const song = await api.song(id);
+            if (!song) return false;
+            store.update({ playbackOpen: true });
+            await player.setQueue([song], 0, false);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    async function applyFromUrl() {
         const parsed = parseUrl();
         suppress = true;
+
         try {
+            if (parsed.kind !== 'playback' && store.get().playbackOpen) {
+                store.update({ playbackOpen: false });
+            }
+
             if (parsed.kind === 'home') {
                 if (store.get().view !== 'search') {
                     store.update({ view: 'search' });
                 }
                 searchActions.resetToHome();
+                return;
+            }
+
+            if (parsed.kind === 'playback') {
+                const ok = await openPlaybackById(parsed.songId);
+                if (!ok) {
+                    history.replaceState({ __app: true, __depth: 0 }, '', '#/');
+                    store.update({ playbackOpen: false, view: 'search' });
+                    searchActions.resetToHome();
+                }
                 return;
             }
 
