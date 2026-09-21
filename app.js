@@ -16,7 +16,7 @@ import {
     openBatchAddModal,
     handleDownloadLyric,
 } from './src/views.js';
-import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown } from './src/components.js';
+import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong } from './src/components.js';
 import { initRouter } from './src/router.js';
 import { initPlaybackView } from './src/playback-view.js';
 
@@ -529,6 +529,7 @@ function bindPlayerBar() {
     const queueBtn = document.getElementById('queue-btn');
     const downloadAudioBtn = document.getElementById('download-audio-btn');
     const downloadLyricBtn = document.getElementById('download-lyric-btn');
+    const shareSongBtn = document.getElementById('share-song-btn');
     const progressEl = document.getElementById('player-progress');
     const progressBar = document.getElementById('player-progress-bar');
     const currentEl = document.getElementById('player-current');
@@ -574,6 +575,18 @@ function bindPlayerBar() {
     queueBtn.addEventListener('click', () => {
         store.update({ view: 'queue' });
     });
+
+    if (shareSongBtn) {
+        shareSongBtn.addEventListener('click', () => {
+            const q = store.get().queue;
+            const currentSong = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+            if (!currentSong) {
+                Toast('当前没有播放歌曲', 'warning', 1600);
+                return;
+            }
+            shareSong(currentSong);
+        });
+    }
 
     if (downloadAudioBtn) {
         downloadAudioBtn.addEventListener('click', () => {
@@ -637,6 +650,7 @@ function bindPlayerBar() {
 
         if (downloadAudioBtn) downloadAudioBtn.disabled = !song;
         if (downloadLyricBtn) downloadLyricBtn.disabled = !song;
+        if (shareSongBtn) shareSongBtn.disabled = !song;
 
         if (song) {
             titleEl.textContent = song.title || '未知歌曲';

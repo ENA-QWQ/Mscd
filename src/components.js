@@ -70,6 +70,24 @@ function fallbackCopy(text) {
     }
 }
 
+export function shareSong(song) {
+    if (!song || !song.id) {
+        Toast('该歌曲暂不支持分享', 'warning', 1600);
+        return;
+    }
+
+    const base = window.location.origin + window.location.pathname;
+    const url = base + '#/song/' + encodeURIComponent(song.id);
+    const title = song.title || '未知歌曲';
+    const artist = song.artist || '未知歌手';
+    const text = `【分享音乐 ${title} - ${artist}】${url}`;
+
+    copyText(text).then((ok) => {
+        if (ok) Toast('已复制分享信息', 'success', 1600);
+        else Toast('复制失败', 'danger', 1600);
+    });
+}
+
 export function closeAllMenus() {
     document.querySelectorAll('.song-menu.is-open').forEach((m) => {
         m.classList.remove('is-open');
@@ -147,6 +165,11 @@ export function SongRow(song, handlers = {}) {
                     else Toast('复制失败', 'danger', 1600);
                 });
             },
+        });
+        menuItems.push({
+            icon: 'link',
+            text: '分享',
+            handler: (s) => shareSong(s),
         });
     }
 
