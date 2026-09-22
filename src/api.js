@@ -552,6 +552,41 @@ export class Meting {
         return adapter;
     }
 
+    async enrichSongsWithAlbum(songs) {
+        if (!Array.isArray(songs) || !songs.length) return songs;
+
+        const needs = songs.filter((s) => s && s.id && !s.album);
+        if (!needs.length) return songs;
+
+        const netease = this.adapters && this.adapters.netease;
+        if (!netease || typeof netease.request !== 'function') return songs;
+
+        const albumById = new Map();
+        const ids = needs.map((s) => String(s.id));
+        const BATCH = 100;
+
+        for (let i = 0; i < ids.length; i += BATCH) {
+            const batch = ids.slice(i, i + BATCH);
+            try {
+                const data = await netease.request('/song/detail', { ids: batch.join(',') });
+                const list = (data && data.songs) || [];
+                for (const ds of list) {
+                    const albumName = ds?.al?.name || ds?.album?.name || '';
+                    if (albumName) albumById.set(String(ds.id), albumName);
+                }
+            } catch {}
+        }
+
+        if (!albumById.size) return songs;
+
+        return songs.map((s) => {
+            if (s && s.id && !s.album && albumById.has(String(s.id))) {
+                return { ...s, album: albumById.get(String(s.id)) };
+            }
+            return s;
+        });
+    }
+
     async search(keyword, options = {}) {
         const adapter = this.pick('search');
         const searchType = options.searchType ?? 1;
@@ -559,7 +594,10 @@ export class Meting {
     }
 
     async song(id, options = {}) {
-        return this.pick('song').song(id, options);
+        const song = await this.pick('song').song(id, options);
+        if (!song || song.album) return song;
+        const enriched = await this.enrichSongsWithAlbum([song]);
+        return enriched[0] || song;
     }
 
     async resolveAudio(song, quality) {
@@ -577,11 +615,13 @@ export class Meting {
     }
 
     async playlist(id) {
-        return this.pick('playlist').playlist(id);
+        const songs = await this.pick('playlist').playlist(id);
+        return await this.enrichSongsWithAlbum(songs);
     }
 
     async album(id) {
-        return this.pick('album').album(id);
+        const songs = await this.pick('album').album(id);
+        return await this.enrichSongsWithAlbum(songs);
     }
 
     async albumInfo(id) {

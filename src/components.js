@@ -1,4 +1,6 @@
 import { el } from './dom.js';
+import { store } from './store.js';
+import { renderShareCard, sanitizeFilename } from './share-card.js';
 
 const ICON_PATHS = {
     play: '<polygon points="6 4 20 12 6 20"/>',
@@ -23,6 +25,7 @@ const ICON_PATHS = {
     link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="1"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
     home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+    'share-card': '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
 };
 
 export function icon(name, filled = false) {
@@ -85,6 +88,118 @@ export function shareSong(song) {
     copyText(text).then((ok) => {
         if (ok) Toast('已复制分享信息', 'success', 1600);
         else Toast('复制失败', 'danger', 1600);
+    });
+}
+
+export function openShareCardModal(song) {
+    if (!song || !song.id) {
+        Toast('该歌曲暂不支持生成分享图', 'warning', 1600);
+        return;
+    }
+
+    const account = store.get().account;
+    const username = account.connected && account.nickname ? account.nickname : '匿名用户';
+    const shareUrl = window.location.origin + window.location.pathname + '#/song/' + encodeURIComponent(song.id);
+
+    const preview = el('div', { class: 'share-card-modal__preview' });
+    const loading = el('div', { class: 'share-card-modal__loading' },
+        el('div', { class: 'loading-bars' },
+            el('span'), el('span'), el('span')
+        ),
+        el('p', { text: '正在生成分享图…' })
+    );
+    preview.appendChild(loading);
+
+    const body = el('div', { class: 'share-card-modal' }, preview);
+
+    let blobRef = null;
+    let blobUrl = '';
+
+    const filename = sanitizeFilename(`${song.title || '分享'} - ${song.artist || '未知歌手'}`) + '.png';
+
+    async function enrichSong(s) {
+        if (s.album) return s;
+        const app = typeof window !== 'undefined' ? window.__app : null;
+        if (!app || !app.api || typeof app.api.song !== 'function') return s;
+        try {
+            const detail = await app.api.song(s.id);
+            if (detail && detail.album) {
+                return { ...s, album: detail.album };
+            }
+        } catch {}
+        return s;
+    }
+
+    (async () => {
+        const enriched = await enrichSong(song);
+        const blob = await renderShareCard(enriched, { username, shareUrl });
+        blobRef = blob;
+        blobUrl = URL.createObjectURL(blob);
+        const img = document.createElement('img');
+        img.src = blobUrl;
+        img.alt = '分享图预览';
+        preview.innerHTML = '';
+        preview.appendChild(img);
+    })().catch((err) => {
+        preview.innerHTML = '';
+        preview.appendChild(el('div', { class: 'share-card-modal__loading' },
+            el('p', { text: '生成失败：' + (err.message || '未知错误') })
+        ));
+    });
+
+    function saveBlob() {
+        if (!blobRef || !blobUrl) {
+            Toast('图片还在生成中，请稍候', 'warning', 1600);
+            return;
+        }
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        Toast('已保存分享图', 'success', 1600);
+    }
+
+    async function shareOrSaveBlob() {
+        if (!blobRef || !blobUrl) {
+            Toast('图片还在生成中，请稍候', 'warning', 1600);
+            return;
+        }
+
+        const file = new File([blobRef], filename, { type: 'image/png' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: song.title || '分享歌曲',
+                    text: `${song.title || ''} - ${song.artist || ''}`,
+                });
+                return;
+            } catch (err) {
+                if (err && err.name === 'AbortError') return;
+            }
+        }
+
+        saveBlob();
+    }
+
+    openModal({
+        title: '分享图片',
+        body,
+        confirmText: '保存图片',
+        cancelText: '关闭',
+        onConfirm: () => {
+            shareOrSaveBlob();
+            return false;
+        },
+        onCancel: () => {
+            if (blobUrl) {
+                URL.revokeObjectURL(blobUrl);
+                blobUrl = '';
+            }
+        },
     });
 }
 
@@ -170,6 +285,11 @@ export function SongRow(song, handlers = {}) {
             icon: 'link',
             text: '分享',
             handler: (s) => shareSong(s),
+        });
+        menuItems.push({
+            icon: 'share-card',
+            text: '生成分享图',
+            handler: (s) => openShareCardModal(s),
         });
     }
 
