@@ -105,8 +105,27 @@ export function initRouter(ctx) {
         }
     }
 
+    let pendingKey = '';
+
     async function applyFromUrl() {
         const parsed = parseUrl();
+
+        let key;
+        if (parsed.kind === 'detail') {
+            key = `detail:${parsed.type}:${parsed.id}`;
+        } else if (parsed.kind === 'playback') {
+            key = `playback:${parsed.songId}`;
+        } else if (parsed.kind === 'search') {
+            key = `search:${parsed.keyword}:${parsed.type}:${parsed.page}`;
+        } else if (parsed.kind === 'view') {
+            key = `view:${parsed.view}`;
+        } else {
+            key = 'home';
+        }
+
+        if (pendingKey === key) return;
+
+        pendingKey = key;
         suppress = true;
 
         try {
@@ -138,15 +157,15 @@ export function initRouter(ctx) {
                     return;
                 }
                 store.update({ view: 'search' });
-                if (parsed.type === 'artist') searchActions.openArtist(parsed.id);
-                else if (parsed.type === 'album') searchActions.openAlbumById(parsed.id);
-                else if (parsed.type === 'playlist') searchActions.openPlaylistById(parsed.id);
+                if (parsed.type === 'artist') await searchActions.openArtist(parsed.id);
+                else if (parsed.type === 'album') await searchActions.openAlbumById(parsed.id);
+                else if (parsed.type === 'playlist') await searchActions.openPlaylistById(parsed.id);
                 return;
             }
 
             if (parsed.kind === 'search') {
                 store.update({ view: 'search' });
-                searchActions.go(parsed.keyword, parsed.type, parsed.page);
+                await searchActions.go(parsed.keyword, parsed.type, parsed.page);
                 return;
             }
 
@@ -156,6 +175,9 @@ export function initRouter(ctx) {
                 }
             }
         } finally {
+            if (pendingKey === key) {
+                pendingKey = '';
+            }
             suppress = false;
         }
     }

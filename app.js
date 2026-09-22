@@ -51,6 +51,51 @@ function filterTracksBySearch(tracks, keyword) {
     });
 }
 
+const DETAIL_META_CACHE_KEY = 'meting-detail-meta';
+const DETAIL_META_CACHE_MAX = 100;
+
+let detailMetaCache = (() => {
+    try {
+        const raw = localStorage.getItem(DETAIL_META_CACHE_KEY);
+        if (!raw) return {};
+        return JSON.parse(raw) || {};
+    } catch {
+        return {};
+    }
+})();
+
+function persistDetailMetaCache() {
+    try {
+        localStorage.setItem(DETAIL_META_CACHE_KEY, JSON.stringify(detailMetaCache));
+    } catch {}
+}
+
+function cacheDetailMeta(kind, meta) {
+    if (!kind || !meta || !meta.id) return;
+    const key = `${kind}:${meta.id}`;
+    detailMetaCache[key] = {
+        id: meta.id,
+        title: meta.title || '',
+        artist: meta.artist || '',
+        pic: meta.pic || '',
+        trackCount: meta.trackCount || 0,
+        description: meta.description || '',
+    };
+    const keys = Object.keys(detailMetaCache);
+    if (keys.length > DETAIL_META_CACHE_MAX) {
+        for (let i = 0; i < keys.length - DETAIL_META_CACHE_MAX; i++) {
+            delete detailMetaCache[keys[i]];
+        }
+    }
+    persistDetailMetaCache();
+}
+
+function getCachedDetailMeta(kind, id) {
+    if (!kind || !id) return null;
+    const entry = detailMetaCache[`${kind}:${id}`];
+    return entry ? { ...entry } : null;
+}
+
 const SEARCH_TYPES = ['1', '10', '100', '1000'];
 
 function emptyTypeResult() {
@@ -203,6 +248,7 @@ const searchActions = {
     },
 
     async openDetail(kind, meta, options = {}) {
+        cacheDetailMeta(kind, meta);
         const s = store.get().search;
         const keepPrevDetail = options.keepPrevDetail === true;
         const prevDetail = keepPrevDetail
@@ -259,6 +305,15 @@ const searchActions = {
     },
 
     async openArtist(id, meta = {}) {
+        const cached = getCachedDetailMeta('artist', id);
+        const merged = {
+            id,
+            title: meta.title || cached?.title || '',
+            artist: meta.artist || cached?.artist || '',
+            pic: meta.pic || cached?.pic || '',
+        };
+        cacheDetailMeta('artist', merged);
+
         const s = store.get().search;
         store.update({
             search: {
@@ -266,10 +321,10 @@ const searchActions = {
                 detail: {
                     kind: 'artist',
                     id,
-                    name: meta.title || '',
-                    title: meta.title || '',
-                    pic: meta.pic || '',
-                    alias: meta.artist || '',
+                    name: merged.title,
+                    title: merged.title,
+                    pic: merged.pic,
+                    alias: merged.artist,
                     briefDesc: '',
                     albumSize: meta._extra?.albumSize || 0,
                     musicSize: meta._extra?.musicSize || 0,
@@ -328,8 +383,9 @@ const searchActions = {
     },
 
     async openAlbumById(id) {
-        let meta = null;
+        let meta = getCachedDetailMeta('album', id);
         try {
+            if (meta) throw null;
             const info = await api.albumInfo(id);
             if (info) {
                 meta = {
@@ -367,9 +423,13 @@ const searchActions = {
     },
 
     async openPlaylistById(id) {
-        let meta = null;
+        let meta = getCachedDetailMeta('playlist', id);
         try {
-            const info = await api.playlistInfo(id);
+            if (meta) throw null;
+            const netease = api.adapters && api.adapters.netease;
+            const info = netease && typeof netease.playlistInfo === 'function'
+                ? await netease.playlistInfo(id)
+                : await api.playlistInfo(id);
             if (info) {
                 meta = {
                     id,

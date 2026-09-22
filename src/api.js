@@ -592,8 +592,20 @@ export class Meting {
 
     async playlistInfo(id) {
         const adapter = this.pick('playlist');
-        if (typeof adapter.playlistInfo !== 'function') return null;
-        return adapter.playlistInfo(id);
+        if (typeof adapter.playlistInfo === 'function') {
+            try {
+                const result = await adapter.playlistInfo(id);
+                if (result) return result;
+            } catch {}
+        }
+        const netease = this.adapters.netease;
+        if (netease && typeof netease.playlistInfo === 'function') {
+            try {
+                const result = await netease.playlistInfo(id);
+                if (result) return result;
+            } catch {}
+        }
+        return null;
     }
 
     async artistDetail(id) {
