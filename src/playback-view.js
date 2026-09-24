@@ -1,9 +1,17 @@
 import { el } from './dom.js';
-import { icon } from './components.js';
+import { icon, shareSong, openShareCardModal, Toast } from './components.js';
 import { loadLyric, findCurrentIndex } from './lyric.js';
+import { openDownloadOptionsModal, handleDownloadLyric } from './views.js';
 
 const SCROLL_DURATION = 280;
 const SCROLL_EASE = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
+function formatMobileTime(sec) {
+    if (!sec || !isFinite(sec) || isNaN(sec)) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 export function initPlaybackView(ctx) {
     const { store, player } = ctx;
@@ -50,7 +58,147 @@ export function initPlaybackView(ctx) {
 
     const inner = el('div', { class: 'playback-overlay__inner' }, leftEl, rightEl);
 
-    const overlay = el('div', { class: 'playback-overlay' }, bg, glow, scrim, topBar, inner);
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+
+    function createMobileSvg(pathContent, filled = true, viewBox = '0 0 24 24') {
+        const svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('viewBox', viewBox);
+        if (filled) {
+            svg.setAttribute('fill', 'currentColor');
+        } else {
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '2');
+            svg.setAttribute('stroke-linecap', 'round');
+            svg.setAttribute('stroke-linejoin', 'round');
+        }
+        svg.innerHTML = pathContent;
+        return svg;
+    }
+
+    const MOBILE_MODE_ICONS = {
+        order: '<path d="M1 3h8.5v1.2H1zM1 7.4h8.5v1.2H1zM1 11.8h8.5v1.2H1z"/><path d="M11 3.5L15 8l-4 4.5z"/>',
+        shuffle: '<path fill-rule="evenodd" d="M0 3.5A.5.5 0 0 1 .5 3H1c2.202 0 3.827 1.24 4.874 2.418.49.552.865 1.102 1.126 1.532.26-.43.636-.98 1.126-1.532C9.173 4.24 10.798 3 13 3v1c-1.798 0-3.173 1.01-4.126 2.082A9.6 9.6 0 0 0 7.556 8a9.6 9.6 0 0 0 1.317 1.918C9.828 10.99 11.204 12 13 12v1c-2.202 0-3.827-1.24-4.874-2.418A10.6 10.6 0 0 1 7 9.05c-.26.43-.636.98-1.126 1.532C4.827 11.76 3.202 13 1 13H.5a.5.5 0 0 1 0-1H1c1.798 0 3.173-1.01 4.126-2.082A9.6 9.6 0 0 0 6.444 8a9.6 9.6 0 0 0-1.317-1.918C4.172 5.01 2.796 4 1 4H.5a.5.5 0 0 1-.5-.5"/><path d="M13 5.466V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m0 9v-3.932a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192"/>',
+        'repeat-one': '<path d="M11 4v1.466a.25.25 0 0 0 .41.192l2.36-1.966a.25.25 0 0 0 0-.384l-2.36-1.966a.25.25 0 0 0-.41.192V3H5a5 5 0 0 0-4.48 7.223.5.5 0 0 0 .896-.446A4 4 0 0 1 5 4zm4.48 1.777a.5.5 0 0 0-.896.446A4 4 0 0 1 11 12H5.001v-1.466a.25.25 0 0 0-.41-.192l-2.36 1.966a.25.25 0 0 0 0 .384l2.36 1.966a.25.25 0 0 0 .41-.192V13h6a5 5 0 0 0 4.48-7.223Z"/><path d="M9 5.5a.5.5 0 0 0-.854-.354l-1.75 1.75a.5.5 0 1 0 .708.708L8 6.707V10.5a.5.5 0 0 0 1 0z"/>',
+        'repeat-all': '<path d="M11 5.466V4H5a4 4 0 0 0-3.584 5.777.5.5 0 1 1-.896.446A5 5 0 0 1 5 3h6V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m3.81.086a.5.5 0 0 1 .67.225A5 5 0 0 1 11 13H5v1.466a.25.25 0 0 1-.41.192l-2.36-1.966a.25.25 0 0 1 0-.384l2.36-1.966a.25.25 0 0 1 .41.192V12h6a4 4 0 0 0 3.585-5.777.5.5 0 0 1 .225-.67Z"/>',
+    };
+
+    const MOBILE_MODE_LABELS = {
+        order: '顺序播放',
+        shuffle: '随机播放',
+        'repeat-one': '单曲循环',
+        'repeat-all': '列表循环',
+    };
+
+    const mobileControlsEl = el('div', { class: 'playback-mobile-controls' });
+
+    const mobileModeBtn = el('button', {
+        class: 'playback-mobile-btn playback-mobile-btn--small',
+        title: '顺序播放',
+        type: 'button',
+    });
+    const mobileModeSvg = document.createElementNS(SVG_NS, 'svg');
+    mobileModeSvg.setAttribute('viewBox', '0 0 16 16');
+    mobileModeSvg.setAttribute('fill', 'currentColor');
+    mobileModeSvg.setAttribute('stroke', 'none');
+    mobileModeSvg.innerHTML = MOBILE_MODE_ICONS.order;
+    mobileModeBtn.appendChild(mobileModeSvg);
+
+    const mobilePrevBtn = el('button', {
+        class: 'playback-mobile-btn playback-mobile-btn--medium',
+        title: '上一首',
+        type: 'button',
+    }, createMobileSvg('<polygon points="19 20 9 12 19 4"/><rect x="4" y="4" width="2" height="16"/>'));
+
+    const mobilePlayBtn = el('button', {
+        class: 'playback-mobile-btn playback-mobile-btn--large',
+        title: '播放',
+        type: 'button',
+    });
+    const mobilePlaySvg = document.createElementNS(SVG_NS, 'svg');
+    mobilePlaySvg.setAttribute('viewBox', '0 0 24 24');
+    mobilePlaySvg.setAttribute('fill', 'currentColor');
+    mobilePlaySvg.innerHTML = '<polygon points="6 4 20 12 6 20"/>';
+    mobilePlayBtn.appendChild(mobilePlaySvg);
+
+    const mobileNextBtn = el('button', {
+        class: 'playback-mobile-btn playback-mobile-btn--medium',
+        title: '下一首',
+        type: 'button',
+    }, createMobileSvg('<polygon points="5 4 15 12 5 20"/><rect x="18" y="4" width="2" height="16"/>'));
+
+    const mobileMoreWrap = el('div', { class: 'playback-mobile-more-wrap' });
+    const mobileMoreBtn = el('button', {
+        class: 'playback-mobile-btn playback-mobile-btn--small',
+        title: '更多',
+        type: 'button',
+    }, createMobileSvg('<circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>'));
+
+    const mobileMoreMenu = el('div', { class: 'playback-mobile-more-menu' });
+
+    const MOBILE_MORE_ITEMS = [
+        {
+            action: 'share',
+            label: '分享',
+            svg: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+            stroke: true,
+        },
+        {
+            action: 'share-card',
+            label: '生成分享图',
+            svg: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+            stroke: true,
+        },
+        {
+            action: 'download-audio',
+            label: '下载单曲',
+            svg: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+            stroke: true,
+        },
+        {
+            action: 'download-lyric',
+            label: '下载歌词',
+            svg: '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/>',
+            stroke: true,
+        },
+    ];
+
+    for (const item of MOBILE_MORE_ITEMS) {
+        const btn = el('button', {
+            class: 'playback-mobile-more-item',
+            type: 'button',
+            dataset: { action: item.action },
+        }, createMobileSvg(item.svg, !item.stroke), el('span', { text: item.label }));
+        mobileMoreMenu.appendChild(btn);
+    }
+
+    mobileMoreWrap.appendChild(mobileMoreBtn);
+    mobileMoreWrap.appendChild(mobileMoreMenu);
+
+    mobileControlsEl.appendChild(mobileModeBtn);
+    mobileControlsEl.appendChild(mobilePrevBtn);
+    mobileControlsEl.appendChild(mobilePlayBtn);
+    mobileControlsEl.appendChild(mobileNextBtn);
+    mobileControlsEl.appendChild(mobileMoreWrap);
+
+    const mobileProgressBar = el('div', { class: 'playback-mobile-progress-bar' });
+    const mobileProgressEl = el('div', { class: 'playback-mobile-progress' }, mobileProgressBar);
+
+    const mobileTimeCurrent = el('span', { class: 'playback-mobile-time', text: '0:00' });
+    const mobileTimeDuration = el('span', { class: 'playback-mobile-time', text: '0:00' });
+
+    const mobileProgressRow = el('div', { class: 'playback-mobile-progress-row' },
+        mobileTimeCurrent,
+        mobileProgressEl,
+        mobileTimeDuration
+    );
+
+    const mobileBottomEl = el('div', { class: 'playback-mobile-bottom' },
+        mobileProgressRow,
+        mobileControlsEl
+    );
+
+    const overlay = el('div', { class: 'playback-overlay' }, bg, glow, scrim, topBar, inner, mobileBottomEl);
 
     document.body.appendChild(overlay);
 
@@ -452,16 +600,122 @@ export function initPlaybackView(ctx) {
         }
     });
 
+    mobilePrevBtn.addEventListener('click', () => player.prev());
+    mobileNextBtn.addEventListener('click', () => player.next());
+    mobilePlayBtn.addEventListener('click', () => player.toggle());
+
+    mobileModeBtn.addEventListener('click', () => {
+        const mode = player.cycleMode();
+        Toast(`已切换到${MOBILE_MODE_LABELS[mode]}`, 'info', 1400);
+    });
+
+    mobileProgressEl.addEventListener('click', (e) => {
+        const rect = mobileProgressEl.getBoundingClientRect();
+        const percent = (e.clientX - rect.left) / rect.width;
+        player.seek(percent);
+    });
+
+    mobileMoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        mobileMoreWrap.classList.toggle('is-open');
+    });
+
+    mobileMoreMenu.addEventListener('click', (e) => {
+        const item = e.target.closest('.playback-mobile-more-item');
+        if (!item) return;
+        e.stopPropagation();
+        mobileMoreWrap.classList.remove('is-open');
+
+        const q = store.get().queue;
+        const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+        if (!song) {
+            Toast('当前没有播放歌曲', 'warning', 1600);
+            return;
+        }
+
+        const action = item.dataset.action;
+        if (action === 'share') {
+            shareSong(song);
+        } else if (action === 'share-card') {
+            openShareCardModal(song);
+        } else if (action === 'download-audio') {
+            openDownloadOptionsModal(song, ctx, 'now');
+        } else if (action === 'download-lyric') {
+            handleDownloadLyric(song, ctx);
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!mobileMoreWrap.contains(e.target)) {
+            mobileMoreWrap.classList.remove('is-open');
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            mobileMoreWrap.classList.remove('is-open');
+        }
+    });
+
+    store.subscribe((state) => {
+        const q = state.queue;
+
+        const mode = q.playMode || 'order';
+        const label = MOBILE_MODE_LABELS[mode] || '顺序播放';
+        if (mobileModeBtn.title !== label) mobileModeBtn.title = label;
+        const iconHtml = MOBILE_MODE_ICONS[mode] || MOBILE_MODE_ICONS.order;
+        if (mobileModeSvg.innerHTML !== iconHtml) mobileModeSvg.innerHTML = iconHtml;
+
+        const total = q.duration || 0;
+        const cur = q.currentTime || 0;
+        const pct = total > 0 ? `${(cur / total) * 100}%` : '0%';
+        if (mobileProgressBar.style.width !== pct) mobileProgressBar.style.width = pct;
+
+        const curText = formatMobileTime(cur);
+        const durText = formatMobileTime(total);
+        if (mobileTimeCurrent.textContent !== curText) mobileTimeCurrent.textContent = curText;
+        if (mobileTimeDuration.textContent !== durText) mobileTimeDuration.textContent = durText;
+
+        if (q.isPlaying) {
+            const html = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+            if (mobilePlaySvg.innerHTML !== html) mobilePlaySvg.innerHTML = html;
+            if (mobilePlayBtn.title !== '暂停') mobilePlayBtn.title = '暂停';
+        } else {
+            const html = '<polygon points="6 4 20 12 6 20"/>';
+            if (mobilePlaySvg.innerHTML !== html) mobilePlaySvg.innerHTML = html;
+            if (mobilePlayBtn.title !== '播放') mobilePlayBtn.title = '播放';
+        }
+    });
+
     player.on('timeupdate', handleTimeUpdate);
     player.on('trackchange', (song) => handleSongChange(song));
 
     let lastSongKey = '';
+    let wasPlaybackOpen = !!store.get().playbackOpen;
+    let closeTimer = null;
 
     store.subscribe((state) => {
         const q = state.queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
 
-        document.body.classList.toggle('playback-open', !!state.playbackOpen);
+        const isOpen = !!state.playbackOpen;
+        document.body.classList.toggle('playback-open', isOpen);
+
+        if (isOpen) {
+            if (closeTimer) {
+                clearTimeout(closeTimer);
+                closeTimer = null;
+            }
+            document.body.classList.remove('playback-closing');
+        } else if (wasPlaybackOpen) {
+            if (closeTimer) clearTimeout(closeTimer);
+            document.body.classList.add('playback-closing');
+            closeTimer = setTimeout(() => {
+                document.body.classList.remove('playback-closing');
+                closeTimer = null;
+            }, 420);
+        }
+        wasPlaybackOpen = isOpen;
 
         if (state.playbackOpen) {
             requestAnimationFrame(updateSpacerHeight);
@@ -493,6 +747,7 @@ export function initPlaybackView(ctx) {
         destroy: () => {
             if (switchingTimer) clearTimeout(switchingTimer);
             if (followTimer) clearTimeout(followTimer);
+            if (closeTimer) clearTimeout(closeTimer);
             window.removeEventListener('resize', updateSpacerHeight);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         },
