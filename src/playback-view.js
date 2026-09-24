@@ -2,6 +2,7 @@ import { el } from './dom.js';
 import { icon, shareSong, openShareCardModal, Toast } from './components.js';
 import { loadLyric, findCurrentIndex } from './lyric.js';
 import { openDownloadOptionsModal, handleDownloadLyric } from './views.js';
+import { buildUrl } from './router.js';
 
 const SCROLL_DURATION = 280;
 const SCROLL_EASE = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)';
@@ -579,11 +580,16 @@ export function initPlaybackView(ctx) {
     }
 
     function closePlayback() {
-        const depth = (window.history.state && window.history.state.__depth) || 0;
-        if (depth > 0) {
-            window.history.back();
-            return;
+        const state = store.get();
+        if (!state.playbackOpen) return;
+
+        const targetUrl = buildUrl({ ...state, playbackOpen: false });
+        const currentUrl = window.location.hash || '#/';
+        if (targetUrl !== currentUrl) {
+            const depth = (window.history.state && window.history.state.__depth) || 0;
+            window.history.replaceState({ __app: true, __depth: depth }, '', targetUrl);
         }
+
         store.update({ playbackOpen: false });
     }
 

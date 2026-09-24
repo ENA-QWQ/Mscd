@@ -36,7 +36,7 @@ function parseUrl() {
     return { kind: 'home' };
 }
 
-function buildUrl(state) {
+export function buildUrl(state) {
     if (state.playbackOpen) {
         const q = state.queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
@@ -187,8 +187,15 @@ export function initRouter(ctx) {
         const want = buildUrl(state);
         const current = window.location.hash || '#/';
         if (want === current) return;
-        const depth = ((window.history.state && window.history.state.__depth) || 0) + 1;
-        history.pushState({ __app: true, __depth: depth }, '', want);
+
+        const depth = (window.history.state && window.history.state.__depth) || 0;
+
+        if (want.startsWith('#/song/') && current.startsWith('#/song/')) {
+            history.replaceState({ __app: true, __depth: depth }, '', want);
+            return;
+        }
+
+        history.pushState({ __app: true, __depth: depth + 1 }, '', want);
     }
 
     window.addEventListener('hashchange', applyFromUrl);
