@@ -16,7 +16,7 @@ import {
     openBatchAddModal,
     handleDownloadLyric,
 } from './src/views.js';
-import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong } from './src/components.js';
+import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal } from './src/components.js';
 import { initRouter } from './src/router.js';
 import { initPlaybackView } from './src/playback-view.js';
 
@@ -587,9 +587,9 @@ function bindPlayerBar() {
     const nextBtn = document.getElementById('next-btn');
     const modeBtn = document.getElementById('mode-btn');
     const queueBtn = document.getElementById('queue-btn');
-    const downloadAudioBtn = document.getElementById('download-audio-btn');
-    const downloadLyricBtn = document.getElementById('download-lyric-btn');
-    const shareSongBtn = document.getElementById('share-song-btn');
+    const playerMoreWrap = document.getElementById('player-more-wrap');
+    const playerMoreBtn = document.getElementById('player-more-btn');
+    const playerMoreMenu = document.getElementById('player-more-menu');
     const progressEl = document.getElementById('player-progress');
     const progressBar = document.getElementById('player-progress-bar');
     const currentEl = document.getElementById('player-current');
@@ -636,39 +636,37 @@ function bindPlayerBar() {
         store.update({ view: 'queue' });
     });
 
-    if (shareSongBtn) {
-        shareSongBtn.addEventListener('click', () => {
-            const q = store.get().queue;
-            const currentSong = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
-            if (!currentSong) {
-                Toast('当前没有播放歌曲', 'warning', 1600);
-                return;
-            }
-            shareSong(currentSong);
+    if (playerMoreBtn && playerMoreWrap) {
+        playerMoreBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            playerMoreWrap.classList.toggle('is-open');
         });
     }
 
-    if (downloadAudioBtn) {
-        downloadAudioBtn.addEventListener('click', () => {
-            const q = store.get().queue;
-            const currentSong = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
-            if (!currentSong) {
-                Toast('当前没有播放歌曲', 'warning', 1600);
-                return;
-            }
-            openDownloadOptionsModal(currentSong, ctx, 'now');
-        });
-    }
+    if (playerMoreMenu && playerMoreWrap) {
+        playerMoreMenu.addEventListener('click', (e) => {
+            const item = e.target.closest('.player-more-item');
+            if (!item) return;
+            e.stopPropagation();
+            playerMoreWrap.classList.remove('is-open');
 
-    if (downloadLyricBtn) {
-        downloadLyricBtn.addEventListener('click', () => {
             const q = store.get().queue;
             const currentSong = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
             if (!currentSong) {
                 Toast('当前没有播放歌曲', 'warning', 1600);
                 return;
             }
-            handleDownloadLyric(currentSong, ctx);
+
+            const action = item.dataset.action;
+            if (action === 'share') {
+                shareSong(currentSong);
+            } else if (action === 'share-card') {
+                openShareCardModal(currentSong);
+            } else if (action === 'download-audio') {
+                openDownloadOptionsModal(currentSong, ctx, 'now');
+            } else if (action === 'download-lyric') {
+                handleDownloadLyric(currentSong, ctx);
+            }
         });
     }
 
@@ -691,11 +689,15 @@ function bindPlayerBar() {
         if (!volumeWrap.contains(e.target)) {
             volumeWrap.classList.remove('is-open');
         }
+        if (playerMoreWrap && !playerMoreWrap.contains(e.target)) {
+            playerMoreWrap.classList.remove('is-open');
+        }
     });
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             volumeWrap.classList.remove('is-open');
+            if (playerMoreWrap) playerMoreWrap.classList.remove('is-open');
         }
     });
 
@@ -708,9 +710,11 @@ function bindPlayerBar() {
         const q = state.queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
 
-        if (downloadAudioBtn) downloadAudioBtn.disabled = !song;
-        if (downloadLyricBtn) downloadLyricBtn.disabled = !song;
-        if (shareSongBtn) shareSongBtn.disabled = !song;
+        if (playerMoreMenu) {
+            playerMoreMenu.querySelectorAll('.player-more-item').forEach((item) => {
+                item.disabled = !song;
+            });
+        }
 
         if (song) {
             titleEl.textContent = song.title || '未知歌曲';
