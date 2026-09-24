@@ -116,7 +116,7 @@ body::before {
 /* ==================== 布局 ==================== */
 .layout {
     position: relative;
-    z-index: 1;
+    z-index: auto;
     display: grid;
     grid-template-columns: var(--sidebar-width) 1fr;
     grid-template-rows: var(--top-bar-height) 1fr var(--player-bar-height);
@@ -125,7 +125,7 @@ body::before {
         "sidebar main"
         "player player";
     height: 100vh;
-    overflow: hidden;
+    overflow: visible;
     transition: grid-template-rows .35s var(--ease);
 }
 
@@ -344,6 +344,7 @@ body.queue-empty:not(.has-selection) .layout {
 /* ==================== 播放栏 ==================== */
 .player-bar {
     position: relative;
+    z-index: 300;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
     align-items: center;
@@ -354,7 +355,6 @@ body.queue-empty:not(.has-selection) .layout {
     -webkit-backdrop-filter: blur(14px);
     overflow: visible;
     min-width: 0;
-    clip-path: inset(0 0 0 0);
     transition: transform .35s var(--ease), opacity .3s var(--ease), clip-path .35s var(--ease);
 }
 
@@ -1178,7 +1178,7 @@ body.playback-open .player-cover {
     align-items: center;
     justify-content: center;
     padding: 20px;
-    z-index: 200;
+    z-index: 400;
     visibility: hidden;
     pointer-events: none;
     transition: visibility 0s .3s;
@@ -5439,6 +5439,10 @@ body.playback-open {
 }
 
 @media (max-width: 900px) {
+    .player-bar {
+        clip-path: inset(0 0 0 0);
+    }
+
     body.playback-open .player-bar,
     body.playback-closing .player-bar {
         clip-path: inset(100% 0 0 0);
