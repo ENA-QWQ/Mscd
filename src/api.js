@@ -12,6 +12,7 @@ function withTimeout(promise, ms) {
 async function fetchWithRetry(url, options = {}, retryConfig = config.retry) {
     const { maxRetries, baseDelay } = retryConfig;
     let lastError;
+    url = upgradeToHttps(url);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -155,7 +156,7 @@ class MetingAdapter {
     }
 
     async songUrl(id, br) {
-        const url = this.buildUrl({ server: 'netease', type: 'url', id, br });
+        const url = upgradeToHttps(this.buildUrl({ server: 'netease', type: 'url', id, br }));
         const response = await fetch(url, {
             method: 'GET',
             redirect: 'follow',
