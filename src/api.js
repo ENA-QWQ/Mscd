@@ -523,6 +523,24 @@ class NeteaseAdapter {
         return { playlists, more: data?.more === true };
     }
 
+    async userFollows(uid, { limit = 100, offset = 0 } = {}) {
+        const data = await this.request('/user/follows', { uid, limit, offset });
+        const follows = (data?.follow || []).map((u) => {
+            if (!u) return null;
+            return {
+                uid: String(u.userId ?? ''),
+                nickname: u.nickname ?? '',
+                avatarUrl: u.avatarUrl ?? '',
+                signature: u.signature ?? '',
+                userType: u.userType ?? 0,
+                artistId: u.artistId ? String(u.artistId) : '',
+                musicSize: u.musicSize ?? u.artist?.musicSize ?? 0,
+                albumSize: u.albumSize ?? u.artist?.albumSize ?? 0,
+            };
+        }).filter(Boolean);
+        return { follows, more: data?.more === true };
+    }
+
     async playlistTrackAll(id, { limit = 500, offset = 0 } = {}) {
         const data = await this.request('/playlist/track/all', { id, limit, offset });
         const songs = (data?.songs || []).map(s => this.normalizeSong(s)).filter(Boolean);
@@ -677,6 +695,10 @@ export class Meting {
 
     async userPlaylists(uid) {
         return this.pick('user').userPlaylists(uid);
+    }
+
+    async userFollows(uid, options = {}) {
+        return this.pick('user').userFollows(uid, options);
     }
 
     async playlistTrackAll(id, options = {}) {

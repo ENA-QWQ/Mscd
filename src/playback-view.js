@@ -253,9 +253,7 @@ export function initPlaybackView(ctx) {
     }
 
     function proxiedCover(url) {
-        if (!url) return '';
-        if (!ctx.config || !ctx.config.proxy) return url;
-        return ctx.config.proxy + encodeURIComponent(url);
+        return url || '';
     }
 
     function extractPalette(imgUrl) {

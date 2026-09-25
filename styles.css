@@ -4442,7 +4442,8 @@ body.has-selection .multi-select-bar {
 }
 
 @media (max-width: 900px) {
-    .search-view {
+    .search-view,
+    .myfavorites-view {
         margin: -16px -14px 0;
         padding: 0 14px;
     }

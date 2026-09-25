@@ -36,16 +36,8 @@ function tryLoadImage(url, timeout = 10000) {
 
 async function loadCover(song) {
     const original = song.pic || '';
-    const proxied = original && config.proxy
-        ? config.proxy + encodeURIComponent(original)
-        : '';
-
-    if (proxied) {
-        try { return await tryLoadImage(proxied); } catch {}
-    }
-    if (original && original !== proxied) {
-        try { return await tryLoadImage(original); } catch {}
-    }
+    if (!original) return null;
+    try { return await tryLoadImage(original); } catch {}
     return null;
 }
 

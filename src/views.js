@@ -1284,32 +1284,123 @@ export function QueueView(ctx) {
     };
 }
 
-export function MyPlaylistsView(ctx) {
+export function MyFavoritesView(ctx) {
     const { store, api } = ctx;
-    const root = el('div', { class: 'myplaylists-view' });
+    const root = el('div', { class: 'myfavorites-view' });
+
+    const TABS = [
+        { key: 'artists', label: '关注的歌手' },
+        { key: 'created', label: '创建的歌单' },
+        { key: 'collected', label: '收藏的歌单' },
+    ];
+
     let lastAccount = null;
-    let playlists = [];
+    let activeTab = 'artists';
+    let artists = [];
+    let createdPlaylists = [];
+    let collectedPlaylists = [];
     let loading = false;
     let loadError = null;
-    let page = 1;
     let loaded = false;
+    const pages = { artists: 1, created: 1, collected: 1 };
 
-    async function loadPlaylists(uid) {
+    const tabsEl = el('div', { class: 'search-tabs' });
+    const tabsNav = el('div', { class: 'search-tabs__nav' });
+    const totalEl = el('div', { class: 'search-tabs__total' });
+
+    for (const t of TABS) {
+        const btn = el('button', {
+            class: 'search-tab',
+            text: t.label,
+            dataset: { key: t.key },
+        });
+        btn.addEventListener('click', () => {
+            if (activeTab === t.key) return;
+            activeTab = t.key;
+            render();
+        });
+        tabsNav.appendChild(btn);
+    }
+
+    tabsEl.appendChild(tabsNav);
+    tabsEl.appendChild(totalEl);
+
+    const bodyEl = el('div', { class: 'myfavorites-body' });
+
+    root.appendChild(tabsEl);
+    root.appendChild(bodyEl);
+
+    async function fetchAllFollows(uid) {
+        const all = [];
+        const limit = 100;
+        let offset = 0;
+        for (let i = 0; i < 10; i++) {
+            const result = await api.userFollows(uid, { limit, offset });
+            all.push(...result.follows);
+            if (!result.more) break;
+            offset += limit;
+        }
+        return all;
+    }
+
+    async function loadData(uid) {
         loading = true;
         loadError = null;
         render();
 
         try {
-            const { playlists: all } = await api.userPlaylists(uid);
-            const mine = all.filter((p) =>
-                p._creatorId === uid &&
-                !p._subscribed &&
-                p._privacy === 0
+            const [followsList, playlistResult] = await Promise.all([
+                fetchAllFollows(uid),
+                api.userPlaylists(uid),
+            ]);
+
+            artists = followsList.filter((u) => u.userType === 2);
+            artists = await Promise.all(artists.map(async (u) => {
+                if (u.musicSize || u.albumSize) return u;
+                let artistId = u.artistId;
+                if (!artistId) {
+                    try {
+                        const netease = api.adapters && api.adapters.netease;
+                        if (netease) {
+                            const data = await netease.request('/user/detail', { uid: u.uid });
+                            artistId = data?.profile?.artistId || data?.profile?.artist?.id;
+                        }
+                    } catch {}
+                }
+                if (!artistId) return u;
+                try {
+                    const netease = api.adapters && api.adapters.netease;
+                    if (netease) {
+                        const detail = await netease.request('/artist/detail', { id: artistId });
+                        const a = detail?.data?.artist;
+                        if (a) {
+                            return {
+                                ...u,
+                                artistId: String(artistId),
+                                musicSize: a.musicSize ?? 0,
+                                albumSize: a.albumSize ?? 0,
+                                nickname: a.name || u.nickname,
+                                avatarUrl: a.cover || a.avatar || u.avatarUrl,
+                            };
+                        }
+                    }
+                } catch {}
+                return { ...u, artistId: String(artistId) };
+            }));
+
+            const allPlaylists = playlistResult.playlists || [];
+            createdPlaylists = allPlaylists.filter((p) =>
+                String(p._creatorId) === String(uid)
             );
-            playlists = mine;
+            collectedPlaylists = allPlaylists.filter((p) =>
+                String(p._creatorId) !== String(uid)
+            );
+
             loaded = true;
             loading = false;
-            page = 1;
+            pages.artists = 1;
+            pages.created = 1;
+            pages.collected = 1;
             render();
         } catch (err) {
             loadError = err.message || '加载失败';
@@ -1318,87 +1409,159 @@ export function MyPlaylistsView(ctx) {
         }
     }
 
+    function syncTabs() {
+        tabsNav.querySelectorAll('.search-tab').forEach((b) => {
+            b.classList.toggle('is-active', b.dataset.key === activeTab);
+        });
+    }
+
+    function setTotal(text) {
+        if (totalEl.textContent !== text) totalEl.textContent = text;
+    }
+
+    async function resolveArtistId(item) {
+        if (item.artistId) return String(item.artistId);
+        const netease = api.adapters && api.adapters.netease;
+        if (!netease) return '';
+        try {
+            const data = await netease.request('/user/detail', { uid: item.uid });
+            const artistId = data?.profile?.artistId || data?.profile?.artist?.id;
+            if (artistId) return String(artistId);
+        } catch {}
+        return '';
+    }
+
+    function renderArtistCard(item) {
+        const meta = {
+            id: item.artistId || item.uid,
+            title: item.nickname || '',
+            pic: item.avatarUrl || '',
+            _type: 'artist',
+            _extra: {
+                musicSize: item.musicSize || 0,
+                albumSize: item.albumSize || 0,
+            },
+        };
+        return ArtistCard(meta, {
+            onOpen: async () => {
+                const artistId = await resolveArtistId(item);
+                if (!artistId) {
+                    Toast('无法获取该歌手的详情', 'warning', 1600);
+                    return;
+                }
+                ctx.searchActions.openArtist(artistId, {
+                    id: artistId,
+                    title: item.nickname || '',
+                    pic: item.avatarUrl || '',
+                });
+            },
+        });
+    }
+
+    function renderPlaylistCard(item) {
+        return CollectionCard(item, {
+            onOpen: () => {
+                ctx.searchActions.openDetail('playlist', {
+                    id: item.id,
+                    title: item.title,
+                    artist: item.artist,
+                    pic: item.pic,
+                    trackCount: item._extra?.trackCount || 0,
+                    description: item._extra?.description || '',
+                });
+            },
+        });
+    }
+
+    function renderTab() {
+        bodyEl.innerHTML = '';
+
+        const perPage = store.get().settings.perPage;
+        let items;
+        let emptyText;
+        let emptyIcon;
+        let isArtistTab = false;
+
+        if (activeTab === 'artists') {
+            items = artists;
+            emptyText = '暂无关注的歌手';
+            emptyIcon = 'user';
+            isArtistTab = true;
+            setTotal(`共 ${items.length} 位歌手`);
+        } else if (activeTab === 'created') {
+            items = createdPlaylists;
+            emptyText = '暂无创建的歌单';
+            emptyIcon = 'list';
+            setTotal(`共 ${items.length} 个歌单`);
+        } else {
+            items = collectedPlaylists;
+            emptyText = '暂无收藏的歌单';
+            emptyIcon = 'list';
+            setTotal(`共 ${items.length} 个歌单`);
+        }
+
+        if (!items.length) {
+            bodyEl.appendChild(EmptyState(emptyText, emptyIcon));
+            return;
+        }
+
+        const listClass = isArtistTab
+            ? 'song-list song-list--artist'
+            : 'song-list song-list--playlist';
+
+        const list = el('div', { class: listClass });
+
+        const totalPages = Math.max(1, Math.ceil(items.length / perPage));
+        const page = Math.min(Math.max(1, pages[activeTab] || 1), totalPages);
+        const start = (page - 1) * perPage;
+        const slice = items.slice(start, start + perPage);
+
+        for (const item of slice) {
+            list.appendChild(isArtistTab ? renderArtistCard(item) : renderPlaylistCard(item));
+        }
+
+        bodyEl.appendChild(list);
+
+        if (totalPages > 1) {
+            bodyEl.appendChild(Pagination({
+                page,
+                totalPages,
+                onPage: (p) => {
+                    pages[activeTab] = p;
+                    renderTab();
+                },
+            }));
+        }
+    }
+
     function render() {
         const state = store.get();
         const account = state.account;
 
-        root.innerHTML = '';
-
-        const header = el('div', { class: 'view-header' });
-        const left = el('div', { class: 'view-header__left' });
-        left.appendChild(el('div', { class: 'view-title', text: '我的歌单' }));
-
-        const refreshBtn = el('button', {
-            class: 'ena-btn ena-btn--sm',
-            title: '刷新',
-        }, icon('refresh'), el('span', { text: '刷新' }));
-        refreshBtn.disabled = !account.connected;
-        refreshBtn.addEventListener('click', () => {
-            loaded = false;
-            loadPlaylists(account.uid);
-        });
-        left.appendChild(refreshBtn);
-
-        header.appendChild(left);
-        header.appendChild(el('span', {
-            class: 'view-header__count',
-            text: `共 ${playlists.length} 个`,
-        }));
-        root.appendChild(header);
+        syncTabs();
 
         if (!account.connected) {
-            root.appendChild(EmptyState('请先连接网易云账户', 'user'));
+            setTotal('');
+            bodyEl.innerHTML = '';
+            bodyEl.appendChild(EmptyState('请先连接网易云账户', 'user'));
             return;
         }
 
         if (loading && !loaded) {
-            root.appendChild(LoadingState('正在加载歌单…'));
+            setTotal('');
+            bodyEl.innerHTML = '';
+            bodyEl.appendChild(LoadingState('正在加载收藏…'));
             return;
         }
 
         if (loadError) {
-            root.appendChild(ErrorState(loadError, () => loadPlaylists(account.uid)));
+            setTotal('');
+            bodyEl.innerHTML = '';
+            bodyEl.appendChild(ErrorState(loadError, () => loadData(account.uid)));
             return;
         }
 
-        if (!playlists.length) {
-            root.appendChild(EmptyState('没有公开的歌单', 'list'));
-            return;
-        }
-
-        const perPage = state.settings.perPage;
-        const totalPages = Math.max(1, Math.ceil(playlists.length / perPage));
-        const currentPage = Math.min(Math.max(1, page), totalPages);
-        const start = (currentPage - 1) * perPage;
-        const slice = playlists.slice(start, start + perPage);
-
-        const grid = el('div', { class: 'song-list song-list--playlist' });
-        for (const item of slice) {
-            grid.appendChild(CollectionCard(item, {
-                onOpen: () => {
-                    ctx.searchActions.openDetail('playlist', {
-                        id: item.id,
-                        title: item.title,
-                        artist: item.artist,
-                        pic: item.pic,
-                        trackCount: item._extra?.trackCount || 0,
-                        description: item._extra?.description || '',
-                    });
-                },
-            }));
-        }
-        root.appendChild(grid);
-
-        if (totalPages > 1) {
-            root.appendChild(Pagination({
-                page: currentPage,
-                totalPages,
-                onPage: (p) => {
-                    page = p;
-                    render();
-                },
-            }));
-        }
+        renderTab();
     }
 
     const unsubscribe = store.subscribe((state) => {
@@ -1408,10 +1571,12 @@ export function MyPlaylistsView(ctx) {
         }
         lastAccount = { uid: account.uid, connected: account.connected };
         if (account.connected && !loaded && !loading) {
-            loadPlaylists(account.uid);
+            loadData(account.uid);
         } else if (!account.connected) {
             loaded = false;
-            playlists = [];
+            artists = [];
+            createdPlaylists = [];
+            collectedPlaylists = [];
             loadError = null;
             render();
         }

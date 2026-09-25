@@ -29,7 +29,7 @@ function parseUrl() {
         };
     }
 
-    if (['queue', 'downloads', 'status', 'settings', 'liked', 'myplaylists'].includes(name)) {
+    if (['queue', 'downloads', 'status', 'settings', 'liked', 'myfavorites'].includes(name)) {
         return { kind: 'view', view: name };
     }
 
@@ -62,7 +62,7 @@ export function buildUrl(state) {
         return '#/';
     }
 
-    if (['queue', 'downloads', 'status', 'settings', 'liked', 'myplaylists'].includes(state.view)) {
+    if (['queue', 'downloads', 'status', 'settings', 'liked', 'myfavorites'].includes(state.view)) {
         return `#/${state.view}`;
     }
 

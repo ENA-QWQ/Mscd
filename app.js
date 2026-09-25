@@ -10,7 +10,7 @@ import {
     StatusView,
     SettingsView,
     LikedView,
-    MyPlaylistsView,
+    MyFavoritesView,
     openParseModal,
     openDownloadOptionsModal,
     openBatchAddModal,
@@ -1205,8 +1205,8 @@ function mountView(viewName) {
         case 'liked':
             instance = LikedView(ctx);
             break;
-        case 'myplaylists':
-            instance = MyPlaylistsView(ctx);
+        case 'myfavorites':
+            instance = MyFavoritesView(ctx);
             break;
         default:
             instance = SearchView(ctx);
