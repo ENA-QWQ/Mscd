@@ -24,6 +24,13 @@
                     <polyline points="15 18 9 12 15 6" />
                 </svg>
             </button>
+            <button class="ena-btn ena-btn--icon mobile-more-btn" id="mobile-more-btn" title="更多">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="1.5" />
+                    <circle cx="12" cy="12" r="1.5" />
+                    <circle cx="12" cy="19" r="1.5" />
+                </svg>
+            </button>
             <span class="top-bar-title" id="top-bar-title">MSCD</span>
         </div>
 
@@ -54,7 +61,7 @@
                 </svg>
                 <span>浏览</span>
             </a>
-            <a href="#" data-view="queue">
+            <a href="#" data-view="queue" class="mobile-nav-hidden">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
                     <line x1="8" y1="6" x2="21" y2="6" />
@@ -73,7 +80,7 @@
                 </svg>
                 <span>收藏的音乐</span>
             </a>
-            <a href="#" data-view="myplaylists">
+            <a href="#" data-view="myplaylists" class="mobile-nav-hidden">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
                     <line x1="3" y1="6" x2="14" y2="6" />
@@ -102,7 +109,7 @@
                 </svg>
                 <span>状态中心</span>
             </a>
-            <a href="#" data-view="settings">
+            <a href="#" data-view="settings" class="mobile-nav-hidden">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3" />
@@ -315,6 +322,44 @@
 
 </div>
 
+<div class="mobile-more-menu" id="mobile-more-menu">
+    <button class="mobile-more-item" data-view="queue">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6" />
+            <line x1="8" y1="12" x2="21" y2="12" />
+            <line x1="8" y1="18" x2="21" y2="18" />
+            <line x1="3" y1="6" x2="3.01" y2="6" />
+            <line x1="3" y1="12" x2="3.01" y2="12" />
+            <line x1="3" y1="18" x2="3.01" y2="18" />
+        </svg>
+        <span>播放队列</span>
+    </button>
+    <button class="mobile-more-item" data-view="myplaylists">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="14" y2="6" />
+            <line x1="3" y1="12" x2="10" y2="12" />
+            <line x1="3" y1="18" x2="10" y2="18" />
+            <circle cx="17" cy="18" r="3" />
+            <line x1="20" y1="18" x2="20" y2="7" />
+            <path d="M20 7l2-.5" />
+        </svg>
+        <span>我的歌单</span>
+    </button>
+    <button class="mobile-more-item" data-view="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        <span>设置</span>
+    </button>
+    <button class="mobile-more-item" data-action="parse">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+        <span>内容 ID 解析</span>
+    </button>
+</div>
 <div class="ena-modal" id="modal-root"></div>
 <div class="ena-toast-wrap" id="toast-root"></div>
 
