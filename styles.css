@@ -4841,23 +4841,36 @@ body.has-selection .multi-select-bar {
         margin-bottom: 32px;
     }
 
+    .home-actions {
+        gap: 8px;
+    }
+
     .home-action {
-        flex: 1 1 100%;
-        max-width: 320px;
-        padding: 20px 16px;
-        flex-direction: row;
-        justify-content: flex-start;
-        gap: 12px;
+        flex: 1 1 0;
+        max-width: none;
+        min-width: 0;
+        padding: 14px 6px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 8px;
+        font-size: .72rem;
     }
 
     .home-action__icon {
-        width: 26px;
-        height: 26px;
+        width: 22px;
+        height: 22px;
     }
 
     .home-action__icon svg {
-        width: 24px;
-        height: 24px;
+        width: 20px;
+        height: 20px;
+    }
+
+    .home-action__text {
+        white-space: normal;
+        font-size: .68rem;
+        line-height: 1.2;
+        text-align: center;
     }
 }
 
