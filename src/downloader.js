@@ -327,8 +327,14 @@ function buildPictureBlock(picData, mimeType) {
 }
 
 async function fetchCoverAsBytes(coverUrl) {
+    if (!coverUrl) return null;
+
+    const url = config.proxy && !coverUrl.startsWith(config.proxy)
+        ? config.proxy + encodeURIComponent(coverUrl)
+        : coverUrl;
+
     try {
-        const res = await fetch(coverUrl);
+        const res = await fetch(url);
         if (!res.ok) return null;
         const data = new Uint8Array(await res.arrayBuffer());
         const ct = res.headers.get('content-type') || 'image/jpeg';

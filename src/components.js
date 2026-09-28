@@ -319,6 +319,12 @@ export function SongRow(song, handlers = {}) {
 
     const row = el('div', { class: 'song-row', dataset: { id: song.id } });
 
+    const queueState = store.get().queue;
+    const playingSong = queueState.currentIndex >= 0 ? queueState.tracks[queueState.currentIndex] : null;
+    if (queueState.isPlaying && playingSong && String(playingSong.id) === String(song.id)) {
+        row.classList.add('is-playing');
+    }
+
     if (selectable) {
         const checkbox = el('label', { class: 'song-select ena-checkbox' });
         const input = el('input', { type: 'checkbox' });

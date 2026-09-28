@@ -1172,8 +1172,29 @@ function bindQueueVisibility() {
     });
 }
 
+function bindPlayingSync() {
+    let lastKey = '';
+    store.subscribe((state) => {
+        const queueState = state.queue;
+        const playingSong = queueState.currentIndex >= 0 ? queueState.tracks[queueState.currentIndex] : null;
+        const key = `${playingSong ? playingSong.id : ''}|${queueState.isPlaying}`;
+        if (key === lastKey) return;
+        lastKey = key;
+        syncPlayingRows();
+    });
+}
+
 let currentViewInstance = null;
 let lastView = null;
+
+function syncPlayingRows() {
+    const queueState = store.get().queue;
+    const playingSong = queueState.currentIndex >= 0 ? queueState.tracks[queueState.currentIndex] : null;
+    const playingId = queueState.isPlaying && playingSong ? String(playingSong.id) : '';
+    document.querySelectorAll('.song-row').forEach((row) => {
+        row.classList.toggle('is-playing', playingId !== '' && String(row.dataset.id) === playingId);
+    });
+}
 
 function mountView(viewName) {
     if (currentViewInstance) {
@@ -1215,6 +1236,7 @@ function mountView(viewName) {
     if (instance) {
         contentEl.appendChild(instance.node);
         currentViewInstance = instance;
+        syncPlayingRows();
     }
 }
 
@@ -1238,6 +1260,7 @@ bindPlayerBar();
 bindMultiSelectBar();
 bindSelectionSync();
 bindQueueVisibility();
+bindPlayingSync();
 bindAccountButton();
 bindMobileMoreMenu();
 ctx.openAccountModal = openAccountModal;
