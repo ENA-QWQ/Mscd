@@ -4622,7 +4622,7 @@ body.has-selection .multi-select-bar {
     padding: 4px 0 0;
     background: var(--bg-float);
     box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
-    z-index: 260;
+    z-index: 500;
     visibility: hidden;
     pointer-events: none;
     clip-path: inset(0 0 100% 0);
