@@ -199,6 +199,20 @@ class MetingAdapter {
     }
 }
 
+function isSafeAudioUrl(url) {
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+        const host = parsed.hostname.toLowerCase();
+        if (host === 'localhost' || host === '0.0.0.0' || host === '::1') return false;
+        if (/^(10\.|127\.|169\.254\.|192\.168\.)/.test(host)) return false;
+        if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 class NeteaseAdapter {
     constructor(base) {
         this.base = base.replace(/\/+$/, '');
@@ -399,12 +413,13 @@ class NeteaseAdapter {
                 const level = br >= 2000 ? 'lossless' : br >= 320 ? 'exhigh' : 'standard';
                 const data2 = await this.request('/song/url/v1', { id, level });
                 const item2 = data2?.data?.[0];
-                if (item2?.url) return upgradeToHttps(item2.url);
+                if (item2?.url && isSafeAudioUrl(item2.url)) return upgradeToHttps(item2.url);
             } catch {
             }
             throw new Error('无法获取歌曲 URL');
         }
 
+        if (!isSafeAudioUrl(item.url)) throw new Error('无法获取歌曲 URL');
         return upgradeToHttps(item.url);
     }
 
