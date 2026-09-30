@@ -47,15 +47,13 @@ export function generateThemeVars(themeHex) {
 
     const sBg = Math.min(0.42, Math.max(0.04, s * 0.55));
     const sText = Math.min(0.55, Math.max(0.06, s * 0.65));
-    const sAccent = Math.min(0.75, Math.max(0.12, s * 0.85));
 
-    const fillL = isLight ? 25 : 42;
     const hoverTextL = isLight ? 20 : 80;
 
     const accent = {
-        '--fill': hsl(h, sAccent, fillL),
-        '--border-line': hsl(h, sAccent, fillL),
-        '--hover-text': hsl(h, sAccent, hoverTextL),
+        '--fill': themeHex,
+        '--border-line': themeHex,
+        '--hover-text': themeHex,
     };
 
     if (isLight) {
