@@ -513,6 +513,91 @@ body.playback-open .player-cover {
     min-width: 0;
 }
 
+.player-lyric {
+    display: none;
+    position: relative;
+    width: 100%;
+    height: 66px;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 25%, #000 75%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 25%, #000 75%, transparent 100%);
+}
+
+.player-lyric__scroller {
+    position: relative;
+    will-change: transform;
+    transition: transform .28s var(--ease);
+}
+
+.player-lyric__lines {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.player-lyric__line {
+    height: 22px;
+    line-height: 22px;
+    font-size: .76rem;
+    color: var(--text-secondary);
+    opacity: .8;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    padding: 0 8px;
+    box-sizing: border-box;
+    transition: color .25s ease, opacity .25s ease, font-size .25s ease;
+}
+
+.player-lyric__line.is-current {
+    color: var(--text-primary);
+    opacity: 1;
+    font-size: 1.2rem;
+}
+
+@media (min-width: 901px) {
+    .player-bar .player-center {
+        position: relative;
+    }
+
+    .player-bar .player-lyric {
+        display: block;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s var(--ease);
+    }
+
+    .player-bar .player-controls {
+        transition: opacity .25s var(--ease);
+    }
+
+    .player-bar:not(:hover) .player-lyric {
+        opacity: 1;
+    }
+
+    .player-bar:not(:hover) .player-controls {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    body.playback-open .player-bar .player-lyric {
+        opacity: 0;
+    }
+
+    body.playback-open .player-bar .player-controls {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
 .player-more-wrap {
     position: relative;
     display: inline-flex;
@@ -5266,7 +5351,7 @@ body.playback-open {
 }
 
 .playback-album {
-    font-size: 1.05rem;
+    font-size: 1.3rem;
     color: var(--text-tertiary);
     white-space: nowrap;
     overflow: hidden;

@@ -3,6 +3,7 @@ import { Meting } from './src/api.js';
 import { store } from './src/store.js';
 import { Player } from './src/player.js';
 import { Downloader } from './src/downloader.js';
+import { loadLyric, findCurrentIndex } from './src/lyric.js';
 import {
     SearchView,
     QueueView,
@@ -726,6 +727,103 @@ function bindPlayerBar() {
             if (playerMoreMenuEl) playerMoreMenuEl.classList.remove('is-open');
         }
     });
+
+    const lyricLinesEl = document.getElementById('player-lyric-lines');
+    const lyricScrollerEl = document.getElementById('player-lyric-scroller');
+    const lyricWrapEl = document.getElementById('player-lyric');
+
+    let playerLyric = { lines: [], hasTimestamps: false };
+    let playerLyricSongId = '';
+    let playerLyricCurrentIndex = -1;
+
+    function setPlayerLyricPlaceholder(text) {
+        if (!lyricLinesEl) return;
+        lyricLinesEl.innerHTML = '';
+        const node = document.createElement('div');
+        node.className = 'player-lyric__line';
+        node.textContent = text;
+        lyricLinesEl.appendChild(node);
+        if (lyricScrollerEl) lyricScrollerEl.style.transform = '';
+        playerLyricCurrentIndex = -1;
+    }
+
+    function renderPlayerLyric() {
+        if (!lyricLinesEl) return;
+        lyricLinesEl.innerHTML = '';
+        if (!playerLyric.lines.length) {
+            setPlayerLyricPlaceholder('暂无歌词');
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        for (const line of playerLyric.lines) {
+            const node = document.createElement('div');
+            node.className = 'player-lyric__line';
+            node.textContent = line.text || '';
+            frag.appendChild(node);
+        }
+        lyricLinesEl.appendChild(frag);
+        playerLyricCurrentIndex = -1;
+        if (lyricScrollerEl) lyricScrollerEl.style.transform = '';
+    }
+
+    function updatePlayerLyricHighlight() {
+        if (!lyricLinesEl || !lyricScrollerEl || !lyricWrapEl) return;
+        if (!playerLyric.hasTimestamps || !playerLyric.lines.length) return;
+
+        const q = store.get().queue;
+        const t = q.currentTime || 0;
+        const idx = findCurrentIndex(playerLyric.lines, t);
+        if (idx < 0) return;
+        if (idx === playerLyricCurrentIndex) return;
+
+        const prev = lyricLinesEl.children[playerLyricCurrentIndex];
+        if (prev) prev.classList.remove('is-current');
+
+        playerLyricCurrentIndex = idx;
+        const cur = lyricLinesEl.children[idx];
+        if (!cur) return;
+        cur.classList.add('is-current');
+
+        const containerH = lyricWrapEl.clientHeight;
+        const lineH = cur.offsetHeight || 16;
+        const targetTop = (containerH - lineH) / 2;
+        const offset = cur.offsetTop - targetTop;
+        lyricScrollerEl.style.transform = `translateY(${-offset}px)`;
+    }
+
+    async function loadPlayerLyric(song) {
+        if (!song || !song.id) {
+            playerLyric = { lines: [], hasTimestamps: false };
+            playerLyricSongId = '';
+            setPlayerLyricPlaceholder('暂无歌词');
+            return;
+        }
+        if (song.id === playerLyricSongId) return;
+        playerLyricSongId = song.id;
+        playerLyric = { lines: [], hasTimestamps: false };
+        setPlayerLyricPlaceholder('歌词加载中…');
+        try {
+            const parsed = await loadLyric(api, song);
+            if (playerLyricSongId !== song.id) return;
+            playerLyric = parsed;
+            renderPlayerLyric();
+            updatePlayerLyricHighlight();
+        } catch {
+            if (playerLyricSongId !== song.id) return;
+            setPlayerLyricPlaceholder('歌词加载失败');
+        }
+    }
+
+    setPlayerLyricPlaceholder('暂无歌词');
+
+    {
+        const q0 = store.get().queue;
+        const curSong = q0.currentIndex >= 0 ? q0.tracks[q0.currentIndex] : null;
+        if (curSong) loadPlayerLyric(curSong);
+    }
+
+    player.on('trackchange', (song) => loadPlayerLyric(song));
+    player.on('timeupdate', () => updatePlayerLyricHighlight());
 
     player.on('error', ({ song, error }) => {
         const msg = error?.message || '播放失败';
