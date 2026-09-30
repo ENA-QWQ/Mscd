@@ -3791,7 +3791,8 @@ body.has-selection .multi-select-bar {
         display: none;
     }
 
-    .top-bar-actions .parse-btn {
+    .top-bar-actions .parse-btn,
+    .top-bar-actions .multi-select-btn {
         display: none;
     }
 

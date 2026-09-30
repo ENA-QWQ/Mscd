@@ -960,6 +960,13 @@ function bindAccountButton() {
     function render() {
         host.innerHTML = '';
 
+        const multiSelectBtn = document.createElement('button');
+        multiSelectBtn.className = 'ena-btn ena-btn--icon multi-select-btn';
+        multiSelectBtn.title = '多选';
+        multiSelectBtn.appendChild(icon('check-square'));
+        multiSelectBtn.addEventListener('click', () => store.toggleMultiSelectMode());
+        host.appendChild(multiSelectBtn);
+
         const parseBtn = document.createElement('button');
         parseBtn.className = 'ena-btn ena-btn--icon parse-btn';
         parseBtn.title = '内容 ID 解析';
@@ -1025,6 +1032,12 @@ function bindMobileMoreMenu() {
 
         if (item.dataset.action === 'parse') {
             ctx.openParseModal();
+            close();
+            return;
+        }
+
+        if (item.dataset.action === 'multi-select') {
+            store.toggleMultiSelectMode();
             close();
         }
     });
@@ -1158,12 +1171,14 @@ function bindMultiSelectBar() {
 
 function bindSelectionSync() {
     let lastSelection = null;
+    let lastMode = false;
 
     store.subscribe((state) => {
-        if (state.selection === lastSelection) return;
+        if (state.selection === lastSelection && state.multiSelectMode === lastMode) return;
         lastSelection = state.selection;
+        lastMode = state.multiSelectMode;
 
-        const hasSelection = state.selection.length > 0;
+        const hasSelection = state.selection.length > 0 || state.multiSelectMode;
         document.body.classList.toggle('has-selection', hasSelection);
         const bar = document.getElementById('multi-select-bar');
         if (bar) {

@@ -54,6 +54,7 @@ function createInitialState() {
         downloadsSearch: '',
 
         selection: [],
+        multiSelectMode: false,
 
         visibleTracks: [],
 
@@ -267,8 +268,17 @@ class Store {
     }
 
     clearSelection() {
-        if (this.state.selection.length === 0) return;
+        if (this.state.selection.length === 0 && !this.state.multiSelectMode) return;
         this.state.selection = [];
+        this.state.multiSelectMode = false;
+        this.notify();
+    }
+
+    toggleMultiSelectMode() {
+        this.state.multiSelectMode = !this.state.multiSelectMode;
+        if (!this.state.multiSelectMode) {
+            this.state.selection = [];
+        }
         this.notify();
     }
 
