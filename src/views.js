@@ -919,7 +919,8 @@ export function SearchView(ctx) {
     };
 }
 
-export function LikedView(ctx) {
+export function LikedView(ctx, options = {}) {
+    const { headerHost } = options;
     const { store, player, api } = ctx;
     const root = el('div', { class: 'liked-view' });
     let lastAccount = null;
@@ -962,10 +963,7 @@ export function LikedView(ctx) {
         const account = state.account;
 
         root.innerHTML = '';
-
-        const header = el('div', { class: 'view-header' });
-        const left = el('div', { class: 'view-header__left' });
-        left.appendChild(el('div', { class: 'view-title', text: '收藏的音乐' }));
+        if (headerHost) headerHost.innerHTML = '';
 
         const playAllBtn = el('button', {
             class: 'ena-btn ena-btn--sm ena-btn--primary',
@@ -977,7 +975,6 @@ export function LikedView(ctx) {
             player.setQueue(tracks, 0, true);
             Toast(`开始播放 ${tracks.length} 首`, 'success', 1600);
         });
-        left.appendChild(playAllBtn);
 
         const downloadAllBtn = el('button', {
             class: 'ena-btn ena-btn--sm',
@@ -988,7 +985,6 @@ export function LikedView(ctx) {
             if (!tracks.length) return;
             openBatchAddModal(tracks, ctx, 'append');
         });
-        left.appendChild(downloadAllBtn);
 
         const refreshBtn = el('button', {
             class: 'ena-btn ena-btn--sm',
@@ -999,14 +995,28 @@ export function LikedView(ctx) {
             loaded = false;
             loadTracks(account.uid);
         });
-        left.appendChild(refreshBtn);
 
-        header.appendChild(left);
-        header.appendChild(el('span', {
-            class: 'view-header__count',
+        const countEl = el('span', {
+            class: 'view-header__count search-tabs__liked-count',
             text: `共 ${tracks.length} 首`,
-        }));
-        root.appendChild(header);
+        });
+
+        if (headerHost) {
+            headerHost.appendChild(countEl);
+            headerHost.appendChild(playAllBtn);
+            headerHost.appendChild(downloadAllBtn);
+            headerHost.appendChild(refreshBtn);
+        } else {
+            const header = el('div', { class: 'view-header' });
+            const left = el('div', { class: 'view-header__left' });
+            left.appendChild(el('div', { class: 'view-title', text: '收藏的音乐' }));
+            left.appendChild(playAllBtn);
+            left.appendChild(downloadAllBtn);
+            left.appendChild(refreshBtn);
+            header.appendChild(left);
+            header.appendChild(countEl);
+            root.appendChild(header);
+        }
 
         if (!account.connected) {
             root.appendChild(EmptyState('请先连接网易云账户', 'user'));
@@ -1289,24 +1299,27 @@ export function MyFavoritesView(ctx) {
     const root = el('div', { class: 'myfavorites-view' });
 
     const TABS = [
+        { key: 'liked', label: '收藏的音乐' },
         { key: 'artists', label: '关注的歌手' },
         { key: 'created', label: '创建的歌单' },
         { key: 'collected', label: '收藏的歌单' },
     ];
 
     let lastAccount = null;
-    let activeTab = 'artists';
+    let activeTab = 'liked';
     let artists = [];
     let createdPlaylists = [];
     let collectedPlaylists = [];
     let loading = false;
     let loadError = null;
     let loaded = false;
+    let likedInstance = null;
     const pages = { artists: 1, created: 1, collected: 1 };
 
     const tabsEl = el('div', { class: 'search-tabs' });
     const tabsNav = el('div', { class: 'search-tabs__nav' });
     const totalEl = el('div', { class: 'search-tabs__total' });
+    const likedHeaderEl = el('div', { class: 'search-tabs__liked-header hidden' });
 
     for (const t of TABS) {
         const btn = el('button', {
@@ -1323,6 +1336,7 @@ export function MyFavoritesView(ctx) {
     }
 
     tabsEl.appendChild(tabsNav);
+    tabsEl.appendChild(likedHeaderEl);
     tabsEl.appendChild(totalEl);
 
     const bodyEl = el('div', { class: 'myfavorites-body' });
@@ -1413,6 +1427,9 @@ export function MyFavoritesView(ctx) {
         tabsNav.querySelectorAll('.search-tab').forEach((b) => {
             b.classList.toggle('is-active', b.dataset.key === activeTab);
         });
+        const isLiked = activeTab === 'liked';
+        likedHeaderEl.classList.toggle('hidden', !isLiked);
+        totalEl.classList.toggle('hidden', isLiked);
     }
 
     function setTotal(text) {
@@ -1474,6 +1491,18 @@ export function MyFavoritesView(ctx) {
     }
 
     function renderTab() {
+        if (activeTab !== 'liked' && likedInstance) {
+            likedInstance.destroy?.();
+            likedInstance = null;
+        }
+
+        if (activeTab === 'liked') {
+            bodyEl.innerHTML = '';
+            if (!likedInstance) likedInstance = LikedView(ctx, { headerHost: likedHeaderEl });
+            bodyEl.appendChild(likedInstance.node);
+            return;
+        }
+
         bodyEl.innerHTML = '';
 
         const perPage = store.get().settings.perPage;
@@ -1547,6 +1576,11 @@ export function MyFavoritesView(ctx) {
             return;
         }
 
+        if (activeTab === 'liked') {
+            renderTab();
+            return;
+        }
+
         if (loading && !loaded) {
             setTotal('');
             bodyEl.innerHTML = '';
@@ -1584,7 +1618,13 @@ export function MyFavoritesView(ctx) {
 
     return {
         node: root,
-        destroy: () => unsubscribe(),
+        destroy: () => {
+            if (likedInstance) {
+                likedInstance.destroy?.();
+                likedInstance = null;
+            }
+            unsubscribe();
+        },
     };
 }
 

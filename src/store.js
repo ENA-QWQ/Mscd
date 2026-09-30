@@ -283,7 +283,7 @@ class Store {
             follows: 0,
             connected: false,
         };
-        if (this.state.view === 'liked' || this.state.view === 'myplaylists') {
+        if (this.state.view === 'myfavorites') {
             this.state.view = 'search';
         }
         this.notify();

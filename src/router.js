@@ -29,7 +29,8 @@ function parseUrl() {
         };
     }
 
-    if (['queue', 'downloads', 'status', 'settings', 'liked', 'myfavorites'].includes(name)) {
+    if (name === 'liked') return { kind: 'view', view: 'myfavorites' };
+    if (['queue', 'downloads', 'status', 'settings', 'myfavorites'].includes(name)) {
         return { kind: 'view', view: name };
     }
 
@@ -62,7 +63,7 @@ export function buildUrl(state) {
         return '#/';
     }
 
-    if (['queue', 'downloads', 'status', 'settings', 'liked', 'myfavorites'].includes(state.view)) {
+    if (['queue', 'downloads', 'status', 'settings', 'myfavorites'].includes(state.view)) {
         return `#/${state.view}`;
     }
 

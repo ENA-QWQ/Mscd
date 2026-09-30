@@ -9,7 +9,6 @@ import {
     DownloadsView,
     StatusView,
     SettingsView,
-    LikedView,
     MyFavoritesView,
     openParseModal,
     openDownloadOptionsModal,
@@ -1222,9 +1221,6 @@ function mountView(viewName) {
             break;
         case 'settings':
             instance = SettingsView(ctx);
-            break;
-        case 'liked':
-            instance = LikedView(ctx);
             break;
         case 'myfavorites':
             instance = MyFavoritesView(ctx);

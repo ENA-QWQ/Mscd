@@ -4424,6 +4424,35 @@ body.has-selection .multi-select-bar {
     white-space: nowrap;
 }
 
+.search-tabs__liked-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.search-tabs__liked-count {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .search-tabs__liked-header {
+        width: 100%;
+        justify-content: flex-end;
+        padding-top: 8px;
+    }
+
+    .search-tabs__liked-header .ena-btn span {
+        display: none;
+    }
+
+    .search-tabs__liked-header .ena-btn {
+        padding: 6px 8px;
+        gap: 0;
+    }
+}
+
 .search-tab {
     position: relative;
     overflow: hidden;
@@ -4526,12 +4555,17 @@ body.has-selection .multi-select-bar {
     }
 
     .search-tabs {
+        flex-wrap: wrap;
         margin-bottom: 14px;
     }
 
+    .search-tabs__nav {
+        flex: 1 1 100%;
+    }
+
     .search-tab {
-        padding: 8px 14px;
-        font-size: .76rem;
+        padding: 8px 11px;
+        font-size: .7rem;
     }
 
     .search-tabs__total {
@@ -4550,8 +4584,8 @@ body.has-selection .multi-select-bar {
 
 @media (max-width: 560px) {
     .search-tab {
-        padding: 8px 12px;
-        font-size: .72rem;
+        padding: 7px 9px;
+        font-size: .64rem;
     }
 }
 
