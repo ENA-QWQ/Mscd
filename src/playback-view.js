@@ -204,7 +204,66 @@ export function initPlaybackView(ctx) {
     document.body.appendChild(overlay);
 
     let currentSongId = '';
+    let currentTitleText = '';
+    let titleScrollRAF = null;
+    let titleResizeTimer = null;
     let currentLyric = { lines: [], hasTimestamps: false };
+
+    function setPlaybackTitle(text) {
+        currentTitleText = text || '';
+        if (titleScrollRAF) {
+            cancelAnimationFrame(titleScrollRAF);
+            titleScrollRAF = null;
+        }
+        titleEl.classList.remove('is-scrolling');
+        titleEl.style.removeProperty('--scroll-distance');
+        titleEl.style.removeProperty('--scroll-duration');
+        titleEl.textContent = '';
+        titleEl.classList.remove('is-scrolling');
+        titleEl.style.removeProperty('--scroll-loop');
+        titleEl.style.removeProperty('--scroll-duration');
+
+        const track = el('span', { class: 'playback-title__track' });
+        const inner = el('span', {
+            class: 'playback-title__inner',
+            text: currentTitleText || '未知歌曲',
+        });
+        track.appendChild(inner);
+        titleEl.appendChild(track);
+
+        titleScrollRAF = requestAnimationFrame(() => {
+            titleScrollRAF = null;
+
+            const textWidth = inner.scrollWidth;
+            const overflow = textWidth - titleEl.clientWidth;
+            if (overflow <= 4) return;
+
+            const gapPx = 48;
+            const innerClone = el('span', {
+                class: 'playback-title__inner',
+                text: currentTitleText || '未知歌曲',
+            });
+            innerClone.style.paddingLeft = `${gapPx}px`;
+            track.appendChild(innerClone);
+
+            const loopDistance = textWidth + gapPx;
+            const duration = Math.max(3, Math.min(14, loopDistance / 60));
+
+            titleEl.style.setProperty('--scroll-loop', `${loopDistance}px`);
+            titleEl.style.setProperty('--scroll-duration', `${duration}s`);
+            titleEl.classList.add('is-scrolling');
+        });
+    }
+
+    function handleTitleResize() {
+        if (titleResizeTimer) clearTimeout(titleResizeTimer);
+        titleResizeTimer = setTimeout(() => {
+            titleResizeTimer = null;
+            if (currentTitleText) setPlaybackTitle(currentTitleText);
+        }, 150);
+    }
+
+    window.addEventListener('resize', handleTitleResize);
     let currentLineIndex = -1;
     let lyricLoading = false;
     let lyricToken = 0;
@@ -541,7 +600,7 @@ export function initPlaybackView(ctx) {
             switchingTimer = null;
             renderCover(song);
             renderBg(song);
-            titleEl.textContent = song.title || '未知歌曲';
+            setPlaybackTitle(song.title || '未知歌曲');
             artistEl.textContent = song.artist || '未知歌手';
             albumEl.textContent = song.album || '';
             loadCurrentLyric(song);
@@ -752,7 +811,10 @@ export function initPlaybackView(ctx) {
             if (switchingTimer) clearTimeout(switchingTimer);
             if (followTimer) clearTimeout(followTimer);
             if (closeTimer) clearTimeout(closeTimer);
+            if (titleScrollRAF) cancelAnimationFrame(titleScrollRAF);
+            if (titleResizeTimer) clearTimeout(titleResizeTimer);
             window.removeEventListener('resize', updateSpacerHeight);
+            window.removeEventListener('resize', handleTitleResize);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         },
     };

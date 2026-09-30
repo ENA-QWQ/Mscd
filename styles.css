@@ -356,17 +356,14 @@ body.queue-empty:not(.has-selection) .layout {
     -webkit-backdrop-filter: blur(14px);
     overflow: visible;
     min-width: 0;
-    transition: transform .35s var(--ease), opacity .3s var(--ease), clip-path .35s var(--ease);
+    clip-path: inset(0 0 0 0);
+    transition: clip-path .35s var(--ease);
 }
 
 body.has-selection .player-bar,
 body.queue-empty:not(.has-selection) .player-bar {
-    opacity: 0;
+    clip-path: inset(100% 0 0 0);
     pointer-events: none;
-}
-
-body.has-selection .player-bar {
-    transform: translateY(100%);
 }
 
 .player-info {
@@ -522,22 +519,19 @@ body.playback-open .player-cover {
 }
 
 .player-more-menu {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
+    position: fixed;
     min-width: 172px;
     padding: 4px 0 0;
     background: var(--bg-float);
     box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
-    z-index: 260;
+    z-index: 500;
     visibility: hidden;
     pointer-events: none;
     clip-path: inset(0 0 100% 0);
     transition: clip-path .25s var(--ease), visibility .25s;
 }
 
-.player-more-wrap.is-open .player-more-menu {
+.player-more-menu.is-open {
     visibility: visible;
     pointer-events: auto;
     clip-path: inset(0 0 0 0);
@@ -606,10 +600,7 @@ body.playback-open .player-cover {
 }
 
 .volume-popup {
-    position: absolute;
-    bottom: calc(100% + 10px);
-    left: 50%;
-    transform: translateX(-50%);
+    position: fixed;
     width: 160px;
     padding: 14px 16px;
     background: var(--bg-float);
@@ -617,10 +608,10 @@ body.playback-open .player-cover {
     clip-path: inset(0 0 100% 0);
     transition: clip-path .28s var(--ease);
     pointer-events: none;
-    z-index: 50;
+    z-index: 500;
 }
 
-.volume-wrap.is-open .volume-popup {
+.volume-popup.is-open {
     clip-path: inset(0 0 0 0);
     pointer-events: auto;
 }
@@ -2085,14 +2076,14 @@ body.has-selection .song-select {
     background: var(--bg-player);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    transform: translateY(100%);
-    transition: transform .35s var(--ease);
+    clip-path: inset(100% 0 0 0);
+    transition: clip-path .35s var(--ease);
     pointer-events: none;
     overflow: hidden;
 }
 
 body.has-selection .multi-select-bar {
-    transform: translateY(0);
+    clip-path: inset(0 0 0 0);
     pointer-events: auto;
 }
 
@@ -3732,13 +3723,19 @@ body.has-selection .multi-select-bar {
         height: var(--player-bar-height);
         z-index: 90;
         padding: 0 6px;
+        display: flex;
+        align-items: center;
         justify-content: flex-start;
+        background: var(--bg-player);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
         overflow-x: auto;
         overflow-y: hidden;
         scrollbar-width: none;
         -ms-overflow-style: none;
-        transform: translateY(100vh);
-        transition: transform .35s var(--ease);
+        clip-path: inset(100% 0 0 0);
+        transition: clip-path .35s var(--ease);
+        pointer-events: none;
     }
 
     .multi-select-bar::-webkit-scrollbar {
@@ -3746,7 +3743,8 @@ body.has-selection .multi-select-bar {
     }
 
     body.has-selection .multi-select-bar {
-        transform: translateY(0);
+        clip-path: inset(0 0 0 0);
+        pointer-events: auto;
     }
 
     .multi-select-bar__count {
@@ -5241,9 +5239,29 @@ body.playback-open {
     line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
     flex-shrink: 1;
     min-width: 0;
+    position: relative;
+}
+
+.playback-title__track {
+    display: inline-flex;
+    white-space: nowrap;
+    will-change: transform;
+}
+
+.playback-title__inner {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.playback-title.is-scrolling .playback-title__track {
+    animation: playback-title-scroll var(--scroll-duration, 8s) linear infinite;
+}
+
+@keyframes playback-title-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(calc(-1 * var(--scroll-loop, 0px))); }
 }
 
 .playback-album {

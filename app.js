@@ -604,6 +604,11 @@ function bindPlayerBar() {
 
     if (!playBtn) return;
 
+    const volumePopup = volumeWrap.querySelector('.volume-popup');
+    const playerMoreMenuEl = playerMoreWrap ? playerMoreWrap.querySelector('.player-more-menu') : null;
+    if (volumePopup) document.body.appendChild(volumePopup);
+    if (playerMoreMenuEl) document.body.appendChild(playerMoreMenuEl);
+
     function createCoverPlaceholder() {
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '0 0 24 24');
@@ -635,19 +640,46 @@ function bindPlayerBar() {
         store.update({ view: 'queue' });
     });
 
-    if (playerMoreBtn && playerMoreWrap) {
-        playerMoreBtn.addEventListener('click', (e) => {
+    if (volumeBtn && volumePopup) {
+        volumeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            playerMoreWrap.classList.toggle('is-open');
+            const isOpen = volumePopup.classList.contains('is-open');
+            if (playerMoreMenuEl) playerMoreMenuEl.classList.remove('is-open');
+            if (isOpen) {
+                volumePopup.classList.remove('is-open');
+            } else {
+                const rect = volumeBtn.getBoundingClientRect();
+                volumePopup.style.left = `${rect.left + rect.width / 2}px`;
+                volumePopup.style.top = `${rect.top - 10}px`;
+                volumePopup.style.transform = 'translate(-50%, -100%)';
+                volumePopup.classList.add('is-open');
+            }
         });
     }
 
-    if (playerMoreMenu && playerMoreWrap) {
-        playerMoreMenu.addEventListener('click', (e) => {
+    if (playerMoreBtn && playerMoreMenuEl) {
+        playerMoreBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = playerMoreMenuEl.classList.contains('is-open');
+            if (volumePopup) volumePopup.classList.remove('is-open');
+            if (isOpen) {
+                playerMoreMenuEl.classList.remove('is-open');
+            } else {
+                const rect = playerMoreBtn.getBoundingClientRect();
+                playerMoreMenuEl.style.left = `${rect.left + rect.width / 2}px`;
+                playerMoreMenuEl.style.top = `${rect.top - 8}px`;
+                playerMoreMenuEl.style.transform = 'translate(-50%, -100%)';
+                playerMoreMenuEl.classList.add('is-open');
+            }
+        });
+    }
+
+    if (playerMoreMenuEl) {
+        playerMoreMenuEl.addEventListener('click', (e) => {
             const item = e.target.closest('.player-more-item');
             if (!item) return;
             e.stopPropagation();
-            playerMoreWrap.classList.remove('is-open');
+            playerMoreMenuEl.classList.remove('is-open');
 
             const q = store.get().queue;
             const currentSong = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
@@ -675,28 +707,23 @@ function bindPlayerBar() {
         player.seek(percent);
     });
 
-    volumeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        volumeWrap.classList.toggle('is-open');
-    });
-
     volumeSlider.addEventListener('input', (e) => {
         player.setVolume(Number(e.target.value) / 100);
     });
 
     document.addEventListener('click', (e) => {
-        if (!volumeWrap.contains(e.target)) {
-            volumeWrap.classList.remove('is-open');
+        if (volumePopup && !volumePopup.contains(e.target) && !volumeBtn.contains(e.target)) {
+            volumePopup.classList.remove('is-open');
         }
-        if (playerMoreWrap && !playerMoreWrap.contains(e.target)) {
-            playerMoreWrap.classList.remove('is-open');
+        if (playerMoreMenuEl && !playerMoreMenuEl.contains(e.target) && playerMoreBtn && !playerMoreBtn.contains(e.target)) {
+            playerMoreMenuEl.classList.remove('is-open');
         }
     });
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            volumeWrap.classList.remove('is-open');
-            if (playerMoreWrap) playerMoreWrap.classList.remove('is-open');
+            if (volumePopup) volumePopup.classList.remove('is-open');
+            if (playerMoreMenuEl) playerMoreMenuEl.classList.remove('is-open');
         }
     });
 
@@ -709,8 +736,8 @@ function bindPlayerBar() {
         const q = state.queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
 
-        if (playerMoreMenu) {
-            playerMoreMenu.querySelectorAll('.player-more-item').forEach((item) => {
+        if (playerMoreMenuEl) {
+            playerMoreMenuEl.querySelectorAll('.player-more-item').forEach((item) => {
                 item.disabled = !song;
             });
         }
