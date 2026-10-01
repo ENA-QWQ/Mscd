@@ -758,12 +758,55 @@ function bindPlayerBar() {
         for (const line of playerLyric.lines) {
             const node = document.createElement('div');
             node.className = 'player-lyric__line';
-            node.textContent = line.text || '';
+            if (line.words && line.words.length) {
+                for (const word of line.words) {
+                    const span = document.createElement('span');
+                    span.className = 'player-lyric__word';
+                    span.textContent = word.text;
+                    span.dataset.start = String(word.startTime);
+                    span.dataset.end = String(word.endTime);
+                    node.appendChild(span);
+                }
+            } else {
+                node.textContent = line.text || '';
+            }
             frag.appendChild(node);
         }
         lyricLinesEl.appendChild(frag);
         playerLyricCurrentIndex = -1;
         if (lyricScrollerEl) lyricScrollerEl.style.transform = '';
+    }
+
+    function updatePlayerWords(t) {
+        if (!playerLyric.hasWordTimestamps || !playerLyric.lines.length) return;
+        const idx = findCurrentIndex(playerLyric.lines, t);
+        if (idx < 0) return;
+        const words = playerLyric.lines[idx].words;
+        if (!words || !words.length) return;
+        const row = lyricLinesEl.children[idx];
+        if (!row) return;
+        const spans = row.querySelectorAll('.player-lyric__word');
+        let activeIdx = -1;
+        for (let i = 0; i < words.length; i++) {
+            if (t < words[i].endTime) {
+                if (t >= words[i].startTime) activeIdx = i;
+                break;
+            }
+            activeIdx = i;
+        }
+        if (t >= words[words.length - 1].endTime) activeIdx = words.length - 1;
+        for (let i = 0; i < spans.length; i++) {
+            spans[i].classList.toggle('is-past', i < activeIdx);
+            spans[i].classList.toggle('is-active', i === activeIdx);
+        }
+        if (activeIdx < 0 || activeIdx >= spans.length) return;
+        const w = words[activeIdx];
+        const dur = w.endTime - w.startTime;
+        if (dur <= 0) return;
+        let p = ((t - w.startTime) / dur) * 100;
+        if (p < 0) p = 0;
+        else if (p > 100) p = 100;
+        spans[activeIdx].style.setProperty('--p', p.toFixed(1) + '%');
     }
 
     function updatePlayerLyricHighlight() {
@@ -774,6 +817,7 @@ function bindPlayerBar() {
         const t = q.currentTime || 0;
         const idx = findCurrentIndex(playerLyric.lines, t);
         if (idx < 0) return;
+
         if (idx === playerLyricCurrentIndex) return;
 
         const prev = lyricLinesEl.children[playerLyricCurrentIndex];
@@ -789,6 +833,25 @@ function bindPlayerBar() {
         const targetTop = (containerH - lineH) / 2;
         const offset = cur.offsetTop - targetTop;
         lyricScrollerEl.style.transform = `translateY(${-offset}px)`;
+    }
+
+    let playerWordRaf = null;
+    function tickPlayerWordRaf() {
+        playerWordRaf = null;
+        const q = store.get().queue;
+        if (!q.isPlaying) return;
+        updatePlayerWords(player.audio.currentTime || 0);
+        playerWordRaf = requestAnimationFrame(tickPlayerWordRaf);
+    }
+    function startPlayerWordRaf() {
+        if (playerWordRaf) return;
+        playerWordRaf = requestAnimationFrame(tickPlayerWordRaf);
+    }
+    function stopPlayerWordRaf() {
+        if (playerWordRaf) {
+            cancelAnimationFrame(playerWordRaf);
+            playerWordRaf = null;
+        }
     }
 
     async function loadPlayerLyric(song) {
@@ -824,6 +887,11 @@ function bindPlayerBar() {
 
     player.on('trackchange', (song) => loadPlayerLyric(song));
     player.on('timeupdate', () => updatePlayerLyricHighlight());
+
+    store.subscribe((state) => {
+        if (state.queue.isPlaying) startPlayerWordRaf();
+        else stopPlayerWordRaf();
+    });
 
     player.on('error', ({ song, error }) => {
         const msg = error?.message || '播放失败';

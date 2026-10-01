@@ -80,20 +80,121 @@ export function findCurrentIndex(lines, t) {
     return ans;
 }
 
+export function parseYrc(text) {
+    if (!text) return { lines: [], hasTimestamps: false, hasWordTimestamps: false };
+
+    const rawLines = String(text).split(/\r?\n/);
+    const lines = [];
+    let hasWordTimestamps = false;
+
+    for (const rawLine of rawLines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        if (line.startsWith('{')) continue;
+
+        const lineMatch = line.match(/^\[(\d+),(\d+)\]/);
+        if (!lineMatch) continue;
+
+        const lineStart = parseInt(lineMatch[1], 10);
+        const lineDuration = parseInt(lineMatch[2], 10);
+        const content = line.slice(lineMatch[0].length);
+
+        const wordRe = /\((\d+),(\d+),(\d+)\)([^(]*)/g;
+        const words = [];
+        let wordMatch;
+
+        while ((wordMatch = wordRe.exec(content)) !== null) {
+            const wordStart = parseInt(wordMatch[1], 10);
+            const wordDurationCs = parseInt(wordMatch[2], 10);
+            const wordText = wordMatch[4];
+            if (!wordText) continue;
+            const startSec = wordStart / 1000;
+            const endSec = (wordStart + wordDurationCs) / 1000;
+            words.push({ text: wordText, startTime: startSec, endTime: endSec });
+            hasWordTimestamps = true;
+        }
+
+        if (words.length) {
+            lines.push({
+                time: lineStart / 1000,
+                duration: lineDuration / 1000,
+                text: words.map((w) => w.text).join(''),
+                words,
+            });
+        }
+    }
+
+    lines.sort((a, b) => a.time - b.time);
+    return { lines, hasTimestamps: lines.length > 0, hasWordTimestamps };
+}
+
+function mergeTranslation(lines, tlyricText) {
+    if (!lines || !lines.length || !tlyricText) return;
+    const re = /^\[(\d+):(\d+)(?:[.:](\d+))?\](.*)$/;
+    const entries = [];
+    for (const raw of String(tlyricText).split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line) continue;
+        const m = line.match(re);
+        if (!m) continue;
+        const min = parseInt(m[1], 10) || 0;
+        const sec = parseInt(m[2], 10) || 0;
+        const frac = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) / 1000 : 0;
+        const text = m[4].trim();
+        if (text) entries.push({ time: min * 60 + sec + frac, text });
+    }
+    if (!entries.length) return;
+    for (const line of lines) {
+        if (line.translation) continue;
+        for (const e of entries) {
+            if (Math.abs(e.time - line.time) <= 0.5) {
+                line.translation = e.text;
+                break;
+            }
+        }
+    }
+}
+
 export async function loadLyric(api, song) {
-    if (!song || !song.id) return { lines: [], hasTimestamps: false };
+    if (!song || !song.id) return { lines: [], hasTimestamps: false, hasWordTimestamps: false };
 
     const key = String(song.id);
     if (lyricCache.has(key)) return lyricCache.get(key);
 
-    let text = '';
+    let raw = '';
     try {
-        text = await api.resolveLyric(song);
+        raw = await api.resolveLyric(song);
     } catch {
-        text = '';
+        raw = '';
     }
 
-    const parsed = parseLrc(text);
+    let parsed;
+
+    if (raw && typeof raw === 'object') {
+        const yrcText = raw.yrc || '';
+        if (yrcText) {
+            const yrcResult = parseYrc(yrcText);
+            if (yrcResult.lines.length) {
+                parsed = {
+                    lines: yrcResult.lines,
+                    hasTimestamps: true,
+                    hasWordTimestamps: yrcResult.hasWordTimestamps,
+                };
+            }
+        }
+        if (!parsed) {
+            const lrcText = raw.lrc || '';
+            const lrcResult = parseLrc(lrcText);
+            parsed = { ...lrcResult, hasWordTimestamps: false };
+        }
+        if (parsed && raw.tlyric) {
+            mergeTranslation(parsed.lines, raw.tlyric);
+        }
+    } else {
+        const lrcResult = parseLrc(typeof raw === 'string' ? raw : '');
+        parsed = { ...lrcResult, hasWordTimestamps: false };
+    }
+
     lyricCache.set(key, parsed);
     return parsed;
 }

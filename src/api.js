@@ -420,6 +420,32 @@ class NeteaseAdapter {
         }
     }
 
+    async lyricNew(id) {
+        try {
+            const url = this.buildUrl('/lyric/new', { id });
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 30000);
+            let response;
+            try {
+                response = await fetch(upgradeToHttps(url), {
+                    signal: controller.signal,
+                    redirect: 'follow',
+                });
+            } finally {
+                clearTimeout(timer);
+            }
+            if (!response.ok) return { lrc: '', yrc: '', tlyric: '' };
+            const data = JSON.parse(await response.text());
+            return {
+                lrc: data?.lrc?.lyric ?? '',
+                yrc: data?.yrc?.lyric ?? '',
+                tlyric: data?.tlyric?.lyric ?? '',
+            };
+        } catch {
+            return { lrc: '', yrc: '', tlyric: '' };
+        }
+    }
+
     async playlist(id) {
         const data = await this.request('/playlist/detail', { id });
         const playlist = data?.playlist;
@@ -648,7 +674,16 @@ export class Meting {
 
     async resolveLyric(song) {
         if (!song?.id) return '';
-        return this.pick('lyric').lyric(song.id);
+        const netease = this.adapters && this.adapters.netease;
+        if (netease && typeof netease.lyricNew === 'function') {
+            try {
+                const result = await netease.lyricNew(song.id);
+                if (result && (result.yrc || result.lrc)) return result;
+            } catch {}
+        }
+        const adapter = this.pick('lyric');
+        const text = await adapter.lyric(song.id);
+        return text || '';
     }
 
     async resolveCover(song) {

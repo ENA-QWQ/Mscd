@@ -207,7 +207,7 @@ export function initPlaybackView(ctx) {
     let currentTitleText = '';
     let titleScrollRAF = null;
     let titleResizeTimer = null;
-    let currentLyric = { lines: [], hasTimestamps: false };
+    let currentLyric = { lines: [], hasTimestamps: false, hasWordTimestamps: false };
 
     function setPlaybackTitle(text) {
         currentTitleText = text || '';
@@ -473,16 +473,33 @@ export function initPlaybackView(ctx) {
         lines.forEach((line, index) => {
             const row = el('div', { class: 'playback-lyric__line' });
             row.dataset.index = String(index);
-            row.appendChild(el('div', {
-                class: 'playback-lyric__text',
-                text: line.text || '',
-            }));
+            row.dataset.startTime = String(line.time);
+
+            const textEl = el('div', { class: 'playback-lyric__text' });
+
+            if (line.words && line.words.length) {
+                for (const word of line.words) {
+                    const span = el('span', {
+                        class: 'playback-lyric__word',
+                        text: word.text,
+                    });
+                    span.dataset.start = String(word.startTime);
+                    span.dataset.end = String(word.endTime);
+                    textEl.appendChild(span);
+                }
+            } else {
+                textEl.textContent = line.text || '';
+            }
+
+            row.appendChild(textEl);
+
             if (line.translation) {
                 row.appendChild(el('div', {
                     class: 'playback-lyric__translation',
                     text: line.translation,
                 }));
             }
+
             row.addEventListener('click', () => {
                 if (!currentLyric.hasTimestamps) return;
                 if (line.time < 0) return;
@@ -492,6 +509,7 @@ export function initPlaybackView(ctx) {
                 player.seek(line.time / total);
                 resumeFollow();
             });
+
             lyricLines.appendChild(row);
         });
 
@@ -551,7 +569,7 @@ export function initPlaybackView(ctx) {
         const token = ++lyricToken;
         lyricLoading = true;
 
-        currentLyric = { lines: [], hasTimestamps: false };
+        currentLyric = { lines: [], hasTimestamps: false, hasWordTimestamps: false };
         currentLineIndex = -1;
         lyricLines.innerHTML = '';
         scrollY = 0;
@@ -566,7 +584,7 @@ export function initPlaybackView(ctx) {
             renderLyricLines(parsed.lines);
         } catch {
             if (token !== lyricToken) return;
-            currentLyric = { lines: [], hasTimestamps: false };
+            currentLyric = { lines: [], hasTimestamps: false, hasWordTimestamps: false };
             lyricEl.classList.add('hidden');
             lyricPlaceholder.classList.remove('hidden');
             lyricPlaceholder.textContent = '歌词加载失败';
@@ -575,12 +593,69 @@ export function initPlaybackView(ctx) {
         }
     }
 
+    function updateWordHighlight(lineIndex, currentTime) {
+        const row = lyricLines.children[lineIndex];
+        if (!row) return;
+
+        const spans = row.querySelectorAll('.playback-lyric__word');
+        if (!spans.length) return;
+
+        const wordList = currentLyric.lines[lineIndex].words;
+        if (!wordList || !wordList.length) return;
+
+        let activeIdx = -1;
+        for (let i = 0; i < wordList.length; i++) {
+            if (currentTime < wordList[i].endTime) {
+                if (currentTime >= wordList[i].startTime) activeIdx = i;
+                break;
+            }
+            activeIdx = i;
+        }
+        if (currentTime >= wordList[wordList.length - 1].endTime) activeIdx = wordList.length - 1;
+
+        for (let i = 0; i < spans.length; i++) {
+            spans[i].classList.toggle('is-past', i < activeIdx);
+            spans[i].classList.toggle('is-active', i === activeIdx);
+        }
+
+        if (activeIdx < 0 || activeIdx >= spans.length) return;
+        const w = wordList[activeIdx];
+        const dur = w.endTime - w.startTime;
+        if (dur <= 0) return;
+        let p = ((currentTime - w.startTime) / dur) * 100;
+        if (p < 0) p = 0;
+        else if (p > 100) p = 100;
+        spans[activeIdx].style.setProperty('--p', p.toFixed(1) + '%');
+    }
+
     function handleTimeUpdate() {
         if (!currentLyric.hasTimestamps || !currentLyric.lines.length) return;
         const q = store.get().queue;
         const t = q.currentTime || 0;
         const idx = findCurrentIndex(currentLyric.lines, t);
         if (idx >= 0) updateHighlight(idx, true);
+    }
+
+    let wordRaf = null;
+    function tickWordRaf() {
+        wordRaf = null;
+        if (!currentLyric.hasWordTimestamps || !currentLyric.lines.length) return;
+        const q = store.get().queue;
+        if (!q.isPlaying) return;
+        const t = player.audio.currentTime || 0;
+        const idx = findCurrentIndex(currentLyric.lines, t);
+        if (idx >= 0) updateWordHighlight(idx, t);
+        wordRaf = requestAnimationFrame(tickWordRaf);
+    }
+    function startWordRaf() {
+        if (wordRaf) return;
+        wordRaf = requestAnimationFrame(tickWordRaf);
+    }
+    function stopWordRaf() {
+        if (wordRaf) {
+            cancelAnimationFrame(wordRaf);
+            wordRaf = null;
+        }
     }
 
     function handleSongChange(song) {
@@ -783,6 +858,9 @@ export function initPlaybackView(ctx) {
         if (state.playbackOpen) {
             requestAnimationFrame(updateSpacerHeight);
         }
+
+        if (state.queue.isPlaying) startWordRaf();
+        else stopWordRaf();
 
         if (song) {
             const key = String(song.id || song.url || song.title || '');
