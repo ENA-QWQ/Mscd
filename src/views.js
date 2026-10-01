@@ -1042,25 +1042,35 @@ export function LikedView(ctx, options = {}) {
         root.innerHTML = '';
         if (headerHost) headerHost.innerHTML = '';
 
+        const filterTree = state.filter?.liked || null;
+        let sourceTracks = tracks;
+        if (filterTree && tracks.length) {
+            const filterCtx = buildFilterContext(tracks, {
+                downloads: state.downloads,
+                queue: state.queue.tracks,
+            });
+            sourceTracks = tracks.filter((t, idx) => evaluate(filterTree, t, { ...filterCtx, index: idx }));
+        }
+
         const playAllBtn = el('button', {
             class: 'ena-btn ena-btn--sm ena-btn--primary',
             title: '播放全部',
         }, icon('play', true), el('span', { text: '播放全部' }));
-        playAllBtn.disabled = !account.connected || !tracks.length;
+        playAllBtn.disabled = !account.connected || !sourceTracks.length;
         playAllBtn.addEventListener('click', () => {
-            if (!tracks.length) return;
-            player.setQueue(tracks, 0, true);
-            Toast(`开始播放 ${tracks.length} 首`, 'success', 1600);
+            if (!sourceTracks.length) return;
+            player.setQueue(sourceTracks, 0, true);
+            Toast(`开始播放 ${sourceTracks.length} 首`, 'success', 1600);
         });
 
         const downloadAllBtn = el('button', {
             class: 'ena-btn ena-btn--sm',
             title: '下载全部',
         }, icon('download'), el('span', { text: '下载全部' }));
-        downloadAllBtn.disabled = !account.connected || !tracks.length;
+        downloadAllBtn.disabled = !account.connected || !sourceTracks.length;
         downloadAllBtn.addEventListener('click', () => {
-            if (!tracks.length) return;
-            openBatchAddModal(tracks, ctx, 'append');
+            if (!sourceTracks.length) return;
+            openBatchAddModal(sourceTracks, ctx, 'append');
         });
 
         const refreshBtn = el('button', {
@@ -1073,15 +1083,38 @@ export function LikedView(ctx, options = {}) {
             loadTracks(account.uid);
         });
 
+        const filterBtn = el('button', {
+            class: 'ena-btn ena-btn--sm',
+            title: '筛选',
+        }, icon('filter'), el('span', { text: '筛选' }));
+        filterBtn.disabled = !account.connected || !tracks.length;
+        filterBtn.addEventListener('click', () => {
+            openFilterEditor({
+                title: '筛选收藏的音乐',
+                fields: getFieldsForView('liked'),
+                initial: store.get().filter?.liked || null,
+                onApply: (tree) => {
+                    store.update({
+                        filter: { ...store.get().filter, liked: tree },
+                    });
+                    store.persist();
+                },
+            });
+        });
+
+        const countText = filterTree
+            ? `共 ${sourceTracks.length} / ${tracks.length} 首`
+            : `共 ${tracks.length} 首`;
         const countEl = el('span', {
             class: 'view-header__count search-tabs__liked-count',
-            text: `共 ${tracks.length} 首`,
+            text: countText,
         });
 
         if (headerHost) {
             headerHost.appendChild(countEl);
             headerHost.appendChild(playAllBtn);
             headerHost.appendChild(downloadAllBtn);
+            headerHost.appendChild(filterBtn);
             headerHost.appendChild(refreshBtn);
         } else {
             const header = el('div', { class: 'view-header' });
@@ -1089,6 +1122,7 @@ export function LikedView(ctx, options = {}) {
             left.appendChild(el('div', { class: 'view-title', text: '收藏的音乐' }));
             left.appendChild(playAllBtn);
             left.appendChild(downloadAllBtn);
+            left.appendChild(filterBtn);
             left.appendChild(refreshBtn);
             header.appendChild(left);
             header.appendChild(countEl);
@@ -1119,11 +1153,17 @@ export function LikedView(ctx, options = {}) {
             return;
         }
 
+        if (!sourceTracks.length) {
+            root.appendChild(EmptyState('没有符合筛选条件的歌曲', 'search'));
+            store.setVisibleTracks([]);
+            return;
+        }
+
         const perPage = state.settings.perPage;
-        const totalPages = Math.max(1, Math.ceil(tracks.length / perPage));
+        const totalPages = Math.max(1, Math.ceil(sourceTracks.length / perPage));
         const currentPage = Math.min(Math.max(1, page), totalPages);
         const start = (currentPage - 1) * perPage;
-        const slice = tracks.slice(start, start + perPage);
+        const slice = sourceTracks.slice(start, start + perPage);
 
         store.setVisibleTracks(slice);
 
@@ -1145,18 +1185,31 @@ export function LikedView(ctx, options = {}) {
         }
     }
 
+    let lastFilter = null;
+
     const unsubscribe = store.subscribe((state) => {
         const account = state.account;
-        if (lastAccount && lastAccount.uid === account.uid && lastAccount.connected === account.connected) {
-            return;
-        }
+        const filter = state.filter?.liked || null;
+
+        const accountChanged = !lastAccount
+            || lastAccount.uid !== account.uid
+            || lastAccount.connected !== account.connected;
+        const filterChanged = lastFilter !== filter;
+
+        if (!accountChanged && !filterChanged) return;
+
         lastAccount = { uid: account.uid, connected: account.connected };
+        lastFilter = filter;
+
         if (account.connected && !loaded && !loading) {
             loadTracks(account.uid);
         } else if (!account.connected) {
             loaded = false;
             tracks = [];
             loadError = null;
+            render();
+        } else if (filterChanged) {
+            page = 1;
             render();
         }
     });

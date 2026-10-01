@@ -67,6 +67,7 @@ function createInitialState() {
             queue: null,
             downloads: null,
             playlist: null,
+            liked: null,
         },
 
         downloadProgress: {
@@ -123,6 +124,7 @@ function loadPersisted(state) {
                 queue: f.queue || null,
                 downloads: f.downloads || null,
                 playlist: f.playlist || null,
+                liked: f.liked || null,
             };
         }
 

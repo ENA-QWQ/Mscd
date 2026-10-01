@@ -91,6 +91,7 @@ const VIEW_GROUPS = {
     queue: ['base', 'duration', 'content', 'length', 'cross'],
     downloads: ['base', 'duration', 'content', 'length', 'downloads', 'cross'],
     playlist: ['base', 'duration', 'content', 'length', 'cross'],
+    liked: ['base', 'duration', 'content', 'length', 'cross'],
 };
 
 export function getFieldsForView(view) {
