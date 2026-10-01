@@ -304,7 +304,7 @@ class Store {
         this.state.visibleTracks = Array.isArray(songs) ? songs : [];
     }
 
-    upsertDownloadTask(id, patch) {
+    upsertDownloadTask(id, patch, options = {}) {
         const tasks = this.state.downloadTasks;
         const idx = tasks.findIndex((t) => t.id === id);
         const isNew = idx === -1;
@@ -324,7 +324,9 @@ class Store {
         }
 
         this.notify();
-        this.persist();
+        if (options.persist !== false) {
+            this.persist();
+        }
     }
 
     updateTaskTrack(taskId, trackId, patch) {

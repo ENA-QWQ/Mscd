@@ -1553,13 +1553,17 @@ export class Downloader {
                 }
             }
 
+            let lastPackagingTick = 0;
             const zipBlob = await zip.generateAsync(
                 { type: 'blob' },
                 (metadata) => {
+                    const now = Date.now();
+                    if (now - lastPackagingTick < 200 && metadata.percent < 100) return;
+                    lastPackagingTick = now;
                     store.upsertDownloadTask(taskId, {
                         phase: 'packaging',
                         packagingProgress: metadata.percent / 100,
-                    });
+                    }, { persist: false });
                 }
             );
 
