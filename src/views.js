@@ -19,6 +19,8 @@ import {
     pickDownloadDir,
     clearSavedDir,
 } from './downloader.js';
+import { getFieldsForView, buildFilterContext, evaluate } from './filter.js';
+import { openFilterEditor } from './filter-editor.js';
 
 function hexToRgb(hex) {
     let h = String(hex || '').replace('#', '');
@@ -293,6 +295,7 @@ export function SearchView(ctx) {
     const { store, player, api } = ctx;
     const root = el('div', { class: 'search-view' });
     let lastSearch = null;
+    let lastFilter = null;
     let homeInstance = null;
 
     function openArtistDetail(meta) {
@@ -611,7 +614,32 @@ export function SearchView(ctx) {
         }
 
         infoChildren.push(el('div', { class: 'detail-header__meta' }, ...metaChildren));
-        infoChildren.push(el('div', { class: 'detail-header__actions' }, playAllBtn, downloadAllBtn));
+
+        const actionChildren = [playAllBtn, downloadAllBtn];
+        if (detail.kind === 'playlist') {
+            const filterBtn = el('button', {
+                class: 'ena-btn ena-btn--sm',
+                title: '筛选',
+            }, icon('filter'), el('span', { text: '筛选' }));
+            filterBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openFilterEditor({
+                    title: '筛选歌单',
+                    fields: getFieldsForView('playlist'),
+                    initial: store.get().filter?.playlist || null,
+                    onApply: (tree) => {
+                        const cur = store.get().search;
+                        store.update({
+                            filter: { ...store.get().filter, playlist: tree },
+                            search: cur.detail ? { ...cur, detail: { ...cur.detail, page: 1 } } : cur,
+                        });
+                        store.persist();
+                    },
+                });
+            });
+            actionChildren.push(filterBtn);
+        }
+        infoChildren.push(el('div', { class: 'detail-header__actions' }, ...actionChildren));
 
         const info = el('div', { class: 'detail-header__info' }, ...infoChildren);
 
@@ -636,11 +664,26 @@ export function SearchView(ctx) {
             return;
         }
 
+        let sourceTracks = detail.tracks;
+        if (detail.kind === 'playlist') {
+            const filterTree = store.get().filter?.playlist || null;
+            if (filterTree && detail.tracks.length) {
+                const filterCtx = buildFilterContext(detail.tracks, {
+                    downloads: store.get().downloads,
+                    queue: store.get().queue.tracks,
+                });
+                sourceTracks = detail.tracks
+                    .map((t, idx) => ({ t, idx }))
+                    .filter(({ t, idx }) => evaluate(filterTree, t, { ...filterCtx, index: idx }))
+                    .map(({ t }) => t);
+            }
+        }
+
         const perPage = store.get().settings.perPage;
-        const totalPages = Math.max(1, Math.ceil(detail.tracks.length / perPage));
+        const totalPages = Math.max(1, Math.ceil(sourceTracks.length / perPage));
         const page = Math.min(Math.max(1, detail.page || 1), totalPages);
         const start = (page - 1) * perPage;
-        const slice = detail.tracks.slice(start, start + perPage);
+        const slice = sourceTracks.slice(start, start + perPage);
 
         store.setVisibleTracks(slice);
 
@@ -717,6 +760,24 @@ export function SearchView(ctx) {
         }
         tabsEl.appendChild(tabsNav);
         tabsEl.appendChild(el('div', { class: 'search-tabs__total' }));
+
+        const filterBtn = el('button', {
+            class: 'ena-btn ena-btn--sm search-tabs__filter',
+            title: '筛选单曲',
+        }, icon('filter'), el('span', { text: '筛选' }));
+        filterBtn.addEventListener('click', () => {
+            openFilterEditor({
+                title: '筛选搜索结果',
+                fields: getFieldsForView('search'),
+                initial: store.get().filter?.search || null,
+                onApply: (tree) => {
+                    store.update({ filter: { ...store.get().filter, search: tree } });
+                    store.persist();
+                },
+            });
+        });
+        tabsEl.appendChild(filterBtn);
+
         bodyEl = el('div', { class: 'search-body' });
         root.appendChild(tabsEl);
         root.appendChild(bodyEl);
@@ -727,6 +788,8 @@ export function SearchView(ctx) {
         tabsEl.querySelectorAll('.search-tab').forEach((b) => {
             b.classList.toggle('is-active', b.dataset.key === type);
         });
+        const filterBtn = tabsEl.querySelector('.search-tabs__filter');
+        if (filterBtn) filterBtn.style.display = type === '1' ? '' : 'none';
     }
 
     function renderItems(items, typeKey) {
@@ -735,10 +798,22 @@ export function SearchView(ctx) {
         else if (typeKey === '10') listClass += ' song-list--album';
         else if (typeKey === '100') listClass += ' song-list--artist';
 
+        let sourceItems = items;
+        if (typeKey === '1' && items.length) {
+            const filterTree = store.get().filter?.search || null;
+            if (filterTree) {
+                const filterCtx = buildFilterContext(items, {
+                    downloads: store.get().downloads,
+                    queue: store.get().queue.tracks,
+                });
+                sourceItems = items.filter((it) => evaluate(filterTree, it, filterCtx));
+            }
+        }
+
         const list = el('div', { class: listClass });
         const visibleTracks = [];
 
-        for (const item of items) {
+        for (const item of sourceItems) {
             if (typeKey === '100') {
                 list.appendChild(ArtistCard(item, {
                     onOpen: () => openArtistDetail(item),
@@ -851,8 +926,10 @@ export function SearchView(ctx) {
     function render() {
         const state = store.get();
         const search = state.search;
-        if (search === lastSearch) return;
+        const filter = state.filter?.search || null;
+        if (search === lastSearch && filter === lastFilter) return;
         lastSearch = search;
+        lastFilter = filter;
 
         if (search.detail) {
             if (homeInstance) {
@@ -1114,6 +1191,23 @@ export function QueueView(ctx) {
     searchWrap.appendChild(searchInputWrap);
     toolbar.appendChild(searchWrap);
 
+    const filterBtn = el('button', { class: 'ena-btn ena-btn--sm' }, icon('filter'), el('span', { text: '筛选' }));
+    filterBtn.addEventListener('click', () => {
+        openFilterEditor({
+            title: '筛选播放队列',
+            fields: getFieldsForView('queue'),
+            initial: store.get().filter?.queue || null,
+            onApply: (tree) => {
+                store.update({
+                    filter: { ...store.get().filter, queue: tree },
+                    queuePage: 1,
+                });
+                store.persist();
+            },
+        });
+    });
+    toolbar.appendChild(filterBtn);
+
     const removeBtn = el('button', { class: 'ena-btn ena-btn--sm' }, '移除');
     removeBtn.addEventListener('click', () => {
         const state = store.get();
@@ -1173,6 +1267,7 @@ export function QueueView(ctx) {
     let lastSearch = null;
     let lastPage = null;
     let lastPerPage = null;
+    let lastFilter = null;
 
     function render() {
         const state = store.get();
@@ -1189,13 +1284,16 @@ export function QueueView(ctx) {
         const selectedInQueue = state.selection.some((s) => q.tracks.some((t) => t.id === s.id));
         removeBtn.disabled = !hasTracks || !selectedInQueue;
 
+        const filter = state.filter?.queue || null;
+
         if (
             q.tracks === lastTracks &&
             q.currentIndex === lastIndex &&
             q.isPlaying === lastPlaying &&
             search === lastSearch &&
             page === lastPage &&
-            perPage === lastPerPage
+            perPage === lastPerPage &&
+            filter === lastFilter
         ) return;
 
         lastTracks = q.tracks;
@@ -1204,6 +1302,7 @@ export function QueueView(ctx) {
         lastSearch = search;
         lastPage = page;
         lastPerPage = perPage;
+        lastFilter = filter;
 
         listHost.innerHTML = '';
 
@@ -1213,9 +1312,18 @@ export function QueueView(ctx) {
             return;
         }
 
+        const filterCtx = filter ? buildFilterContext(q.tracks, {
+            downloads: state.downloads,
+            queue: q.tracks,
+            currentIndex: q.currentIndex,
+            isPlaying: q.isPlaying,
+        }) : null;
+
         const items = [];
         q.tracks.forEach((song, idx) => {
-            if (matchSearch(song, search)) items.push({ song, index: idx });
+            if (!matchSearch(song, search)) return;
+            if (filter && filterCtx && !evaluate(filter, song, { ...filterCtx, index: idx })) return;
+            items.push({ song, index: idx });
         });
 
         if (!items.length) {
@@ -1652,6 +1760,23 @@ export function DownloadsView(ctx) {
     searchWrap.appendChild(searchInputWrap);
     toolbar.appendChild(searchWrap);
 
+    const filterBtn = el('button', { class: 'ena-btn ena-btn--sm' }, icon('filter'), el('span', { text: '筛选' }));
+    filterBtn.addEventListener('click', () => {
+        openFilterEditor({
+            title: '筛选下载列表',
+            fields: getFieldsForView('downloads'),
+            initial: store.get().filter?.downloads || null,
+            onApply: (tree) => {
+                store.update({
+                    filter: { ...store.get().filter, downloads: tree },
+                    downloadsPage: 1,
+                });
+                store.persist();
+            },
+        });
+    });
+    toolbar.appendChild(filterBtn);
+
     const allBtn = el('button', { class: 'ena-btn ena-btn--primary ena-btn--sm' }, '全部下载');
     allBtn.addEventListener('click', startDownloadAll);
     toolbar.appendChild(allBtn);
@@ -1695,6 +1820,7 @@ export function DownloadsView(ctx) {
     let lastSearch = null;
     let lastPage = null;
     let lastPerPage = null;
+    let lastFilter = null;
 
     async function startDownloadAll() {
         const downloads = store.get().downloads;
@@ -1806,17 +1932,21 @@ export function DownloadsView(ctx) {
         editBtn.disabled = !hasSelection || !hasDownloads;
         removeBtn.disabled = !selectedInDownloads || !hasDownloads;
 
+        const filter = state.filter?.downloads || null;
+
         if (
             state.downloads === lastDownloads &&
             search === lastSearch &&
             page === lastPage &&
-            perPage === lastPerPage
+            perPage === lastPerPage &&
+            filter === lastFilter
         ) return;
 
         lastDownloads = state.downloads;
         lastSearch = search;
         lastPage = page;
         lastPerPage = perPage;
+        lastFilter = filter;
 
         listHost.innerHTML = '';
 
@@ -1826,9 +1956,17 @@ export function DownloadsView(ctx) {
             return;
         }
 
-        const filtered = search
+        let filtered = search
             ? state.downloads.filter((s) => matchSearch(s, search))
             : state.downloads;
+
+        if (filter) {
+            const filterCtx = buildFilterContext(state.downloads, {
+                downloads: state.downloads,
+                queue: state.queue.tracks,
+            });
+            filtered = filtered.filter((s, idx) => evaluate(filter, s, { ...filterCtx, index: idx }));
+        }
 
         if (!filtered.length) {
             listHost.appendChild(EmptyState('没有匹配的歌曲', 'search'));

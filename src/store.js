@@ -62,6 +62,13 @@ function createInitialState() {
 
         downloadTasks: [],
 
+        filter: {
+            search: null,
+            queue: null,
+            downloads: null,
+            playlist: null,
+        },
+
         downloadProgress: {
             active: false,
             done: 0,
@@ -107,6 +114,16 @@ function loadPersisted(state) {
 
         if (Array.isArray(saved.downloads)) {
             state.downloads = saved.downloads;
+        }
+
+        if (saved.filter && typeof saved.filter === 'object') {
+            const f = saved.filter;
+            state.filter = {
+                search: f.search || null,
+                queue: f.queue || null,
+                downloads: f.downloads || null,
+                playlist: f.playlist || null,
+            };
         }
 
         if (saved.settings && typeof saved.settings === 'object') {
@@ -402,6 +419,7 @@ class Store {
                     duration: this.state.queue.duration,
                 },
                 downloadTasks: this.state.downloadTasks,
+                filter: this.state.filter,
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         } catch (err) {

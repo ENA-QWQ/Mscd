@@ -27,6 +27,10 @@ const ICON_PATHS = {
     home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
     'share-card': '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
     'check-square': '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+    filter: '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+    'chevron-down': '<polyline points="6 9 12 15 18 9"/>',
+    'folder-plus': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>',
+    not: '<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',
 };
 
 export function icon(name, filled = false) {
@@ -794,7 +798,15 @@ if (typeof document !== 'undefined') {
         if (e.key === 'Escape') closeAllDropdowns();
     });
     window.addEventListener('resize', () => closeAllDropdowns());
-    window.addEventListener('scroll', () => closeAllDropdowns(), true);
+    window.addEventListener('scroll', (e) => {
+        const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+        for (const n of path) {
+            if (n && n.classList && n.classList.contains('ena-dropdown__menu')) return;
+        }
+        const t = e.target;
+        if (t && typeof t.closest === 'function' && t.closest('.ena-dropdown__menu')) return;
+        closeAllDropdowns();
+    }, true);
 }
 
 export function Dropdown({ options, value, onChange, className = '', title = '' }) {
@@ -850,12 +862,28 @@ export function Dropdown({ options, value, onChange, className = '', title = '' 
         }
         const rect = trigger.getBoundingClientRect();
         menuEl.style.minWidth = `${Math.max(rect.width, 140)}px`;
+        menuEl.style.maxHeight = '';
+
+        const mh = menuEl.offsetHeight;
         const mw = menuEl.offsetWidth;
+        const spaceBelow = window.innerHeight - rect.bottom - 8;
+        const spaceAbove = rect.top - 8;
+
         let left = rect.left;
         if (left + mw > window.innerWidth - 8) {
             left = Math.max(8, window.innerWidth - mw - 8);
         }
-        menuEl.style.top = `${rect.bottom + 4}px`;
+
+        if (spaceBelow >= mh || spaceBelow >= spaceAbove) {
+            menuEl.style.top = `${rect.bottom + 4}px`;
+            menuEl.style.bottom = '';
+            if (mh > spaceBelow) menuEl.style.maxHeight = `${Math.max(120, spaceBelow)}px`;
+        } else {
+            menuEl.style.top = 'auto';
+            menuEl.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+            menuEl.style.maxHeight = `${Math.max(120, spaceAbove)}px`;
+        }
+
         menuEl.style.left = `${left}px`;
         wrap.classList.add('is-open');
         isOpen = true;

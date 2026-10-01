@@ -17,7 +17,7 @@ export const config = {
         url: 'meting',
         lyric: 'meting',
         album: 'netease',
-        playlist: 'meting',
+        playlist: 'netease',
         artist: 'netease',
         user: 'netease',
     },

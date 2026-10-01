@@ -246,6 +246,9 @@ class NeteaseAdapter {
             ?? '';
         const pic = albumObj.picUrl ?? albumObj.pic ?? '';
 
+        let duration = Number(item.dt ?? item.duration ?? 0) || 0;
+        if (duration > 10000) duration = Math.round(duration / 1000);
+
         return {
             id: String(item.id ?? ''),
             title: item.name ?? '',
@@ -254,7 +257,7 @@ class NeteaseAdapter {
             url: '',
             pic,
             lrc: '',
-            duration: item.dt ?? item.duration ?? 0,
+            duration,
         };
     }
 
@@ -422,16 +425,35 @@ class NeteaseAdapter {
         const playlist = data?.playlist;
         if (!playlist) return [];
 
-        let tracks = playlist.tracks || [];
-        const trackIds = playlist.trackIds || [];
+        const total = playlist.trackCount || 0;
+        const pageSize = 500;
+        const pages = Math.max(1, Math.ceil(total / pageSize));
 
-        if (trackIds.length > tracks.length) {
-            const ids = trackIds.map(t => t.id).join(',');
-            const detail = await this.request('/song/detail', { ids });
-            tracks = detail?.songs || tracks;
+        const tasks = [];
+        for (let i = 0; i < pages; i++) {
+            tasks.push(this.request('/playlist/track/all', {
+                id,
+                limit: pageSize,
+                offset: i * pageSize,
+            }));
         }
 
-        return tracks.map(t => this.normalizeSong(t)).filter(Boolean);
+        const results = await Promise.all(tasks);
+        const all = [];
+        for (const r of results) {
+            if (r && Array.isArray(r.songs)) {
+                for (const s of r.songs) {
+                    const song = this.normalizeSong(s);
+                    if (song) all.push(song);
+                }
+            }
+        }
+
+        if (!all.length) {
+            return (playlist.tracks || []).map(t => this.normalizeSong(t)).filter(Boolean);
+        }
+
+        return all;
     }
 
     async album(id) {

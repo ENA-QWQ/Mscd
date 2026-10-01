@@ -4749,13 +4749,19 @@ body.has-selection .multi-select-bar {
     visibility: hidden;
     pointer-events: none;
     clip-path: inset(0 0 100% 0);
-    transition: clip-path .25s var(--ease), visibility .25s;
+    transition: clip-path .25s var(--ease), visibility 0s linear .25s;
+    max-height: 60vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
 }
 
 .ena-dropdown__menu.is-open {
     visibility: visible;
     pointer-events: auto;
     clip-path: inset(0 0 0 0);
+    transition: clip-path .25s var(--ease), visibility 0s linear 0s;
 }
 
 .ena-dropdown__item {
@@ -5970,5 +5976,243 @@ body.playback-open {
         box-sizing: border-box;
         padding-left: 20px;
         padding-right: 20px;
+    }
+}
+
+.filter-editor {
+    display: flex;
+    flex-direction: column;
+}
+
+.filter-editor__tree {
+    display: flex;
+    flex-direction: column;
+    max-height: 56vh;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+.filter-group-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.filter-empty {
+    padding: 14px 8px;
+    text-align: center;
+    font-size: .76rem;
+    color: var(--text-tertiary);
+}
+
+.filter-op-connector {
+    display: flex;
+    align-items: center;
+    padding: 2px 0 2px 8px;
+}
+
+.filter-op-connector .ena-dropdown {
+    height: 20px;
+}
+
+.filter-op-connector .ena-dropdown__trigger {
+    padding: 0 18px 0 6px;
+    font-size: .68rem;
+    border-bottom: none;
+    background-image:
+            url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 9px;
+    color: var(--text-tertiary);
+}
+
+.filter-op-connector .ena-dropdown.is-open .ena-dropdown__trigger {
+    background-image:
+            url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-position: right 6px center;
+    background-size: 9px;
+    color: var(--text-primary);
+}
+
+.filter-condition {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+}
+
+.filter-condition .ena-dropdown {
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.filter-condition .ena-dropdown__trigger {
+    padding: 0 22px 0 8px;
+    font-size: .74rem;
+    border-bottom: 1px solid var(--border-line);
+    background-image:
+            url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"),
+            linear-gradient(var(--fill), var(--fill));
+    background-repeat: no-repeat, no-repeat;
+    background-position: right 8px center, left bottom;
+    background-size: 10px, 100% 0%;
+}
+
+.filter-condition .ena-dropdown.is-open .ena-dropdown__trigger {
+    background-image:
+            url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"),
+            linear-gradient(var(--fill), var(--fill));
+    background-repeat: no-repeat, no-repeat;
+    background-position: right 8px center, left bottom;
+    background-size: 10px, 100% 100%;
+    color: #fff;
+}
+
+.filter-condition__op .ena-dropdown__trigger {
+    padding: 0 22px 0 0;
+}
+
+.filter-condition__op .ena-dropdown__label {
+    text-align: center;
+}
+
+.filter-condition__value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 80px;
+    flex-wrap: wrap;
+}
+
+.filter-condition .ena-input {
+    width: auto;
+    padding: 0 8px;
+    height: 26px;
+    font-size: .74rem;
+    flex: 1;
+    min-width: 60px;
+    border-bottom: 1px solid var(--border-line);
+    background-color: transparent;
+}
+
+.filter-condition .ena-input:focus {
+    background-color: transparent;
+}
+
+.filter-condition .filter-value__num {
+    max-width: 80px;
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.filter-value__unit {
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.filter-value__unit .ena-dropdown__trigger {
+    padding: 0 20px 0 8px;
+    font-size: .72rem;
+}
+
+.filter-value__sep {
+    color: var(--text-tertiary);
+    font-size: .74rem;
+    flex-shrink: 0;
+}
+
+.filter-value__opt {
+    font-size: .72rem;
+}
+
+.filter-subgroup {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-subtle);
+}
+
+.filter-subgroup__header {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 4px;
+}
+
+.filter-subgroup__label {
+    font-family: 'LXGW WenKai Light', system-ui, sans-serif;
+    font-size: .68rem;
+    letter-spacing: .5px;
+    color: var(--text-tertiary);
+    margin-left: 4px;
+}
+
+.filter-subgroup__spacer {
+    flex: 1;
+}
+
+.filter-subgroup__body {
+    padding: 3px 6px 4px 6px;
+}
+
+.filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0 2px 6px;
+}
+
+.ena-btn--icon.filter-icon-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.ena-btn--icon.filter-icon-btn svg {
+    width: 13px;
+    height: 13px;
+}
+
+.filter-icon-btn.is-active {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+.filter-condition__del {
+    margin-left: auto;
+    color: var(--text-tertiary);
+}
+
+.filter-condition__del:hover {
+    color: var(--danger);
+}
+
+.ena-modal__panel:has(.filter-editor) {
+    max-width: 640px;
+}
+
+.search-tabs__filter {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+@media (max-width: 900px) {
+    .filter-condition {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .filter-condition__value {
+        flex: 1 1 100%;
+        order: 3;
+    }
+
+    .filter-condition__del {
+        margin-left: auto;
+    }
+
+    .ena-modal__panel:has(.filter-editor) {
+        max-width: 100%;
     }
 }
