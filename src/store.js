@@ -57,6 +57,8 @@ function createInitialState() {
         multiSelectMode: false,
 
         visibleTracks: [],
+        allTracks: [],
+        filteredTracks: [],
 
         playbackOpen: false,
 
@@ -321,6 +323,14 @@ class Store {
 
     setVisibleTracks(songs) {
         this.state.visibleTracks = Array.isArray(songs) ? songs : [];
+    }
+
+    setAllTracks(songs) {
+        this.state.allTracks = Array.isArray(songs) ? songs : [];
+    }
+
+    setFilteredTracks(songs) {
+        this.state.filteredTracks = Array.isArray(songs) ? songs : [];
     }
 
     upsertDownloadTask(id, patch, options = {}) {

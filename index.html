@@ -255,23 +255,21 @@
             已选 <strong id="selection-count">0</strong> 首
         </div>
         <div class="multi-select-bar__actions">
-            <button class="multi-select-action" data-action="select-all" title="全选此页">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="9 11 12 14 22 4" />
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                </svg>
-                <span>全选此页</span>
-            </button>
-            <button class="multi-select-action" data-action="select-all-all" title="全选所有">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M8 4h12v12" />
-                    <rect x="4" y="8" width="12" height="12" />
-                    <polyline points="7 14 10 17 13 11" />
-                </svg>
-                <span>全选所有</span>
-            </button>
+            <div class="multi-select-menu-wrap">
+                <button class="multi-select-action" data-action="select-menu" title="全选">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 11 12 14 22 4" />
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                    </svg>
+                    <span>全选</span>
+                </button>
+                <div class="multi-select-menu">
+                    <button class="multi-select-menu-item" data-action="select-all">全选此页</button>
+                    <button class="multi-select-menu-item" data-action="select-all-all">全选所有</button>
+                    <button class="multi-select-menu-item" data-action="select-filtered">全选筛选结果</button>
+                </div>
+            </div>
             <button class="multi-select-action" data-action="cancel" title="取消选择">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
@@ -280,42 +278,39 @@
                 </svg>
                 <span>取消</span>
             </button>
-            <button class="multi-select-action" data-action="add-download" title="添加到下载列表">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                <span>添加到下载列表</span>
-            </button>
-            <button class="multi-select-action" data-action="replace-download" title="替换下载列表">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                <span>替换下载列表</span>
-            </button>
-            <button class="multi-select-action" data-action="add-playlist" title="添加到播放列表">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="8" y1="6" x2="21" y2="6" />
-                    <line x1="8" y1="12" x2="21" y2="12" />
-                    <line x1="8" y1="18" x2="21" y2="18" />
-                    <line x1="3" y1="6" x2="3.01" y2="6" />
-                    <line x1="3" y1="12" x2="3.01" y2="12" />
-                    <line x1="3" y1="18" x2="3.01" y2="18" />
-                </svg>
-                <span>添加到播放列表</span>
-            </button>
-            <button class="multi-select-action" data-action="replace-playlist" title="替换播放列表">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <polygon points="6 4 20 12 6 20" />
-                </svg>
-                <span>替换播放列表</span>
-            </button>
+            <div class="multi-select-menu-wrap">
+                <button class="multi-select-action" data-action="download-menu" title="添加下载">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>添加下载</span>
+                </button>
+                <div class="multi-select-menu">
+                    <button class="multi-select-menu-item" data-action="add-download">添加到下载列表</button>
+                    <button class="multi-select-menu-item" data-action="replace-download">替换下载列表</button>
+                </div>
+            </div>
+            <div class="multi-select-menu-wrap">
+                <button class="multi-select-action" data-action="play-menu" title="添加播放">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="8" y1="6" x2="21" y2="6" />
+                        <line x1="8" y1="12" x2="21" y2="12" />
+                        <line x1="8" y1="18" x2="21" y2="18" />
+                        <line x1="3" y1="6" x2="3.01" y2="6" />
+                        <line x1="3" y1="12" x2="3.01" y2="12" />
+                        <line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                    <span>添加播放</span>
+                </button>
+                <div class="multi-select-menu">
+                    <button class="multi-select-menu-item" data-action="add-playlist">添加到播放列表</button>
+                    <button class="multi-select-menu-item" data-action="replace-playlist">替换播放列表</button>
+                </div>
+            </div>
         </div>
     </footer>
 

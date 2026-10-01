@@ -1162,10 +1162,46 @@ function bindMultiSelectBar() {
     const bar = document.getElementById('multi-select-bar');
     if (!bar) return;
 
-    bar.addEventListener('click', (e) => {
-        const btn = e.target.closest('.multi-select-action');
+    const pairs = [];
+    bar.querySelectorAll('.multi-select-menu-wrap').forEach((wrap) => {
+        const menu = wrap.querySelector('.multi-select-menu');
+        if (!menu) return;
+        document.body.appendChild(menu);
+        pairs.push({ wrap, menu });
+    });
+
+    function closeMenus() {
+        for (const { wrap, menu } of pairs) {
+            wrap.classList.remove('is-open');
+            menu.classList.remove('is-open');
+        }
+    }
+
+    function positionMenu(btn, menu) {
+        const btnRect = btn.getBoundingClientRect();
+        const menuWidth = menu.offsetWidth || 160;
+        const menuHeight = menu.offsetHeight || 120;
+
+        let left = btnRect.left + btnRect.width / 2 - menuWidth / 2;
+        left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+        menu.style.left = left + 'px';
+
+        let top = btnRect.top - menuHeight - 6;
+        if (top < 8) top = btnRect.bottom + 6;
+        menu.style.top = top + 'px';
+    }
+
+    function openMenuFor(wrap) {
+        const entry = pairs.find((p) => p.wrap === wrap);
+        if (!entry) return;
+        const btn = wrap.querySelector('.multi-select-action');
         if (!btn) return;
-        const action = btn.dataset.action;
+        positionMenu(btn, entry.menu);
+        wrap.classList.add('is-open');
+        entry.menu.classList.add('is-open');
+    }
+
+    function handleAction(action) {
         const selection = store.get().selection;
 
         if (action === 'select-all') {
@@ -1184,33 +1220,31 @@ function bindMultiSelectBar() {
         }
 
         if (action === 'select-all-all') {
-            const view = store.get().view;
-            if (view !== 'queue' && view !== 'downloads') {
-                Toast('仅播放队列和下载列表支持全选所有', 'warning', 1600);
+            const tracks = store.get().allTracks;
+            if (!tracks.length) {
+                Toast('当前视图没有可全选的数据', 'warning', 1600);
                 return;
             }
-
-            let tracks = [];
-            let keyword = '';
-            if (view === 'queue') {
-                tracks = store.get().queue.tracks;
-                keyword = store.get().queueSearch || '';
-            } else {
-                tracks = store.get().downloads;
-                keyword = store.get().downloadsSearch || '';
-            }
-
-            const filtered = filterTracksBySearch(tracks, keyword);
-            if (!filtered.length) {
-                Toast('当前没有可选的歌曲', 'warning', 1600);
-                return;
-            }
-
-            const added = store.addSelection(filtered);
+            const added = store.addSelection(tracks);
             if (!added) {
-                Toast('当前结果已全部选中', 'warning', 1400);
+                Toast('已全部选中', 'warning', 1400);
             } else {
-                Toast(`已选中当前结果 ${filtered.length} 首`, 'success', 1600);
+                Toast(`已选中 ${tracks.length} 首`, 'success', 1600);
+            }
+            return;
+        }
+
+        if (action === 'select-filtered') {
+            const tracks = store.get().filteredTracks;
+            if (!tracks.length) {
+                Toast('没有可选的筛选结果', 'warning', 1600);
+                return;
+            }
+            const added = store.addSelection(tracks);
+            if (!added) {
+                Toast('筛选结果已全部选中', 'warning', 1400);
+            } else {
+                Toast(`已选中筛选结果 ${tracks.length} 首`, 'success', 1600);
             }
             return;
         }
@@ -1264,7 +1298,50 @@ function bindMultiSelectBar() {
             Toast(`已替换播放列表（${selection.length} 首）`, 'success', 1600);
             store.clearSelection();
         }
+    }
+
+    bar.addEventListener('click', (e) => {
+        const actionBtn = e.target.closest('.multi-select-action');
+        if (!actionBtn) return;
+        e.stopPropagation();
+
+        const wrap = actionBtn.closest('.multi-select-menu-wrap');
+        if (wrap) {
+            const wasOpen = wrap.classList.contains('is-open');
+            closeMenus();
+            if (!wasOpen) openMenuFor(wrap);
+            return;
+        }
+
+        closeMenus();
+        handleAction(actionBtn.dataset.action);
     });
+
+    for (const { menu } of pairs) {
+        menu.addEventListener('click', (e) => {
+            const item = e.target.closest('.multi-select-menu-item');
+            if (!item) return;
+            e.stopPropagation();
+            closeMenus();
+            if (item.classList.contains('is-disabled') || item.disabled) return;
+            handleAction(item.dataset.action);
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        if (bar.contains(e.target)) return;
+        for (const { menu } of pairs) {
+            if (menu.contains(e.target)) return;
+        }
+        closeMenus();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeMenus();
+    });
+
+    window.addEventListener('resize', closeMenus);
+    window.addEventListener('scroll', closeMenus, true);
 }
 
 function bindSelectionSync() {
@@ -1281,13 +1358,19 @@ function bindSelectionSync() {
         const bar = document.getElementById('multi-select-bar');
         if (bar) {
             const view = state.view;
-            bar.querySelectorAll('.multi-select-action').forEach((btn) => {
+            const hasAll = Array.isArray(state.allTracks) && state.allTracks.length > 0;
+            const hasFiltered = Array.isArray(state.filteredTracks) && state.filteredTracks.length > 0;
+            const hasVisible = Array.isArray(state.visibleTracks) && state.visibleTracks.length > 0;
+            document.querySelectorAll('.multi-select-menu-item').forEach((btn) => {
                 const a = btn.dataset.action;
                 let disabled = false;
                 if ((a === 'add-playlist' || a === 'replace-playlist') && view === 'queue') disabled = true;
                 if ((a === 'add-download' || a === 'replace-download') && view === 'downloads') disabled = true;
-                if (a === 'select-all-all' && view !== 'queue' && view !== 'downloads') disabled = true;
+                if (a === 'select-all' && !hasVisible) disabled = true;
+                if (a === 'select-all-all' && !hasAll) disabled = true;
+                if (a === 'select-filtered' && !hasFiltered) disabled = true;
                 btn.classList.toggle('is-disabled', disabled);
+                btn.disabled = disabled;
             });
         }
         const countEl = document.getElementById('selection-count');
@@ -1340,6 +1423,9 @@ function mountView(viewName) {
         currentViewInstance.destroy?.();
         currentViewInstance = null;
     }
+
+    store.setAllTracks([]);
+    store.setFilteredTracks([]);
 
     const contentEl = document.getElementById('content-area');
     if (!contentEl) return;

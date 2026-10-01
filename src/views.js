@@ -334,6 +334,8 @@ export function SearchView(ctx) {
             }
             songsSection.appendChild(list);
             store.setVisibleTracks(songs);
+            store.setAllTracks(songs);
+            store.setFilteredTracks(songs);
         }
         root.appendChild(songsSection);
 
@@ -380,6 +382,8 @@ export function SearchView(ctx) {
         const slice = all.slice(start, start + perPage);
 
         store.setVisibleTracks(slice);
+        store.setAllTracks(all);
+        store.setFilteredTracks(all);
 
         const header = el('div', { class: 'artist-section__header' });
         const backBtn = el('button', {
@@ -433,6 +437,8 @@ export function SearchView(ctx) {
         const slice = all.slice(start, start + perPage);
 
         store.setVisibleTracks([]);
+        store.setAllTracks([]);
+        store.setFilteredTracks([]);
 
         const header = el('div', { class: 'artist-section__header' });
         const backBtn = el('button', {
@@ -686,6 +692,8 @@ export function SearchView(ctx) {
         const slice = sourceTracks.slice(start, start + perPage);
 
         store.setVisibleTracks(slice);
+        store.setAllTracks(detail.tracks);
+        store.setFilteredTracks(sourceTracks);
 
         const list = el('div', { class: 'song-list' });
         for (const song of slice) {
@@ -911,6 +919,8 @@ export function SearchView(ctx) {
         const { list, visibleTracks } = renderItems(r.items, typeKey);
         host.appendChild(list);
         store.setVisibleTracks(visibleTracks);
+        store.setAllTracks(visibleTracks);
+        store.setFilteredTracks(visibleTracks);
 
         const perPage = store.get().settings.perPage;
         const totalPages = total > 0 ? Math.ceil(total / perPage) : 0;
@@ -1166,6 +1176,8 @@ export function LikedView(ctx, options = {}) {
         const slice = sourceTracks.slice(start, start + perPage);
 
         store.setVisibleTracks(slice);
+        store.setAllTracks(tracks);
+        store.setFilteredTracks(sourceTracks);
 
         const list = el('div', { class: 'song-list' });
         for (const song of slice) {
@@ -1391,6 +1403,8 @@ export function QueueView(ctx) {
         const slice = items.slice(start, start + perPage);
 
         store.setVisibleTracks(slice.map((it) => it.song));
+        store.setAllTracks(q.tracks);
+        store.setFilteredTracks(items.map((it) => it.song));
 
         const list = el('div', { class: 'song-list' });
         for (const { song, index } of slice) {
@@ -2033,6 +2047,8 @@ export function DownloadsView(ctx) {
         const slice = filtered.slice(start, start + perPage);
 
         store.setVisibleTracks(slice);
+        store.setAllTracks(state.downloads);
+        store.setFilteredTracks(filtered);
 
         const list = el('div', { class: 'song-list' });
         for (const song of slice) {
