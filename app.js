@@ -19,6 +19,7 @@ import {
 import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal } from './src/components.js';
 import { initRouter } from './src/router.js';
 import { initPlaybackView } from './src/playback-view.js';
+import { initSidebarTrees } from './src/sidebar-tree.js';
 
 const api = new Meting(config);
 const player = new Player(api, config);
@@ -1564,5 +1565,6 @@ ctx.openAccountModal = openAccountModal;
 initRouter(ctx);
 initPlaybackView(ctx);
 bindRouter();
+initSidebarTrees(ctx);
 
 window.__app = ctx;

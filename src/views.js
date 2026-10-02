@@ -1481,7 +1481,7 @@ export function MyFavoritesView(ctx) {
     ];
 
     let lastAccount = null;
-    let activeTab = 'liked';
+    let activeTab = store.get().favoritesTab || 'liked';
     let artists = [];
     let createdPlaylists = [];
     let collectedPlaylists = [];
@@ -1505,6 +1505,7 @@ export function MyFavoritesView(ctx) {
         btn.addEventListener('click', () => {
             if (activeTab === t.key) return;
             activeTab = t.key;
+            store.setFavoritesTab(t.key);
             render();
         });
         tabsNav.appendChild(btn);
@@ -1775,10 +1776,20 @@ export function MyFavoritesView(ctx) {
 
     const unsubscribe = store.subscribe((state) => {
         const account = state.account;
-        if (lastAccount && lastAccount.uid === account.uid && lastAccount.connected === account.connected) {
-            return;
-        }
+        const externalTab = state.favoritesTab;
+        const tabChanged = externalTab && externalTab !== activeTab;
+        const accountChanged = !lastAccount
+            || lastAccount.uid !== account.uid
+            || lastAccount.connected !== account.connected;
+
+        if (!accountChanged && !tabChanged) return;
+
         lastAccount = { uid: account.uid, connected: account.connected };
+
+        if (tabChanged) {
+            activeTab = externalTab;
+        }
+
         if (account.connected && !loaded && !loading) {
             loadData(account.uid);
         } else if (!account.connected) {
@@ -1787,6 +1798,8 @@ export function MyFavoritesView(ctx) {
             createdPlaylists = [];
             collectedPlaylists = [];
             loadError = null;
+            render();
+        } else if (tabChanged) {
             render();
         }
     });

@@ -11,6 +11,15 @@ function createInitialState() {
     return {
         view: 'search',
 
+        sidebarExpanded: {
+            myfavorites: false,
+            downloads: false,
+            status: false,
+            queue: false,
+        },
+
+        favoritesTab: 'liked',
+
         account: {
             uid: '',
             nickname: '',
@@ -154,6 +163,19 @@ function loadPersisted(state) {
             };
         }
 
+        if (saved.sidebarExpanded && typeof saved.sidebarExpanded === 'object') {
+            state.sidebarExpanded = {
+                myfavorites: !!saved.sidebarExpanded.myfavorites,
+                downloads: !!saved.sidebarExpanded.downloads,
+                status: !!saved.sidebarExpanded.status,
+                queue: !!saved.sidebarExpanded.queue,
+            };
+        }
+
+        if (typeof saved.favoritesTab === 'string') {
+            state.favoritesTab = saved.favoritesTab;
+        }
+
         if (saved.queue && typeof saved.queue === 'object') {
             state.queue = {
                 ...state.queue,
@@ -266,6 +288,21 @@ class Store {
         }
 
         this.notify();
+    }
+
+    toggleSidebarTree(key) {
+        const expanded = { ...this.state.sidebarExpanded };
+        expanded[key] = !expanded[key];
+        this.state.sidebarExpanded = expanded;
+        this.notify();
+        this.persist();
+    }
+
+    setFavoritesTab(tab) {
+        if (this.state.favoritesTab === tab) return;
+        this.state.favoritesTab = tab;
+        this.notify();
+        this.persist();
     }
 
     toggleSelection(song) {
@@ -432,6 +469,8 @@ class Store {
                 },
                 downloadTasks: this.state.downloadTasks,
                 filter: this.state.filter,
+                sidebarExpanded: this.state.sidebarExpanded,
+                favoritesTab: this.state.favoritesTab,
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         } catch (err) {

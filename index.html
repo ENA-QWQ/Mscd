@@ -61,8 +61,14 @@
                 </svg>
                 <span>浏览</span>
             </a>
-            <a href="#" data-view="queue" class="mobile-nav-hidden">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            <a href="#" data-view="queue" data-tree="queue" class="mobile-nav-hidden">
+                <span class="side-tree-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 6 15 12 9 18" />
+                    </svg>
+                </span>
+                <svg class="side-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
                     <line x1="8" y1="6" x2="21" y2="6" />
                     <line x1="8" y1="12" x2="21" y2="12" />
@@ -71,10 +77,19 @@
                     <line x1="3" y1="12" x2="3.01" y2="12" />
                     <line x1="3" y1="18" x2="3.01" y2="18" />
                 </svg>
-                <span>播放队列</span>
+                <span class="side-nav-label">播放队列<i class="side-nav-badge"></i></span>
             </a>
-            <a href="#" data-view="myfavorites">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            <div class="side-tree" data-tree-panel="queue">
+                <div class="side-tree-inner"></div>
+            </div>
+            <a href="#" data-view="myfavorites" data-tree="myfavorites">
+                <span class="side-tree-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 6 15 12 9 18" />
+                    </svg>
+                </span>
+                <svg class="side-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
                     <line x1="3" y1="6" x2="14" y2="6" />
                     <line x1="3" y1="12" x2="10" y2="12" />
@@ -83,25 +98,46 @@
                     <line x1="20" y1="18" x2="20" y2="7" />
                     <path d="M20 7l2-.5" />
                 </svg>
-                <span>我的收藏</span>
+                <span class="side-nav-label">我的收藏<i class="side-nav-badge"></i></span>
             </a>
-            <a href="#" data-view="downloads">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            <div class="side-tree" data-tree-panel="myfavorites">
+                <div class="side-tree-inner"></div>
+            </div>
+            <a href="#" data-view="downloads" data-tree="downloads">
+                <span class="side-tree-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 6 15 12 9 18" />
+                    </svg>
+                </span>
+                <svg class="side-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                <span>下载列表</span>
+                <span class="side-nav-label">下载列表<i class="side-nav-badge"></i></span>
             </a>
-            <a href="#" data-view="status">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            <div class="side-tree" data-tree-panel="downloads">
+                <div class="side-tree-inner"></div>
+            </div>
+            <a href="#" data-view="status" data-tree="status">
+                <span class="side-tree-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 6 15 12 9 18" />
+                    </svg>
+                </span>
+                <svg class="side-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <polyline points="12 6 12 12 16 14" />
                 </svg>
-                <span>状态中心</span>
+                <span class="side-nav-label">状态中心<i class="side-nav-badge"></i></span>
             </a>
+            <div class="side-tree" data-tree-panel="status">
+                <div class="side-tree-inner"></div>
+            </div>
             <a href="#" data-view="settings" class="mobile-nav-hidden">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
