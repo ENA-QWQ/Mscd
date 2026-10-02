@@ -28,6 +28,20 @@ function isOpen(key) {
     return openNodes.has(key);
 }
 
+async function resolveArtistId(item) {
+    if (!item) return '';
+    if (item.artistId) return String(item.artistId);
+    const api = ctx && ctx.api;
+    const netease = api && api.adapters && api.adapters.netease;
+    if (!netease || !item.uid) return '';
+    try {
+        const data = await netease.request('/user/detail', { uid: item.uid });
+        const artistId = data?.profile?.artistId || data?.profile?.artist?.id;
+        if (artistId) return String(artistId);
+    } catch {}
+    return '';
+}
+
 function getPage(key) {
     return pages.get(key) || 0;
 }
@@ -608,9 +622,11 @@ function renderFavorites(panel) {
                         level: 2,
                         label: u.nickname || '未知歌手',
                         title: u.nickname || '',
-                        onClick: () => {
-                            ctx.searchActions.openArtist(u.artistId || u.uid, {
-                                id: u.artistId || u.uid,
+                        onClick: async () => {
+                            const artistId = await resolveArtistId(u);
+                            if (!artistId) return;
+                            ctx.searchActions.openArtist(artistId, {
+                                id: artistId,
                                 title: u.nickname || '',
                                 pic: u.avatarUrl || '',
                             });
