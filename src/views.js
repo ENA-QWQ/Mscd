@@ -3415,7 +3415,8 @@ function HomeContent(ctx) {
     accountBtn.addEventListener('click', () => {
         const account = store.get().account;
         if (account.connected) {
-            store.update({ view: 'liked' });
+            store.setFavoritesTab('liked');
+            store.update({ view: 'myfavorites' });
         } else {
             ctx.openAccountModal();
         }
