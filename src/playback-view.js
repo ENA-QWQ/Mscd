@@ -485,6 +485,7 @@ export function initPlaybackView(ctx) {
                     });
                     span.dataset.start = String(word.startTime);
                     span.dataset.end = String(word.endTime);
+                    span.style.setProperty('--p', '0%');
                     textEl.appendChild(span);
                 }
             } else {
@@ -537,7 +538,12 @@ export function initPlaybackView(ctx) {
 
         currentLineIndex = index;
 
-        if (prev) prev.classList.remove('is-current');
+        if (prev) {
+            prev.classList.remove('is-current');
+            prev.querySelectorAll('.playback-lyric__word').forEach((s) => {
+                s.style.setProperty('--p', '100%');
+            });
+        }
         row.classList.add('is-current');
 
         if (!followPaused) {
@@ -614,8 +620,13 @@ export function initPlaybackView(ctx) {
         if (currentTime >= wordList[wordList.length - 1].endTime) activeIdx = wordList.length - 1;
 
         for (let i = 0; i < spans.length; i++) {
-            spans[i].classList.toggle('is-past', i < activeIdx);
-            spans[i].classList.toggle('is-active', i === activeIdx);
+            const isPast = i < activeIdx;
+            const isActive = i === activeIdx;
+            spans[i].classList.toggle('is-past', isPast);
+            spans[i].classList.toggle('is-active', isActive);
+            if (isPast) {
+                spans[i].style.setProperty('--p', '100%');
+            }
         }
 
         if (activeIdx < 0 || activeIdx >= spans.length) return;

@@ -765,6 +765,7 @@ function bindPlayerBar() {
                     span.textContent = word.text;
                     span.dataset.start = String(word.startTime);
                     span.dataset.end = String(word.endTime);
+                    span.style.setProperty('--p', '0%');
                     node.appendChild(span);
                 }
             } else {
@@ -796,8 +797,13 @@ function bindPlayerBar() {
         }
         if (t >= words[words.length - 1].endTime) activeIdx = words.length - 1;
         for (let i = 0; i < spans.length; i++) {
-            spans[i].classList.toggle('is-past', i < activeIdx);
-            spans[i].classList.toggle('is-active', i === activeIdx);
+            const isPast = i < activeIdx;
+            const isActive = i === activeIdx;
+            spans[i].classList.toggle('is-past', isPast);
+            spans[i].classList.toggle('is-active', isActive);
+            if (isPast) {
+                spans[i].style.setProperty('--p', '100%');
+            }
         }
         if (activeIdx < 0 || activeIdx >= spans.length) return;
         const w = words[activeIdx];
