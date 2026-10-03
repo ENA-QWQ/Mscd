@@ -20,8 +20,6 @@ const PER_PAGE = {
     playlists: 8,
     tracks: 15,
     status: 8,
-    queue: 20,
-    downloads: 20,
 };
 
 function isOpen(key) {
@@ -865,18 +863,12 @@ function computeSignature(state) {
     return [
         state.account.uid,
         state.account.connected ? '1' : '0',
-        downloads.map((d) => d.id || '').join(','),
         tasks.filter((t) => t.status === 'active').map((t) => {
             const pending = (t.tracks || []).filter((tr) => PENDING_TRACK_STATUSES.has(tr.status));
             return `${t.id}:${t.status}:${pending.length}`;
         }).join(','),
-        state.downloadsSearch || '',
-        queueTracks.length,
-        state.queue.currentIndex,
         state.sidebarExpanded.myfavorites ? '1' : '0',
-        state.sidebarExpanded.downloads ? '1' : '0',
         state.sidebarExpanded.status ? '1' : '0',
-        state.sidebarExpanded.queue ? '1' : '0',
         favCache ? '1' : '0',
     ].join('|');
 }
@@ -901,17 +893,9 @@ function renderAll(force = false) {
         const panel = document.querySelector('.side-tree[data-tree-panel="myfavorites"]');
         if (panel) renderFavorites(panel);
     }
-    if (expanded.downloads) {
-        const panel = document.querySelector('.side-tree[data-tree-panel="downloads"]');
-        if (panel) renderDownloads(panel);
-    }
     if (expanded.status) {
         const panel = document.querySelector('.side-tree[data-tree-panel="status"]');
         if (panel) renderStatus(panel);
-    }
-    if (expanded.queue) {
-        const panel = document.querySelector('.side-tree[data-tree-panel="queue"]');
-        if (panel) renderQueue(panel);
     }
 
     updateBadges(state);
