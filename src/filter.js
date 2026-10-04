@@ -75,6 +75,34 @@ export const FIELD_DEFS = {
 
     isInDownloads: { label: '已在下载列表', type: 'boolean', get: (s, ctx) => !!s.id && !!ctx?.downloadIds?.has(String(s.id)) },
     isInQueue: { label: '已在播放队列', type: 'boolean', get: (s, ctx) => !!s.id && !!ctx?.queueIds?.has(String(s.id)) },
+
+    publishDate: {
+        label: '发行日期', type: 'date', dynamic: true,
+        get: (s, ctx) => ctx?.wikiMap?.get(String(s.id))?.publishDate ?? '',
+    },
+    hasAward: {
+        label: '获得奖项', type: 'boolean', dynamic: true,
+        get: (s, ctx) => !!ctx?.wikiMap?.get(String(s.id))?.hasAward,
+    },
+    bizTags: {
+        label: '推荐标签', type: 'enum', dynamic: true,
+        options: [],
+        get: (s, ctx) => ctx?.wikiMap?.get(String(s.id))?.bizTags ?? [],
+    },
+    language: {
+        label: '语种', type: 'enum', dynamic: true,
+        options: [],
+        get: (s, ctx) => ctx?.wikiMap?.get(String(s.id))?.language ?? '',
+    },
+    genre: {
+        label: '曲风', type: 'enum', dynamic: true,
+        options: [],
+        get: (s, ctx) => ctx?.wikiMap?.get(String(s.id))?.genre ?? '',
+    },
+    bpm: {
+        label: 'BPM', type: 'number', dynamic: true,
+        get: (s, ctx) => ctx?.wikiMap?.get(String(s.id))?.bpm ?? 0,
+    },
 };
 
 const FIELD_GROUP_DEFS = [
@@ -83,15 +111,16 @@ const FIELD_GROUP_DEFS = [
     { key: 'content', label: '内容特征', fields: ['hasCover', 'hasAlbum', 'hasArtist', 'titleHasVersion', 'titleHasBracket', 'titleScript'] },
     { key: 'length', label: '文本长度', fields: ['titleLength', 'artistLength', 'albumLength'] },
     { key: 'downloads', label: '下载属性', fields: ['quality', 'withLyric', 'lyricOnly'] },
+    { key: 'wiki', label: '百科信息', fields: ['publishDate', 'hasAward', 'bizTags', 'language', 'genre', 'bpm'] },
     { key: 'cross', label: '跨列表', fields: ['isInDownloads', 'isInQueue'] },
 ];
 
 const VIEW_GROUPS = {
-    search: ['base', 'duration', 'content', 'length'],
-    queue: ['base', 'duration', 'content', 'length', 'cross'],
-    downloads: ['base', 'duration', 'content', 'length', 'downloads', 'cross'],
-    playlist: ['base', 'duration', 'content', 'length', 'cross'],
-    liked: ['base', 'duration', 'content', 'length', 'cross'],
+    search: ['base', 'duration', 'content', 'length', 'wiki'],
+    queue: ['base', 'duration', 'content', 'length', 'cross', 'wiki'],
+    downloads: ['base', 'duration', 'content', 'length', 'downloads', 'cross', 'wiki'],
+    playlist: ['base', 'duration', 'content', 'length', 'cross', 'wiki'],
+    liked: ['base', 'duration', 'content', 'length', 'cross', 'wiki'],
 };
 
 export function getFieldsForView(view) {
@@ -126,6 +155,20 @@ export const OPERATORS = {
     isTrue: { label: '是', types: ['boolean'], apply: (a) => a === true },
     isFalse: { label: '否', types: ['boolean'], apply: (a) => a === false },
 
+    before: { label: '早于', types: ['date'], apply: (a, b) => { if (!a || !b) return false; return new Date(a).getTime() < new Date(b).getTime(); } },
+    after: { label: '晚于', types: ['date'], apply: (a, b) => { if (!a || !b) return false; return new Date(a).getTime() > new Date(b).getTime(); } },
+    dateBetween: {
+        label: '介于', types: ['date'], valueShape: 'range',
+        apply: (a, b) => {
+            if (!a) return false;
+            const t = new Date(a).getTime();
+            if (isNaN(t)) return false;
+            const min = b?.min ? new Date(b.min).getTime() : -Infinity;
+            const max = b?.max ? new Date(b.max).getTime() : Infinity;
+            return t >= min && t <= max;
+        },
+    },
+
     eqEnum: { label: '等于', types: ['enum'], apply: (a, b) => String(a) === String(b) },
     neqEnum: { label: '不等于', types: ['enum'], apply: (a, b) => String(a) !== String(b) },
     in: { label: '是其中之一', types: ['enum'], valueShape: 'multi', apply: (a, b) => Array.isArray(b) && b.map(String).includes(String(a)) },
@@ -156,6 +199,10 @@ export function defaultForOperator(op, field) {
     if (field.type === 'duration') {
         if (op === 'between') return { min: 0, max: 0, unit: 's' };
         return { value: 0, unit: 's' };
+    }
+    if (field.type === 'date') {
+        if (op === 'dateBetween') return { min: '', max: '' };
+        return '';
     }
     if (op === 'between') return { min: 0, max: 0 };
     if (op === 'in' || op === 'notIn') return [];
@@ -221,5 +268,18 @@ export function buildFilterContext(tracks, options = {}) {
     return {
         downloadIds,
         queueIds,
+        wikiMap: options.wikiMap instanceof Map ? options.wikiMap : new Map(),
     };
+}
+
+export function treeHasDynamicField(node) {
+    if (!node) return false;
+    if (node.type === 'condition') {
+        const field = FIELD_DEFS[node.field];
+        return !!(field && field.dynamic);
+    }
+    if (node.type === 'group') {
+        return (node.children || []).some((c) => treeHasDynamicField(c));
+    }
+    return false;
 }

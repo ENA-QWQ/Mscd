@@ -19,7 +19,8 @@ import {
     pickDownloadDir,
     clearSavedDir,
 } from './downloader.js';
-import { getFieldsForView, buildFilterContext, evaluate } from './filter.js';
+import { getFieldsForView, buildFilterContext, evaluate, treeHasDynamicField } from './filter.js';
+import { getWikiFetcher, collectWikiOptions } from './wiki.js';
 import { openFilterEditor } from './filter-editor.js';
 
 function hexToRgb(hex) {
@@ -43,6 +44,47 @@ function matchSearch(song, keyword) {
     const artist = (song.artist || '').toLowerCase();
     const album = (song.album || '').toLowerCase();
     return title.includes(q) || artist.includes(q) || album.includes(q);
+}
+
+async function runWikiForTracks(ctx, tracks) {
+    const { store } = ctx;
+    const ids = (tracks || []).map((t) => String(t.id)).filter(Boolean);
+    if (!ids.length) return;
+
+    const current = store.get();
+
+    if (current.wikiProgress.active) return;
+
+    const map = current.wikiMap;
+    if (map instanceof Map && map.size > 0) {
+        const missing = ids.filter((id) => !map.has(id));
+        if (!missing.length) return;
+    }
+
+    store.update({
+        wikiProgress: { active: true, done: 0, total: ids.length },
+    });
+
+    try {
+        const fetcher = getWikiFetcher();
+        const result = await fetcher.ensure(ids, {
+            onProgress: ({ done, total }) => {
+                store.update({
+                    wikiProgress: { active: true, done, total },
+                });
+            },
+        });
+
+        store.update({
+            wikiMap: result,
+            wikiOptions: collectWikiOptions(result),
+            wikiProgress: { active: false, done: result.size, total: ids.length },
+        });
+    } catch (e) {
+        store.update({
+            wikiProgress: { active: false, done: 0, total: 0, error: (e && e.message) || '拉取失败' },
+        });
+    }
 }
 
 function openDownloadSettingsModal(ctx, options) {
@@ -296,6 +338,7 @@ export function SearchView(ctx) {
     const root = el('div', { class: 'search-view' });
     let lastSearch = null;
     let lastFilter = null;
+    let lastWikiMap = null;
     let homeInstance = null;
 
     function openArtistDetail(meta) {
@@ -623,6 +666,7 @@ export function SearchView(ctx) {
 
         const actionChildren = [playAllBtn, downloadAllBtn];
         if (detail.kind === 'playlist') {
+            const playlistFilterKey = `playlist:${detail.id}`;
             const filterBtn = el('button', {
                 class: 'ena-btn ena-btn--sm',
                 title: '筛选',
@@ -632,14 +676,17 @@ export function SearchView(ctx) {
                 openFilterEditor({
                     title: '筛选歌单',
                     fields: getFieldsForView('playlist'),
-                    initial: store.get().filter?.playlist || null,
+                    initial: store.get().filter?.[playlistFilterKey] || null,
                     onApply: (tree) => {
                         const cur = store.get().search;
                         store.update({
-                            filter: { ...store.get().filter, playlist: tree },
+                            filter: { ...store.get().filter, [playlistFilterKey]: tree },
                             search: cur.detail ? { ...cur, detail: { ...cur.detail, page: 1 } } : cur,
                         });
                         store.persist();
+                        if (tree && treeHasDynamicField(tree) && detail.tracks) {
+                            void runWikiForTracks(ctx, detail.tracks);
+                        }
                     },
                 });
             });
@@ -672,11 +719,12 @@ export function SearchView(ctx) {
 
         let sourceTracks = detail.tracks;
         if (detail.kind === 'playlist') {
-            const filterTree = store.get().filter?.playlist || null;
+            const filterTree = store.get().filter?.[`playlist:${detail.id}`] || null;
             if (filterTree && detail.tracks.length) {
                 const filterCtx = buildFilterContext(detail.tracks, {
                     downloads: store.get().downloads,
                     queue: store.get().queue.tracks,
+                    wikiMap: store.get().wikiMap,
                 });
                 sourceTracks = detail.tracks
                     .map((t, idx) => ({ t, idx }))
@@ -781,6 +829,10 @@ export function SearchView(ctx) {
                 onApply: (tree) => {
                     store.update({ filter: { ...store.get().filter, search: tree } });
                     store.persist();
+                    if (tree && treeHasDynamicField(tree)) {
+                        const items = store.get().search.results?.['1']?.items || [];
+                        void runWikiForTracks(ctx, items);
+                    }
                 },
             });
         });
@@ -813,6 +865,7 @@ export function SearchView(ctx) {
                 const filterCtx = buildFilterContext(items, {
                     downloads: store.get().downloads,
                     queue: store.get().queue.tracks,
+                    wikiMap: store.get().wikiMap,
                 });
                 sourceItems = items.filter((it) => evaluate(filterTree, it, filterCtx));
             }
@@ -937,9 +990,11 @@ export function SearchView(ctx) {
         const state = store.get();
         const search = state.search;
         const filter = state.filter?.search || null;
-        if (search === lastSearch && filter === lastFilter) return;
+        const wikiMap = state.wikiMap;
+        if (search === lastSearch && filter === lastFilter && wikiMap === lastWikiMap) return;
         lastSearch = search;
         lastFilter = filter;
+        lastWikiMap = wikiMap;
 
         if (search.detail) {
             if (homeInstance) {
@@ -1058,6 +1113,7 @@ export function LikedView(ctx, options = {}) {
             const filterCtx = buildFilterContext(tracks, {
                 downloads: state.downloads,
                 queue: state.queue.tracks,
+                wikiMap: state.wikiMap,
             });
             sourceTracks = tracks.filter((t, idx) => evaluate(filterTree, t, { ...filterCtx, index: idx }));
         }
@@ -1108,6 +1164,9 @@ export function LikedView(ctx, options = {}) {
                         filter: { ...store.get().filter, liked: tree },
                     });
                     store.persist();
+                    if (tree && treeHasDynamicField(tree)) {
+                        void runWikiForTracks(ctx, tracks);
+                    }
                 },
             });
         });
@@ -1198,20 +1257,24 @@ export function LikedView(ctx, options = {}) {
     }
 
     let lastFilter = null;
+    let lastWikiMap = null;
 
     const unsubscribe = store.subscribe((state) => {
         const account = state.account;
         const filter = state.filter?.liked || null;
+        const wikiMap = state.wikiMap;
 
         const accountChanged = !lastAccount
             || lastAccount.uid !== account.uid
             || lastAccount.connected !== account.connected;
         const filterChanged = lastFilter !== filter;
+        const wikiChanged = wikiMap !== lastWikiMap;
 
-        if (!accountChanged && !filterChanged) return;
+        if (!accountChanged && !filterChanged && !wikiChanged) return;
 
         lastAccount = { uid: account.uid, connected: account.connected };
         lastFilter = filter;
+        lastWikiMap = wikiMap;
 
         if (account.connected && !loaded && !loading) {
             loadTracks(account.uid);
@@ -1220,7 +1283,7 @@ export function LikedView(ctx, options = {}) {
             tracks = [];
             loadError = null;
             render();
-        } else if (filterChanged) {
+        } else if (filterChanged || wikiChanged) {
             page = 1;
             render();
         }
@@ -1268,6 +1331,9 @@ export function QueueView(ctx) {
                     queuePage: 1,
                 });
                 store.persist();
+                if (tree && treeHasDynamicField(tree)) {
+                    void runWikiForTracks(ctx, store.get().queue.tracks);
+                }
             },
         });
     });
@@ -1333,6 +1399,7 @@ export function QueueView(ctx) {
     let lastPage = null;
     let lastPerPage = null;
     let lastFilter = null;
+    let lastWikiMap = null;
 
     function render() {
         const state = store.get();
@@ -1358,7 +1425,8 @@ export function QueueView(ctx) {
             search === lastSearch &&
             page === lastPage &&
             perPage === lastPerPage &&
-            filter === lastFilter
+            filter === lastFilter &&
+            state.wikiMap === lastWikiMap
         ) return;
 
         lastTracks = q.tracks;
@@ -1368,6 +1436,7 @@ export function QueueView(ctx) {
         lastPage = page;
         lastPerPage = perPage;
         lastFilter = filter;
+        lastWikiMap = state.wikiMap;
 
         listHost.innerHTML = '';
 
@@ -1382,6 +1451,7 @@ export function QueueView(ctx) {
             queue: q.tracks,
             currentIndex: q.currentIndex,
             isPlaying: q.isPlaying,
+            wikiMap: state.wikiMap,
         }) : null;
 
         const items = [];
@@ -1852,6 +1922,9 @@ export function DownloadsView(ctx) {
                     downloadsPage: 1,
                 });
                 store.persist();
+                if (tree && treeHasDynamicField(tree)) {
+                    void runWikiForTracks(ctx, store.get().downloads);
+                }
             },
         });
     });
@@ -1901,6 +1974,7 @@ export function DownloadsView(ctx) {
     let lastPage = null;
     let lastPerPage = null;
     let lastFilter = null;
+    let lastWikiMap = null;
 
     async function startDownloadAll() {
         const downloads = store.get().downloads;
@@ -2019,7 +2093,8 @@ export function DownloadsView(ctx) {
             search === lastSearch &&
             page === lastPage &&
             perPage === lastPerPage &&
-            filter === lastFilter
+            filter === lastFilter &&
+            state.wikiMap === lastWikiMap
         ) return;
 
         lastDownloads = state.downloads;
@@ -2027,6 +2102,7 @@ export function DownloadsView(ctx) {
         lastPage = page;
         lastPerPage = perPage;
         lastFilter = filter;
+        lastWikiMap = state.wikiMap;
 
         listHost.innerHTML = '';
 
@@ -2044,6 +2120,7 @@ export function DownloadsView(ctx) {
             const filterCtx = buildFilterContext(state.downloads, {
                 downloads: state.downloads,
                 queue: state.queue.tracks,
+                wikiMap: state.wikiMap,
             });
             filtered = filtered.filter((s, idx) => evaluate(filter, s, { ...filterCtx, index: idx }));
         }

@@ -1,4 +1,5 @@
 import { el } from './dom.js';
+import { store } from './store.js';
 import { icon, openModal, Dropdown } from './components.js';
 import {
     FIELD_DEFS,
@@ -14,6 +15,81 @@ const OP_OPTIONS = [
     { value: 'or', label: '或' },
 ];
 
+function loadWikiOptionsFromIndexedDB() {
+    return new Promise((resolve) => {
+        const empty = { genre: [], language: [], bizTags: [] };
+        try {
+            const req = indexedDB.open('mscd-wiki', 1);
+            req.onerror = () => resolve(empty);
+            req.onsuccess = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains('songWiki')) {
+                    resolve(empty);
+                    return;
+                }
+                const tx = db.transaction('songWiki', 'readonly');
+                const st = tx.objectStore('songWiki');
+                const genre = new Set();
+                const language = new Set();
+                const bizTags = new Set();
+                st.openCursor().onsuccess = (ev) => {
+                    const cur = ev.target.result;
+                    if (!cur) return;
+                    const v = cur.value;
+                    if (v && !v.failed && v.data) {
+                        const d = v.data;
+                        if (d.genre) genre.add(String(d.genre));
+                        if (d.language) language.add(String(d.language));
+                        if (Array.isArray(d.bizTags)) {
+                            for (const t of d.bizTags) if (t) bizTags.add(String(t));
+                        }
+                    }
+                    cur.continue();
+                };
+                tx.oncomplete = () => {
+                    resolve({
+                        genre: Array.from(genre).sort(),
+                        language: Array.from(language).sort(),
+                        bizTags: Array.from(bizTags).sort(),
+                    });
+                };
+                tx.onerror = () => resolve(empty);
+            };
+        } catch {
+            resolve(empty);
+        }
+    });
+}
+
+function collectFromStore() {
+    const empty = { genre: [], language: [], bizTags: [] };
+    try {
+        const s = store && store.get ? store.get() : {};
+        if (s.wikiOptions && (s.wikiOptions.genre?.length || s.wikiOptions.language?.length || s.wikiOptions.bizTags?.length)) {
+            return s.wikiOptions;
+        }
+        if (s.wikiMap instanceof Map && s.wikiMap.size > 0) {
+            const genre = new Set();
+            const language = new Set();
+            const bizTags = new Set();
+            for (const entry of s.wikiMap.values()) {
+                if (!entry) continue;
+                if (entry.genre) genre.add(String(entry.genre));
+                if (entry.language) language.add(String(entry.language));
+                if (Array.isArray(entry.bizTags)) {
+                    for (const t of entry.bizTags) if (t) bizTags.add(String(t));
+                }
+            }
+            return {
+                genre: Array.from(genre).sort(),
+                language: Array.from(language).sort(),
+                bizTags: Array.from(bizTags).sort(),
+            };
+        }
+    } catch {}
+    return empty;
+}
+
 let uidSeq = 0;
 function nextUid(prefix = 'fg') {
     uidSeq += 1;
@@ -26,6 +102,20 @@ function ensureUid(group) {
 }
 
 export function openFilterEditor({ title = '筛选', fields, initial, onApply }) {
+    function applyOptions(wikiOptions) {
+        for (const f of fields) {
+            if (!f.dynamic) continue;
+            const list = wikiOptions[f.key] || [];
+            f.options = list.map((v) => ({ value: String(v), label: String(v) }));
+        }
+    }
+
+    function getField(key) {
+        return fields.find((f) => f.key === key) || FIELD_DEFS[key] || FIELD_DEFS.title;
+    }
+
+    applyOptions(collectFromStore());
+
     let draft = initial ? JSON.parse(JSON.stringify(initial)) : createGroup('and');
     if (!draft.children) draft.children = [];
 
@@ -131,7 +221,7 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply })
             title: '字段',
             onChange: (v) => {
                 cond.field = v;
-                const field = FIELD_DEFS[v] || FIELD_DEFS.title;
+                const field = getField(v);
                 const ops = getOperatorsForField(field);
                 if (!ops.some((o) => o.key === cond.operator)) {
                     cond.operator = ops[0]?.key || 'contains';
@@ -141,7 +231,7 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply })
             },
         })).node);
 
-        const field = FIELD_DEFS[cond.field] || FIELD_DEFS.title;
+        const field = getField(cond.field);
         const ops = getOperatorsForField(field);
 
         node.appendChild(trackDropdown(Dropdown({
@@ -214,6 +304,40 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply })
 
     function renderValueEditor(host, cond, field, op) {
         if (!op || field.type === 'boolean') return;
+
+        if (field.type === 'date') {
+            if (op.valueShape === 'range') {
+                const minInput = el('input', {
+                    type: 'date',
+                    class: 'ena-input filter-value__date',
+                    value: cond.value?.min ?? '',
+                });
+                minInput.addEventListener('input', () => {
+                    cond.value = { ...(cond.value || {}), min: minInput.value };
+                });
+                const maxInput = el('input', {
+                    type: 'date',
+                    class: 'ena-input filter-value__date',
+                    value: cond.value?.max ?? '',
+                });
+                maxInput.addEventListener('input', () => {
+                    cond.value = { ...(cond.value || {}), max: maxInput.value };
+                });
+                host.appendChild(minInput);
+                host.appendChild(el('span', { class: 'filter-value__sep', text: '~' }));
+                host.appendChild(maxInput);
+                return;
+            }
+
+            const input = el('input', {
+                type: 'date',
+                class: 'ena-input filter-value__date',
+                value: typeof cond.value === 'string' ? cond.value : '',
+            });
+            input.addEventListener('input', () => { cond.value = input.value; });
+            host.appendChild(input);
+            return;
+        }
 
         if (field.type === 'duration') {
             const unitOptions = [
@@ -300,8 +424,9 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply })
         }
 
         if (op.valueShape === 'multi') {
+            const opts = field.options || [];
             const values = Array.isArray(cond.value) ? cond.value.map(String) : [];
-            for (const opt of field.options || []) {
+            for (const opt of opts) {
                 const input = el('input', { type: 'checkbox' });
                 input.checked = values.includes(String(opt.value));
                 input.addEventListener('change', () => {
@@ -320,8 +445,9 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply })
         }
 
         if (field.type === 'enum') {
+            const options = field.options || [];
             const dropdown = trackDropdown(Dropdown({
-                options: (field.options || []).map((o) => ({ value: String(o.value), label: o.label })),
+                options: options.map((o) => ({ value: String(o.value), label: o.label })),
                 value: String(cond.value ?? ''),
                 title: field.label,
                 onChange: (v) => { cond.value = v; },
@@ -365,6 +491,13 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply })
         onCancel: () => {
             destroyDropdowns();
         },
+    });
+
+    loadWikiOptionsFromIndexedDB().then((opts) => {
+        if (!(opts.genre.length || opts.language.length || opts.bizTags.length)) return;
+        applyOptions(opts);
+        try { store.update({ wikiOptions: opts }); } catch {}
+        rerender();
     });
 
     return modal;

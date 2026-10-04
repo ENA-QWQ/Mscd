@@ -7117,3 +7117,158 @@ body {
         margin-bottom: -4px;
     }
 }
+
+.filter-value__date {
+    width: auto;
+    min-width: 130px;
+    flex: 0 0 auto;
+}
+
+.wiki-progress {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 900;
+    min-width: 260px;
+    padding: 8px 14px;
+    background: var(--bg-float);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+    font-size: .78rem;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+    transition: opacity .25s ease, visibility .25s;
+}
+
+.wiki-progress.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.wiki-progress__bar {
+    width: 100%;
+    height: 3px;
+    background: var(--progress-track);
+    overflow: hidden;
+}
+
+.wiki-progress__bar-inner {
+    height: 100%;
+    width: 0;
+    background: var(--fill);
+    transition: width .25s linear;
+}
+
+.wiki-progress__text {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+    .wiki-progress {
+        top: 56px;
+        min-width: 220px;
+        font-size: .72rem;
+    }
+}
+
+.filter-value__date {
+    width: auto;
+    min-width: 130px;
+    flex: 0 0 auto;
+}
+
+.wiki-progress-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 950;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(31, 41, 55, .5);
+    opacity: 1;
+    transition: opacity .25s var(--ease);
+}
+
+.wiki-progress-overlay.hidden {
+    display: none !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.wiki-progress-panel {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-menu);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, .18);
+    display: flex;
+    flex-direction: column;
+}
+
+.wiki-progress-header {
+    padding: 16px 22px;
+    background: var(--bg-subtle);
+}
+
+.wiki-progress-title {
+    font-family: 'LXGW WenKai Light', system-ui, sans-serif;
+    font-size: .95rem;
+    font-weight: 700;
+    letter-spacing: .5px;
+}
+
+.wiki-progress-body {
+    padding: 20px 22px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.wiki-progress-text {
+    font-size: .82rem;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.wiki-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--progress-track);
+    overflow: hidden;
+}
+
+.wiki-progress-bar-inner {
+    height: 100%;
+    width: 0;
+    background: var(--fill);
+    transition: width .25s linear;
+}
+
+.wiki-progress-hint {
+    font-size: .72rem;
+    color: var(--text-tertiary);
+    line-height: 1.5;
+}
+
+.wiki-progress-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 22px;
+    background: var(--bg-subtle);
+}
+
+.wiki-progress-cancel {
+    border-bottom-color: var(--danger) !important;
+    color: var(--danger);
+}
+
+.wiki-progress-cancel::before {
+    background: var(--danger);
+}
+
+.wiki-progress-cancel:hover {
+    color: #fff;
+}

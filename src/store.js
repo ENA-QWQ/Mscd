@@ -71,13 +71,16 @@ function createInitialState() {
 
         playbackOpen: false,
 
+        wikiMap: new Map(),
+        wikiOptions: { genre: [], language: [], bizTags: [] },
+        wikiProgress: { active: false, done: 0, total: 0 },
+
         downloadTasks: [],
 
         filter: {
             search: null,
             queue: null,
             downloads: null,
-            playlist: null,
             liked: null,
         },
 
@@ -134,9 +137,13 @@ function loadPersisted(state) {
                 search: f.search || null,
                 queue: f.queue || null,
                 downloads: f.downloads || null,
-                playlist: f.playlist || null,
                 liked: f.liked || null,
             };
+            for (const [key, value] of Object.entries(f)) {
+                if (key.startsWith('playlist:') && value) {
+                    state.filter[key] = value;
+                }
+            }
         }
 
         if (saved.settings && typeof saved.settings === 'object') {
@@ -278,6 +285,7 @@ class Store {
                 typeof value === 'object' &&
                 !Array.isArray(value) &&
                 !(value instanceof Set) &&
+                !(value instanceof Map) &&
                 this.state[key] &&
                 typeof this.state[key] === 'object'
             ) {
