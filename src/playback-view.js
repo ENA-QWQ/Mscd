@@ -626,6 +626,8 @@ export function initPlaybackView(ctx) {
             spans[i].classList.toggle('is-active', isActive);
             if (isPast) {
                 spans[i].style.setProperty('--p', '100%');
+            } else if (!isActive) {
+                spans[i].style.setProperty('--p', '0%');
             }
         }
 

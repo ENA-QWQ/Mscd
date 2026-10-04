@@ -805,6 +805,8 @@ function bindPlayerBar() {
             spans[i].classList.toggle('is-active', isActive);
             if (isPast) {
                 spans[i].style.setProperty('--p', '100%');
+            } else if (!isActive) {
+                spans[i].style.setProperty('--p', '0%');
             }
         }
         if (activeIdx < 0 || activeIdx >= spans.length) return;

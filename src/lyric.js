@@ -147,12 +147,16 @@ function mergeTranslation(lines, tlyricText) {
     if (!entries.length) return;
     for (const line of lines) {
         if (line.translation) continue;
+        let best = null;
+        let bestDiff = 0.5;
         for (const e of entries) {
-            if (Math.abs(e.time - line.time) <= 0.5) {
-                line.translation = e.text;
-                break;
+            const diff = Math.abs(e.time - line.time);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = e;
             }
         }
+        if (best) line.translation = best.text;
     }
 }
 
@@ -215,12 +219,27 @@ export async function loadLyric(api, song) {
 
     let parsed;
 
-    if (y && y.hasWordTimestamps) {
+    if (l) {
+        parsed = l;
+        if (y && y.hasWordTimestamps && y.lines.length) {
+            const yLines = y.lines;
+            for (const line of parsed.lines) {
+                let best = null;
+                let bestDiff = 0.5;
+                for (const yl of yLines) {
+                    if (!yl.words || !yl.words.length) continue;
+                    const diff = Math.abs(yl.time - line.time);
+                    if (diff < bestDiff) {
+                        bestDiff = diff;
+                        best = yl;
+                    }
+                }
+                if (best) line.words = best.words;
+            }
+            parsed.hasWordTimestamps = parsed.lines.some((ln) => ln.words && ln.words.length);
+        }
+    } else if (y) {
         parsed = y;
-    } else if (y && l) {
-        parsed = mergeLines([y, l]);
-    } else {
-        parsed = y || l;
     }
 
     if (!parsed) {
