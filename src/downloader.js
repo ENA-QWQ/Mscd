@@ -677,17 +677,22 @@ export class Downloader {
     }
 
     async downloadLyric(song) {
-        const lrc = await this.api.resolveLyric(song);
-        if (!lrc || !lrc.trim()) throw new Error('暂无歌词');
-        const blob = new Blob([lrc], { type: 'text/plain;charset=utf-8' });
+        const text = await this.fetchLyricText(song);
+        if (!text) throw new Error('暂无歌词');
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
         triggerDownload(blob, buildBaseName(song) + '.lrc');
         return true;
     }
 
     async fetchLyricText(song) {
         try {
-            const lrc = await this.api.resolveLyric(song);
-            if (lrc && lrc.trim()) return lrc;
+            const raw = await this.api.resolveLyric(song);
+            if (!raw) return null;
+            if (typeof raw === 'string') {
+                return raw.trim() ? raw : null;
+            }
+            const text = raw.lrc || raw.yrc || '';
+            return text.trim() ? text : null;
         } catch {}
         return null;
     }
