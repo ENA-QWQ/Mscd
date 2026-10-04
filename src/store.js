@@ -109,6 +109,7 @@ function createInitialState() {
             namingFormat: '{title} - {artist}',
             batchCategory: 'none',
             lyricSaveMode: 'same',
+            songView: 'tile',
         },
     };
 }

@@ -31,7 +31,40 @@ const ICON_PATHS = {
     'chevron-down': '<polyline points="6 9 12 15 18 9"/>',
     'folder-plus': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>',
     not: '<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',
+    layout: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
 };
+
+function resolveSongRowView() {
+    const state = store.get();
+    if (state.view !== 'search' && state.view !== 'myfavorites') return 'tile';
+    return state.settings.songView || 'tile';
+}
+
+function formatSongDuration(sec) {
+    if (!sec || !isFinite(sec) || isNaN(sec)) return '-';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function detailWikiField(song, key) {
+    const state = store.get();
+    const map = state.wikiMap;
+    if (map instanceof Map) {
+        const entry = map.get(String(song.id));
+        if (entry) {
+            if (key === 'bpm') {
+                const v = Number(entry.bpm);
+                return (v > 0) ? String(v) : '-';
+            }
+            const v = entry[key];
+            if (Array.isArray(v)) return v.length ? v.join(' / ') : '-';
+            return v ? String(v) : '-';
+        }
+    }
+    if (state.wikiProgress && state.wikiProgress.active) return '加载中…';
+    return '-';
+}
 
 export function icon(name, filled = false) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -322,7 +355,14 @@ export function SongRow(song, handlers = {}) {
         menuWrap.classList.add('hidden');
     }
 
-    const row = el('div', { class: 'song-row', dataset: { id: song.id } });
+    const songView = resolveSongRowView();
+    const isDetail = songView === 'detail';
+    const isGrid = songView === 'grid';
+
+    const row = el('div', {
+        class: 'song-row' + (isDetail ? ' song-row--detail' : '') + (isGrid ? ' song-row--grid' : ''),
+        dataset: { id: song.id },
+    });
 
     const queueState = store.get().queue;
     const playingSong = queueState.currentIndex >= 0 ? queueState.tracks[queueState.currentIndex] : null;
@@ -347,26 +387,63 @@ export function SongRow(song, handlers = {}) {
             onToggleSelect?.(song);
         });
 
-        row.appendChild(checkbox);
+        if (isGrid) {
+            coverEl.appendChild(checkbox);
+        } else {
+            row.appendChild(checkbox);
+        }
 
         if (selected) row.classList.add('is-selected');
     }
 
-    row.appendChild(bars);
-    row.appendChild(coverEl);
-    row.appendChild(
-        el('div', { class: 'song-info' },
-            el('div', { class: 'song-title-row' },
-                el('span', { class: 'song-title', text: song.title || '未知歌曲' }),
-                song.album
-                    ? el('span', { class: 'song-album', text: `- ${song.album}` })
-                    : null
-            ),
-            el('div', { class: 'song-artist', text: song.artist || '未知歌手' })
-        )
-    );
-    row.appendChild(actionsEl);
-    row.appendChild(menuWrap);
+    if (isGrid) {
+        coverEl.appendChild(bars);
+        coverEl.appendChild(actionsEl);
+        coverEl.appendChild(menuWrap);
+        row.appendChild(coverEl);
+        row.appendChild(
+            el('div', { class: 'song-info' },
+                el('div', { class: 'song-title-row' },
+                    el('span', { class: 'song-title', text: song.title || '未知歌曲' })
+                ),
+                el('div', { class: 'song-artist', text: song.artist || '未知歌手' })
+            )
+        );
+    } else if (isDetail) {
+        coverEl.appendChild(bars);
+        row.appendChild(coverEl);
+        row.appendChild(
+            el('div', { class: 'song-info' },
+                el('div', { class: 'song-title-row' },
+                    el('span', { class: 'song-title', text: song.title || '未知歌曲' })
+                ),
+                el('div', { class: 'song-artist', text: song.artist || '未知歌手' })
+            )
+        );
+        row.appendChild(el('div', { class: 'song-detail-col song-detail-col--album', text: song.album || '-' }));
+        row.appendChild(el('div', { class: 'song-detail-col song-detail-col--date', text: detailWikiField(song, 'publishDate') }));
+        row.appendChild(el('div', { class: 'song-detail-col song-detail-col--bpm', text: detailWikiField(song, 'bpm') }));
+        row.appendChild(el('div', { class: 'song-detail-col song-detail-col--genre', text: detailWikiField(song, 'genre') }));
+        row.appendChild(el('div', { class: 'song-detail-col song-detail-col--duration', text: formatSongDuration(song.duration) }));
+        row.appendChild(actionsEl);
+        row.appendChild(menuWrap);
+    } else {
+        row.appendChild(bars);
+        row.appendChild(coverEl);
+        row.appendChild(
+            el('div', { class: 'song-info' },
+                el('div', { class: 'song-title-row' },
+                    el('span', { class: 'song-title', text: song.title || '未知歌曲' }),
+                    song.album
+                        ? el('span', { class: 'song-album', text: `- ${song.album}` })
+                        : null
+                ),
+                el('div', { class: 'song-artist', text: song.artist || '未知歌手' })
+            )
+        );
+        row.appendChild(actionsEl);
+        row.appendChild(menuWrap);
+    }
 
     row.addEventListener('click', (e) => {
         if (e.target.closest('.song-menu')) return;

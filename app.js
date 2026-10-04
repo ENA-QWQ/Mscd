@@ -15,6 +15,7 @@ import {
     openDownloadOptionsModal,
     openBatchAddModal,
     handleDownloadLyric,
+    runWikiForTracks,
 } from './src/views.js';
 import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal } from './src/components.js';
 import { initRouter } from './src/router.js';
@@ -1133,8 +1134,86 @@ function bindAccountButton() {
     const host = document.getElementById('top-bar-actions');
     if (!host) return;
 
+    let viewSwitcherMenu = null;
+
+    function ensureViewSwitcherMenu() {
+        if (!viewSwitcherMenu) {
+            viewSwitcherMenu = document.createElement('div');
+            viewSwitcherMenu.className = 'view-switcher-menu';
+            document.body.appendChild(viewSwitcherMenu);
+        }
+        return viewSwitcherMenu;
+    }
+
+    function buildViewSwitcherMenu() {
+        const menu = ensureViewSwitcherMenu();
+        const cur = store.get().settings.songView || 'tile';
+        menu.innerHTML = '';
+        const items = [
+            {
+                value: 'tile',
+                label: '平铺',
+                iconPath: '<rect x="3" y="5" width="18" height="5" rx="1"/><rect x="3" y="14" width="18" height="5" rx="1"/>',
+            },
+            {
+                value: 'detail',
+                label: '详细信息',
+                iconPath: '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>',
+            },
+            {
+                value: 'grid',
+                label: '网格',
+                iconPath: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+            },
+        ];
+        for (const opt of items) {
+            const item = document.createElement('button');
+            item.className = 'view-switcher-item' + (opt.value === cur ? ' is-active' : '');
+            item.dataset.view = opt.value;
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '2');
+            svg.setAttribute('stroke-linecap', 'round');
+            svg.setAttribute('stroke-linejoin', 'round');
+            svg.innerHTML = opt.iconPath;
+            item.appendChild(svg);
+            item.appendChild(document.createTextNode(opt.label));
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.classList.remove('is-open');
+                if (store.get().settings.songView === opt.value) return;
+                store.update({ settings: { ...store.get().settings, songView: opt.value } });
+                store.persist();
+            });
+            menu.appendChild(item);
+        }
+    }
+
     function render() {
         host.innerHTML = '';
+
+        const viewSwitcherBtn = document.createElement('button');
+        viewSwitcherBtn.className = 'ena-btn ena-btn--icon view-switcher-btn';
+        viewSwitcherBtn.title = '切换视图';
+        viewSwitcherBtn.appendChild(icon('layout'));
+        viewSwitcherBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const menu = ensureViewSwitcherMenu();
+            const isOpen = menu.classList.contains('is-open');
+            menu.classList.remove('is-open');
+            if (isOpen) return;
+            buildViewSwitcherMenu();
+            const rect = viewSwitcherBtn.getBoundingClientRect();
+            const menuWidth = 140;
+            let left = rect.right - menuWidth;
+            if (left < 8) left = 8;
+            menu.style.left = `${left}px`;
+            menu.style.top = `${rect.bottom + 6}px`;
+            menu.classList.add('is-open');
+        });
+        host.appendChild(viewSwitcherBtn);
 
         const multiSelectBtn = document.createElement('button');
         multiSelectBtn.className = 'ena-btn ena-btn--icon multi-select-btn';
@@ -1163,6 +1242,13 @@ function bindAccountButton() {
         }));
     }
 
+    document.addEventListener('click', (e) => {
+        if (!viewSwitcherMenu) return;
+        if (viewSwitcherMenu.contains(e.target)) return;
+        if (e.target.closest && e.target.closest('.view-switcher-btn')) return;
+        viewSwitcherMenu.classList.remove('is-open');
+    });
+
     render();
     store.subscribe((state) => {
         const current = state.account;
@@ -1172,6 +1258,43 @@ function bindAccountButton() {
         render();
     });
 }
+
+function bindSongViewAttr() {
+    function sync(state) {
+        const contentEl = document.getElementById('content-area');
+        if (!contentEl) return;
+        const isCardView = state.view === 'search' || state.view === 'myfavorites';
+        const sv = isCardView ? (state.settings.songView || 'tile') : 'tile';
+        if (contentEl.dataset.songView !== sv) contentEl.dataset.songView = sv;
+    }
+    store.subscribe(sync);
+}
+
+function bindSilentWiki() {
+    let lastKey = '';
+    store.subscribe((state) => {
+        if (state.view !== 'search' && state.view !== 'myfavorites') {
+            lastKey = '';
+            return;
+        }
+        if (state.settings.songView !== 'detail') {
+            lastKey = '';
+            return;
+        }
+        if (state.wikiProgress.active) return;
+        const tracks = state.visibleTracks;
+        if (!tracks || !tracks.length) return;
+        const ids = tracks.map((t) => String(t.id)).filter(Boolean);
+        if (!ids.length) return;
+        const key = ids.join(',');
+        if (key === lastKey) return;
+        lastKey = key;
+        void runWikiForTracks(ctx, tracks, { silent: true });
+    });
+}
+
+bindSongViewAttr();
+bindSilentWiki();
 
 function bindMobileMoreMenu() {
     const btn = document.getElementById('mobile-more-btn');

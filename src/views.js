@@ -1,4 +1,5 @@
 import { el } from './dom.js';
+import { store } from './store.js';
 import {
     icon,
     SongRow,
@@ -46,7 +47,8 @@ function matchSearch(song, keyword) {
     return title.includes(q) || artist.includes(q) || album.includes(q);
 }
 
-async function runWikiForTracks(ctx, tracks) {
+export async function runWikiForTracks(ctx, tracks, options = {}) {
+    const silent = options.silent === true;
     const { store } = ctx;
     const ids = (tracks || []).map((t) => String(t.id)).filter(Boolean);
     if (!ids.length) return;
@@ -62,7 +64,7 @@ async function runWikiForTracks(ctx, tracks) {
     }
 
     store.update({
-        wikiProgress: { active: true, done: 0, total: ids.length },
+        wikiProgress: { active: true, done: 0, total: ids.length, silent },
     });
 
     try {
@@ -70,7 +72,7 @@ async function runWikiForTracks(ctx, tracks) {
         const result = await fetcher.ensure(ids, {
             onProgress: ({ done, total }) => {
                 store.update({
-                    wikiProgress: { active: true, done, total },
+                    wikiProgress: { active: true, done, total, silent },
                 });
             },
         });
@@ -78,11 +80,11 @@ async function runWikiForTracks(ctx, tracks) {
         store.update({
             wikiMap: result,
             wikiOptions: collectWikiOptions(result),
-            wikiProgress: { active: false, done: result.size, total: ids.length },
+            wikiProgress: { active: false, done: result.size, total: ids.length, silent: false },
         });
     } catch (e) {
         store.update({
-            wikiProgress: { active: false, done: 0, total: 0, error: (e && e.message) || '拉取失败' },
+            wikiProgress: { active: false, done: 0, total: 0, silent: false, error: (e && e.message) || '拉取失败' },
         });
     }
 }
@@ -299,6 +301,22 @@ export async function handleDownloadLyric(song, ctx) {
     }
 }
 
+function maybeAddDetailHeader(list) {
+    if (store.get().settings.songView !== 'detail') return;
+    list.appendChild(el('div', { class: 'song-detail-header' },
+        el('div', { class: 'song-detail-header__cell' }),
+        el('div', { class: 'song-detail-header__cell' }),
+        el('div', { class: 'song-detail-header__cell', text: '歌曲 / 歌手' }),
+        el('div', { class: 'song-detail-header__cell', text: '专辑' }),
+        el('div', { class: 'song-detail-header__cell', text: '发行日期' }),
+        el('div', { class: 'song-detail-header__cell song-detail-header__cell--right', text: 'BPM' }),
+        el('div', { class: 'song-detail-header__cell', text: '曲风' }),
+        el('div', { class: 'song-detail-header__cell song-detail-header__cell--right', text: '时长' }),
+        el('div', { class: 'song-detail-header__cell' }),
+        el('div', { class: 'song-detail-header__cell' })
+    ));
+}
+
 function songRowHandlers(song, ctx, extra = {}) {
     const { store, player } = ctx;
     const state = store.get();
@@ -339,6 +357,7 @@ export function SearchView(ctx) {
     let lastSearch = null;
     let lastFilter = null;
     let lastWikiMap = null;
+    let lastSongView = null;
     let homeInstance = null;
 
     function openArtistDetail(meta) {
@@ -445,6 +464,7 @@ export function SearchView(ctx) {
         root.appendChild(header);
 
         const list = el('div', { class: 'song-list' });
+        maybeAddDetailHeader(list);
         for (const song of slice) {
             list.appendChild(SongRow(song, songRowHandlers(song, ctx)));
         }
@@ -744,6 +764,7 @@ export function SearchView(ctx) {
         store.setFilteredTracks(sourceTracks);
 
         const list = el('div', { class: 'song-list' });
+        maybeAddDetailHeader(list);
         for (const song of slice) {
             list.appendChild(SongRow(song, songRowHandlers(song, ctx)));
         }
@@ -872,6 +893,7 @@ export function SearchView(ctx) {
         }
 
         const list = el('div', { class: listClass });
+        if (typeKey === '1') maybeAddDetailHeader(list);
         const visibleTracks = [];
 
         for (const item of sourceItems) {
@@ -991,10 +1013,12 @@ export function SearchView(ctx) {
         const search = state.search;
         const filter = state.filter?.search || null;
         const wikiMap = state.wikiMap;
-        if (search === lastSearch && filter === lastFilter && wikiMap === lastWikiMap) return;
+        const songView = state.settings.songView;
+        if (search === lastSearch && filter === lastFilter && wikiMap === lastWikiMap && songView === lastSongView) return;
         lastSearch = search;
         lastFilter = filter;
         lastWikiMap = wikiMap;
+        lastSongView = songView;
 
         if (search.detail) {
             if (homeInstance) {
@@ -1239,6 +1263,7 @@ export function LikedView(ctx, options = {}) {
         store.setFilteredTracks(sourceTracks);
 
         const list = el('div', { class: 'song-list' });
+        maybeAddDetailHeader(list);
         for (const song of slice) {
             list.appendChild(SongRow(song, songRowHandlers(song, ctx)));
         }
@@ -1258,23 +1283,27 @@ export function LikedView(ctx, options = {}) {
 
     let lastFilter = null;
     let lastWikiMap = null;
+    let lastSongView = null;
 
     const unsubscribe = store.subscribe((state) => {
         const account = state.account;
         const filter = state.filter?.liked || null;
         const wikiMap = state.wikiMap;
+        const songView = state.settings.songView;
 
         const accountChanged = !lastAccount
             || lastAccount.uid !== account.uid
             || lastAccount.connected !== account.connected;
         const filterChanged = lastFilter !== filter;
         const wikiChanged = wikiMap !== lastWikiMap;
+        const songViewChanged = lastSongView !== songView;
 
-        if (!accountChanged && !filterChanged && !wikiChanged) return;
+        if (!accountChanged && !filterChanged && !wikiChanged && !songViewChanged) return;
 
         lastAccount = { uid: account.uid, connected: account.connected };
         lastFilter = filter;
         lastWikiMap = wikiMap;
+        lastSongView = songView;
 
         if (account.connected && !loaded && !loading) {
             loadTracks(account.uid);
@@ -1285,6 +1314,8 @@ export function LikedView(ctx, options = {}) {
             render();
         } else if (filterChanged || wikiChanged) {
             page = 1;
+            render();
+        } else if (songViewChanged) {
             render();
         }
     });

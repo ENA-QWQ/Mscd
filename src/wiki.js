@@ -344,14 +344,14 @@ export function initWikiProgressUI(store) {
         const p = state.wikiProgress;
         if (!p) return;
 
-        if (p.active) {
+        if (p.active && !p.silent) {
             ensureOverlay();
             overlay.classList.remove('hidden');
             wasActive = true;
             const pct = p.total > 0 ? Math.min(100, (p.done / p.total) * 100) : 0;
             if (barEl) barEl.style.width = pct + '%';
             if (textEl) textEl.textContent = `已分析 ${p.done} / ${p.total}`;
-        } else if (wasActive) {
+        } else if (!p.active && wasActive) {
             wasActive = false;
             if (overlay) overlay.classList.add('hidden');
         }
