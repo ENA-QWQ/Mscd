@@ -369,7 +369,10 @@ class Store {
     }
 
     setVisibleTracks(songs) {
-        this.state.visibleTracks = Array.isArray(songs) ? songs : [];
+        const next = Array.isArray(songs) ? songs : [];
+        if (this.state.visibleTracks === next) return;
+        this.state.visibleTracks = next;
+        this.notify();
     }
 
     setAllTracks(songs) {

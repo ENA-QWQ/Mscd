@@ -1,5 +1,5 @@
 const DB_NAME = 'mscd-wiki';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'songWiki';
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const FAILED_TTL = 60 * 60 * 1000;

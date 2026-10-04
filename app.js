@@ -19,7 +19,7 @@ import {
 } from './src/views.js';
 import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal, openAboutModal, shouldShowAbout } from './src/components.js';
 import { initRouter } from './src/router.js';
-import { initWikiProgressUI } from './src/wiki.js';
+import { initWikiProgressUI, getAllWiki, collectWikiOptions } from './src/wiki.js';
 import { initPlaybackView } from './src/playback-view.js';
 import { initSidebarTrees } from './src/sidebar-tree.js';
 
@@ -1706,43 +1706,18 @@ initWikiProgressUI(store);
     if (document.readyState === 'complete') fire();
     else window.addEventListener('load', fire, { once: true });
 })();
-(function bootstrapWiki() {
-    const req = indexedDB.open('mscd-wiki', 1);
-    req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains('songWiki')) return;
-        const tx = db.transaction('songWiki', 'readonly');
-        const store2 = tx.objectStore('songWiki');
-        const map = new Map();
-        store2.openCursor().onsuccess = (ev) => {
-            const cur = ev.target.result;
-            if (!cur) return;
-            if (cur.value && !cur.value.failed && cur.value.data) {
-                map.set(String(cur.key), cur.value.data);
-            }
-            cur.continue();
-        };
-        tx.oncomplete = () => {
-            if (map.size === 0) return;
-            const genre = new Set();
-            const language = new Set();
-            const bizTags = new Set();
-            for (const entry of map.values()) {
-                if (entry.genre) genre.add(String(entry.genre));
-                if (entry.language) language.add(String(entry.language));
-                for (const t of (entry.bizTags || [])) if (t) bizTags.add(String(t));
-            }
-            store.update({
-                wikiMap: map,
-                wikiOptions: {
-                    genre: Array.from(genre).sort(),
-                    language: Array.from(language).sort(),
-                    bizTags: Array.from(bizTags).sort(),
-                },
-            });
-            console.log('[bootstrap] wikiMap 加载完成:', map.size);
-        };
-    };
+(async function bootstrapWiki() {
+    try {
+        const map = await getAllWiki();
+        if (map.size === 0) return;
+        store.update({
+            wikiMap: map,
+            wikiOptions: collectWikiOptions(map),
+        });
+        console.log('[bootstrap] wikiMap 加载完成:', map.size);
+    } catch (e) {
+        console.warn('[bootstrap] wikiMap 加载失败:', e);
+    }
 })();
 
 window.__app = ctx;

@@ -19,7 +19,7 @@ function loadWikiOptionsFromIndexedDB() {
     return new Promise((resolve) => {
         const empty = { genre: [], language: [], bizTags: [] };
         try {
-            const req = indexedDB.open('mscd-wiki', 1);
+            const req = indexedDB.open('mscd-wiki', 2);
             req.onerror = () => resolve(empty);
             req.onsuccess = () => {
                 const db = req.result;
