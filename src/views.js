@@ -2882,6 +2882,8 @@ export function SettingsView(ctx) {
     let downloadDirNameEl = null;
     let downloadThreadsLabel = null;
     let downloadThreadsRange = null;
+    let concurrencyLabel = null;
+    let concurrencyRange = null;
     let themeCustomEl = null;
     let themeBtnEl = null;
     let namingFormatInput = null;
@@ -3161,6 +3163,32 @@ export function SettingsView(ctx) {
         threadsGroup.appendChild(downloadThreadsRange);
         root.appendChild(threadsGroup);
 
+        const concurrencyGroup = el('div', { class: 'setting-group' });
+        concurrencyLabel = el('div', {
+            class: 'setting-label',
+            text: `同时下载数量：${settings.concurrency}`,
+        });
+        concurrencyRange = el('input', {
+            type: 'range',
+            class: 'ena-range',
+            min: '1',
+            max: '10',
+            step: '1',
+            value: String(settings.concurrency),
+        });
+        concurrencyRange.addEventListener('input', (e) => {
+            const val = Number(e.target.value);
+            concurrencyLabel.textContent = `同时下载数量：${val}`;
+        });
+        concurrencyRange.addEventListener('change', (e) => {
+            const val = Number(e.target.value);
+            store.update({ settings: { ...store.get().settings, concurrency: val } });
+            store.persist();
+        });
+        concurrencyGroup.appendChild(concurrencyLabel);
+        concurrencyGroup.appendChild(concurrencyRange);
+        root.appendChild(concurrencyGroup);
+
         const formatGroup = el('div', { class: 'setting-group' });
         formatGroup.appendChild(el('div', { class: 'setting-label', text: '命名格式' }));
         namingFormatInput = el('input', {
@@ -3297,6 +3325,15 @@ export function SettingsView(ctx) {
         if (downloadThreadsRange && document.activeElement !== downloadThreadsRange) {
             const val = String(settings.downloadThreads);
             if (downloadThreadsRange.value !== val) downloadThreadsRange.value = val;
+        }
+
+        if (concurrencyLabel) {
+            const text = `同时下载数量：${settings.concurrency}`;
+            if (concurrencyLabel.textContent !== text) concurrencyLabel.textContent = text;
+        }
+        if (concurrencyRange && document.activeElement !== concurrencyRange) {
+            const val = String(settings.concurrency);
+            if (concurrencyRange.value !== val) concurrencyRange.value = val;
         }
 
         if (themeCustomEl && document.activeElement !== themeCustomEl) {

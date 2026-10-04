@@ -1075,7 +1075,8 @@ export class Downloader {
         const ok = await ensureDirPermission(dirHandle, true);
         if (!ok) throw new Error('没有目录写入权限');
 
-        const { retry, retryDelay, concurrency } = this.config.download;
+        const { retry, retryDelay } = this.config.download;
+        const concurrency = store.get().settings.concurrency ?? this.config.download.concurrency;
         const total = songs.length;
         const taskId = newTaskId();
 
@@ -1342,7 +1343,8 @@ export class Downloader {
     async downloadAsZip(songs, quality) {
         if (!songs.length) throw new Error('下载列表为空');
 
-        const { retry, retryDelay, concurrency } = this.config.download;
+        const { retry, retryDelay } = this.config.download;
+        const concurrency = store.get().settings.concurrency ?? this.config.download.concurrency;
         const total = songs.length;
         const taskId = newTaskId();
 
