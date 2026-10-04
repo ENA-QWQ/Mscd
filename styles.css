@@ -7272,3 +7272,12 @@ body {
 .wiki-progress-cancel:hover {
     color: #fff;
 }
+
+.player-more-menu,
+.volume-popup,
+.account-menu,
+.mobile-more-menu,
+.multi-select-menu,
+.ena-dropdown__menu {
+    zoom: calc(1 / var(--page-zoom, 1));
+}
