@@ -1570,6 +1570,69 @@ body.playback-open .player-cover {
     height: 100%;
 }
 
+.about-modal h1 {
+    font-family: 'LXGW WenKai Light', system-ui, sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: .5px;
+    margin: 0 0 12px;
+    color: var(--text-primary);
+}
+
+.about-modal h2 {
+    font-family: 'LXGW WenKai Light', system-ui, sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: .5px;
+    margin: 22px 0 10px;
+    color: var(--text-primary);
+}
+
+.about-modal h3 {
+    font-family: 'LXGW WenKai Light', system-ui, sans-serif;
+    font-size: .92rem;
+    font-weight: 700;
+    margin: 16px 0 8px;
+    color: var(--text-primary);
+}
+
+.about-modal p {
+    margin: 0 0 12px;
+    line-height: 1.8;
+}
+
+.about-modal ul {
+    margin: 0 0 12px;
+    padding-left: 20px;
+}
+
+.about-modal li {
+    margin-bottom: 6px;
+    line-height: 1.7;
+}
+
+.about-modal a {
+    color: var(--text-primary);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border-line);
+}
+
+.about-modal a:hover {
+    color: var(--hover-text);
+}
+
+.about-modal strong {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.about-modal code {
+    font-family: ui-monospace, monospace;
+    font-size: .85em;
+    padding: 1px 6px;
+    background: var(--bg-subtle);
+}
+
 .account-menu__item svg {
     width: 14px;
     height: 14px;

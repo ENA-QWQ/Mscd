@@ -2,6 +2,95 @@ import { el } from './dom.js';
 import { store } from './store.js';
 import { renderShareCard, sanitizeFilename } from './share-card.js';
 
+const ABOUT_STORAGE_KEY = 'mscd-about-read-version';
+
+function getAboutReadVersion() {
+    try {
+        return localStorage.getItem(ABOUT_STORAGE_KEY) || '';
+    } catch {
+        return '';
+    }
+}
+
+function setAboutReadVersion(v) {
+    try {
+        localStorage.setItem(ABOUT_STORAGE_KEY, String(v || ''));
+    } catch {}
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderMarkdown(md) {
+    const inline = (s) => {
+        let out = escapeHtml(s);
+        out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+        out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+        return out;
+    };
+
+    const lines = String(md || '').split(/\r?\n/);
+    const out = [];
+    let listOpen = false;
+    let paragraph = [];
+
+    const flushParagraph = () => {
+        if (paragraph.length) {
+            out.push('<p>' + paragraph.map(inline).join('<br>') + '</p>');
+            paragraph = [];
+        }
+    };
+    const flushList = () => {
+        if (listOpen) {
+            out.push('</ul>');
+            listOpen = false;
+        }
+    };
+
+    for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) {
+            flushParagraph();
+            flushList();
+            continue;
+        }
+
+        const h = line.match(/^(#{1,6})\s+(.*)$/);
+        if (h) {
+            flushParagraph();
+            flushList();
+            const level = h[1].length;
+            out.push(`<h${level}>${inline(h[2])}</h${level}>`);
+            continue;
+        }
+
+        const li = line.match(/^[-*+]\s+(.*)$/);
+        if (li) {
+            flushParagraph();
+            if (!listOpen) {
+                out.push('<ul>');
+                listOpen = true;
+            }
+            out.push('<li>' + inline(li[1]) + '</li>');
+            continue;
+        }
+
+        paragraph.push(line);
+    }
+
+    flushParagraph();
+    flushList();
+    return out.join('');
+}
+
 const ICON_PATHS = {
     play: '<polygon points="6 4 20 12 6 20"/>',
     'play-next': '<polygon points="5 4 15 12 5 20"/><line x1="19" y1="5" x2="19" y2="19"/>',
@@ -608,7 +697,34 @@ if (typeof document !== 'undefined') {
     });
 }
 
-export function AccountButton({ account, onConnect, onDisconnect, themeMode = 'auto', onCycleThemeMode }) {
+export function openAboutModal(ctx, options = {}) {
+    const about = (ctx && ctx.config && ctx.config.about) || {};
+    const version = String(about.version || '');
+    const body = el('div', { class: 'about-modal' });
+    body.innerHTML = renderMarkdown(about.content || '');
+
+    if (!options.silent) setAboutReadVersion(version);
+
+    const ref = openModal({
+        title: '关于本站',
+        body,
+        showCancel: false,
+        confirmText: '我知道了',
+        onConfirm: () => {
+            setAboutReadVersion(version);
+        },
+    });
+    return ref;
+}
+
+export function shouldShowAbout(cfg) {
+    const about = (cfg && cfg.about) || {};
+    const version = String(about.version || '');
+    if (!version || !about.content) return false;
+    return getAboutReadVersion() !== version;
+}
+
+export function AccountButton({ account, onConnect, onDisconnect, themeMode = 'auto', onCycleThemeMode, onOpenAbout }) {
     if (!account || !account.connected) {
         if (sharedAccountMenu) sharedAccountMenu.classList.remove('is-open');
         const btn = el('button', {
@@ -667,6 +783,17 @@ export function AccountButton({ account, onConnect, onDisconnect, themeMode = 'a
         onDisconnect();
     });
     sharedAccountMenu.appendChild(disconnectBtn);
+
+    const aboutBtn = el('button', { class: 'account-menu__item' },
+        icon('info'),
+        el('span', { text: '关于本站' })
+    );
+    aboutBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sharedAccountMenu.classList.remove('is-open');
+        onOpenAbout?.();
+    });
+    sharedAccountMenu.appendChild(aboutBtn);
 
     btn.addEventListener('click', (e) => {
         e.stopPropagation();

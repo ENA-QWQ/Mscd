@@ -46,4 +46,22 @@ export const config = {
         perPage: 50,
         themeColor: '',
     },
+
+    about: {
+        version: '2026-10-05',
+        content: `
+感谢使用本项目！如果有什么问题或者建议的新功能，您可以：
+
+- 加入MSCD用户QQ群：**1128651874**
+- 联系站长QQ：**409894128**
+
+站长主页：[Ena](https://enashpinal.pages.dev)
+项目地址：[ENA-QWQ/MSCD](https://github.com/ENA-QWQ/MSCD)
+
+## 声明
+
+- **本项目仅用于前端技术学习，严禁用于任何商业用途或大规模公开提供服务。**
+- **请尊重音乐版权。因使用本项目产生的任何版权纠纷、流量费用及法律风险，与本项目作者无关。**
+`,
+    },
 };

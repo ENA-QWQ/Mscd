@@ -17,7 +17,7 @@ import {
     handleDownloadLyric,
     runWikiForTracks,
 } from './src/views.js';
-import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal } from './src/components.js';
+import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal, openAboutModal, shouldShowAbout } from './src/components.js';
 import { initRouter } from './src/router.js';
 import { initWikiProgressUI } from './src/wiki.js';
 import { initPlaybackView } from './src/playback-view.js';
@@ -1243,6 +1243,7 @@ function bindAccountButton() {
             onCycleThemeMode: (mode) => {
                 store.setThemeMode(mode);
             },
+            onOpenAbout: () => openAboutModal(ctx),
         }));
     }
 
@@ -1698,6 +1699,13 @@ initPlaybackView(ctx);
 bindRouter();
 initSidebarTrees(ctx);
 initWikiProgressUI(store);
+
+(function scheduleAboutAutoShow() {
+    if (!shouldShowAbout(config)) return;
+    const fire = () => setTimeout(() => openAboutModal(ctx), 600);
+    if (document.readyState === 'complete') fire();
+    else window.addEventListener('load', fire, { once: true });
+})();
 (function bootstrapWiki() {
     const req = indexedDB.open('mscd-wiki', 1);
     req.onsuccess = () => {
