@@ -106,6 +106,7 @@ function createInitialState() {
             downloadDirName: '',
             downloadThreads: 8,
             themeColor: '',
+            themeMode: 'auto',
             namingFormat: '{title} - {artist}',
             batchCategory: 'none',
             lyricSaveMode: 'same',
@@ -488,23 +489,33 @@ class Store {
     }
 
     applyTheme() {
-        const { themeColor } = this.state.settings;
+        const { themeColor, themeMode } = this.state.settings;
+        const mode = themeMode || 'auto';
         if (!themeColor) {
-            clearThemeVars();
-        } else {
-            applyThemeVars(generateThemeVars(themeColor));
+            if (mode === 'dark') {
+                applyThemeVars(generateThemeVars('#2d2d2d', 'dark'));
+            } else {
+                clearThemeVars();
+            }
+            return;
         }
+        applyThemeVars(generateThemeVars(themeColor, mode));
     }
 
     setTheme(themeColor) {
         if (this.state.settings.themeColor === themeColor) return;
         this.state.settings = { ...this.state.settings, themeColor };
         this.persist();
-        if (!themeColor) {
-            clearThemeVars();
-        } else {
-            applyThemeVars(generateThemeVars(themeColor));
-        }
+        this.applyTheme();
+        this.notify();
+    }
+
+    setThemeMode(mode) {
+        if (!['auto', 'light', 'dark'].includes(mode)) return;
+        if ((this.state.settings.themeMode || 'auto') === mode) return;
+        this.state.settings = { ...this.state.settings, themeMode: mode };
+        this.persist();
+        this.applyTheme();
         this.notify();
     }
 }

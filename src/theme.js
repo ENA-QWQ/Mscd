@@ -41,9 +41,14 @@ function hsla(h, s, l, a) {
     return `hsla(${Math.round(h)}, ${Math.round(s * 100)}%, ${Math.round(l)}%, ${a})`;
 }
 
-export function generateThemeVars(themeHex) {
+export function generateThemeVars(themeHex, mode = 'auto') {
     const { h, s, l } = hexToHsl(themeHex);
-    const isLight = l >= 0.5;
+    const isLight = mode === 'auto' ? l >= 0.5 : mode === 'light';
+
+    let accentHex = themeHex;
+    if (mode === 'dark' && l < 0.5) {
+        accentHex = hsl(h, s, 50);
+    }
 
     const sBg = Math.min(0.42, Math.max(0.04, s * 0.55));
     const sText = Math.min(0.55, Math.max(0.06, s * 0.65));
@@ -51,9 +56,9 @@ export function generateThemeVars(themeHex) {
     const hoverTextL = isLight ? 20 : 80;
 
     const accent = {
-        '--fill': themeHex,
-        '--border-line': themeHex,
-        '--hover-text': themeHex,
+        '--fill': accentHex,
+        '--border-line': accentHex,
+        '--hover-text': isLight ? accentHex : hsl(h, s, 88),
     };
 
     if (isLight) {

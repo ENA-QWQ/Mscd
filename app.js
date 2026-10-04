@@ -1232,12 +1232,16 @@ function bindAccountButton() {
         const account = store.get().account;
         host.appendChild(AccountButton({
             account,
+            themeMode: store.get().settings.themeMode || 'auto',
             onConnect: openAccountModal,
             onDisconnect: async () => {
                 const ok = await confirmDialog('确定断开当前账户吗？');
                 if (!ok) return;
                 store.disconnectAccount();
                 Toast('已断开账户连接', 'success', 1400);
+            },
+            onCycleThemeMode: (mode) => {
+                store.setThemeMode(mode);
             },
         }));
     }
@@ -1252,9 +1256,10 @@ function bindAccountButton() {
     render();
     store.subscribe((state) => {
         const current = state.account;
-        const last = host.__lastAccount;
-        if (last && last.connected === current.connected && last.uid === current.uid && last.nickname === current.nickname && last.avatarUrl === current.avatarUrl) return;
-        host.__lastAccount = { ...current };
+        const currentMode = state.settings.themeMode || 'auto';
+        const key = `${current.connected}|${current.uid}|${current.nickname}|${current.avatarUrl}|${currentMode}`;
+        if (host.__lastAccountKey === key) return;
+        host.__lastAccountKey = key;
         render();
     });
 }

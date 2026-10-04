@@ -32,6 +32,9 @@ const ICON_PATHS = {
     'folder-plus': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>',
     not: '<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',
     layout: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+    moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+    monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
 };
 
 function resolveSongRowView() {
@@ -605,7 +608,7 @@ if (typeof document !== 'undefined') {
     });
 }
 
-export function AccountButton({ account, onConnect, onDisconnect }) {
+export function AccountButton({ account, onConnect, onDisconnect, themeMode = 'auto', onCycleThemeMode }) {
     if (!account || !account.connected) {
         if (sharedAccountMenu) sharedAccountMenu.classList.remove('is-open');
         const btn = el('button', {
@@ -638,6 +641,21 @@ export function AccountButton({ account, onConnect, onDisconnect }) {
         class: 'ena-btn ena-btn--sm account-btn account-btn--connected',
         title: account.nickname || '已连接',
     }, avatarEl, el('span', { class: 'account-btn__name', text: account.nickname || '已连接' }));
+
+    const modeIcons = { auto: 'monitor', light: 'sun', dark: 'moon' };
+    const modeLabels = { auto: '主题：自动', light: '主题：日间', dark: '主题：夜间' };
+    const currentMode = themeMode || 'auto';
+    const themeModeBtn = el('button', { class: 'account-menu__item' },
+        icon(modeIcons[currentMode]),
+        el('span', { text: modeLabels[currentMode] })
+    );
+    themeModeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const order = ['auto', 'light', 'dark'];
+        const next = order[(order.indexOf(currentMode) + 1) % order.length];
+        onCycleThemeMode?.(next);
+    });
+    sharedAccountMenu.appendChild(themeModeBtn);
 
     const disconnectBtn = el('button', { class: 'account-menu__item' },
         icon('log-out'),
