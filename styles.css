@@ -7442,7 +7442,7 @@ body {
 
 .song-detail-header {
     display: grid;
-    grid-template-columns: 20px 36px minmax(0, 1fr) 140px 88px 60px 80px 56px 96px 28px;
+    grid-template-columns: 20px 36px minmax(0, 200px) minmax(0, 1fr) 88px 60px 80px 56px 96px 28px;
     align-items: center;
     gap: 6px;
     padding: 4px 12px 4px 6px;
@@ -7465,13 +7465,14 @@ body {
 }
 
 .song-detail-header__cell:nth-child(1),
-.song-detail-header__cell:nth-child(3) {
+.song-detail-header__cell:nth-child(3),
+.song-detail-header__cell:nth-child(4) {
     text-align: left;
 }
 
 .song-row--detail {
     display: grid;
-    grid-template-columns: 20px 36px minmax(0, 1fr) 140px 88px 60px 80px 56px 96px 28px;
+    grid-template-columns: 20px 36px minmax(0, 200px) minmax(0, 1fr) 88px 60px 80px 56px 96px 28px;
     align-items: center;
     gap: 6px;
     padding: 6px 12px 6px 6px;
@@ -7583,6 +7584,10 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: center;
+}
+
+.song-detail-col--album {
+    text-align: left;
 }
 
 .song-detail-col--bpm,
