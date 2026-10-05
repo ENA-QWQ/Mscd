@@ -7442,7 +7442,7 @@ body {
 
 .song-detail-header {
     display: grid;
-    grid-template-columns: 20px 36px minmax(0, 200px) minmax(0, 1fr) 88px 60px 80px 56px 96px 28px;
+    grid-template-columns: 20px 36px repeat(2, minmax(0, 1fr)) 88px 60px 80px 56px 96px 28px;
     align-items: center;
     gap: 6px;
     padding: 4px 12px 4px 6px;
@@ -7472,7 +7472,7 @@ body {
 
 .song-row--detail {
     display: grid;
-    grid-template-columns: 20px 36px minmax(0, 200px) minmax(0, 1fr) 88px 60px 80px 56px 96px 28px;
+    grid-template-columns: 20px 36px repeat(2, minmax(0, 1fr)) 88px 60px 80px 56px 96px 28px;
     align-items: center;
     gap: 6px;
     padding: 6px 12px 6px 6px;
