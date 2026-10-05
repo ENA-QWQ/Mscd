@@ -1,7 +1,7 @@
 <div align="center">
 <img src="https://readme-typing-svg.demolab.com?font=Poiret+One&size=90&duration=1200&pause=0&repeat=false&color=2D2D2D&center=true&vCenter=true&width=600&height=140&lines=MSCD" alt="MSCD" />
 <br />
-<a href="https://github.com/ENA-QWQ/cloudmusic_downloader/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-2d2d2d?style=flat-square" alt="License" /></a>
+<a href="https://github.com/ENA-QWQ/MSCD/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-2d2d2d?style=flat-square" alt="License" /></a>
 <a href="https://pages.cloudflare.com/"><img src="https://img.shields.io/badge/Deploy-Cloudflare%20Pages-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Pages" /></a>
 <img src="https://img.shields.io/badge/Build-None-brightgreen?style=flat-square" alt="No Build" />
 <img src="https://img.shields.io/badge/Module-ES%20Modules-F7DF1E?style=flat-square&logo=javascript&logoColor=black" alt="ES Modules" />
@@ -35,33 +35,46 @@ https://mscdownload.pages.dev/
 
 </details>
 
-
 ## 架构
 
 - 原生 ES Modules。clone 即可运行。
 - `MetingAdapter` 与 `NeteaseAdapter`，通过 `config.services` 按功能维度（search / song / url / lyric / album / playlist / artist / user）路由到不同后端。
 - 单例 Store + 订阅模式，所有视图通过 `store.subscribe` 增量渲染，避免全量 DOM 重建。
 - `functions/proxy.js` 运行于 Cloudflare Edge，处理 CORS、Range 透传、SSRF 防护与协议升级。
+- `src/wiki-worker.js` 为独立 Worker，按批次并发抓取百科数据；结果写入 IndexedDB（`mscd-wiki`）。
+- `src/router.js` 基于 `location.hash`，同步 `playbackOpen` / `search.detail` / `view` 到 URL，支持前进后退与分享链接。
+- `src/downloader.js` 使用 File System Access API 的目录句柄持久化在 IndexedDB（`mscd-fs`）。
 
 ## 项目结构
 
 ```
 .
 ├── index.html              # 单页入口
-├── app.js                  # 应用引导、路由、事件绑定
-├── config.js               # 后端地址、服务路由、超时重试、音质等级
+├── app.js                  # 应用引导、事件绑定、视图挂载、Wiki 启动
+├── config.js               # 后端地址、服务路由、超时重试、音质等级、关于信息
 ├── styles.css              # 全量样式
+├── wrangler.toml           # Cloudflare Pages 项目配置
 ├── functions/
 │   └── proxy.js            # Cloudflare Pages Function 代理
 └── src/
     ├── api.js              # Meting / Netease 双适配器
-    ├── components.js       # SongRow / CollectionCard / Modal / Toast / Dropdown
+    ├── components.js       # SongRow / CollectionCard / ArtistCard / Modal / Toast / Dropdown / AccountButton
     ├── dom.js              # el() 元素构造器与工具函数
     ├── downloader.js       # 分片下载、标签写入、任务调度、FS Access
+    ├── filter.js           # 筛选字段定义、运算符、条件求值
+    ├── filter-editor.js    # 筛选条件编辑器（条件树 UI）
+    ├── list-gestures.js    # 列表拖拽排序 / 框选
+    ├── lyric.js            # LRC / YRC / 逐字 JSON 解析与合并
+    ├── playback-view.js    # 全屏播放页（歌词、光晕、移动端控制）
     ├── player.js           # 播放器状态机
+    ├── router.js           # 基于 hash 的前端路由
+    ├── share-card.js       # Canvas 分享图生成（含二维码）
+    ├── sidebar-tree.js     # 侧边栏树：收藏 / 队列 / 下载 / 状态
     ├── store.js            # 全局状态与持久化
     ├── theme.js            # HSL 主题派生
-    └── views.js            # Home / Search / Queue / Downloads / Status / Settings / Liked / MyPlaylists
+    ├── views.js            # Home / Search / Queue / Downloads / Status / Settings / Liked / MyFavorites
+    ├── wiki.js             # 百科缓存（IndexedDB）、抓取调度与进度 UI
+    └── wiki-worker.js      # 百科抓取 Worker
 ```
 
 ## 配置
@@ -84,7 +97,7 @@ export const config = {
         url:      'meting',
         lyric:    'meting',
         album:    'netease',
-        playlist: 'meting',
+        playlist: 'netease',
         artist:   'netease',
         user:     'netease',
     },
@@ -103,6 +116,11 @@ export const config = {
     },
     download: { concurrency: 3, retry: 3, retryDelay: 1000 },
     ui: { perPage: 50, themeColor: '' },
+
+    about: {
+        version: '2026-10-05',
+        content: `...Markdown...`,
+    },
 };
 ```
 
@@ -115,11 +133,15 @@ export const config = {
 | `url`      | 音频直链解析                      | `meting`    |
 | `lyric`    | 歌词                              | `meting`    |
 | `album`    | 专辑详情与曲目                    | `netease`   |
-| `playlist` | 歌单详情与曲目                    | `meting`    |
+| `playlist` | 歌单详情与曲目                    | `netease`   |
 | `artist`   | 歌手详情、单曲、专辑              | `netease`   |
 | `user`     | 用户详情、歌单、喜欢列表          | `netease`   |
 
 `MetingAdapter` 面向 Meting API ，`NeteaseAdapter` 面向 NeteaseCloudMusicApi。
+
+### 关于 `about`
+
+`config.about.version` 变更时，用户下次打开会弹出「关于本站」弹窗；`content` 支持基础 Markdown（标题、列表、加粗、行内代码、链接）。
 
 ## 部署
 
@@ -127,10 +149,10 @@ export const config = {
 
 1. Fork 本仓库。
 2. Cloudflare Dashboard → Pages → Create project → 连接 Git 仓库。
-3. 构建配置留空：
-    - **Build command**：无
-    - **Build output directory**：`/`
-4. `functions/proxy.js` 会自动被识别为 Pages Functions，部署后生效。
+3. 构建配置：
+   - **Build command**：留空
+   - **Build output directory**：`/`
+4. `functions/proxy.js` 会被自动识别为 Pages Functions，部署后生效。
 5. 将 `config.js` 中的 `proxy` 改为你的 Pages 域名，例如：
    ```js
    proxy: 'https://your-project.pages.dev/proxy?url=',
@@ -167,27 +189,41 @@ npx wrangler pages dev . --port 8080
 
 | 功能                | 依赖                                        | 兼容性                         |
 | ------------------- | ------------------------------------------- | ------------------------------ |
-| 基础播放与下载      | ES Modules / Fetch / AbortController        | 全部现代浏览器               |
-| 流式落盘            | File System Access API                      | Chromium 86+           |
+| 基础播放与下载      | ES Modules / Fetch / AbortController        | 全部现代浏览器                 |
+| 流式落盘            | File System Access API                      | Chromium 86+                   |
 | IndexedDB 句柄持久化 | IndexedDB + 结构化克隆                      | 同 File System Access API      |
-| FLAC 标签写入       | 手写解析器                                  | 全部现代浏览器     |
+| 百科缓存            | IndexedDB + Web Worker（module）            | 全部现代浏览器                 |
+| FLAC 标签写入       | 手写解析器                                  | 全部现代浏览器                 |
 | MP3 标签写入        | `browser-id3-writer`                        | 全部现代浏览器                 |
 
 ## 状态持久化
 
-`localStorage` 键名：`meting-app-state`
+### `localStorage`
 
-持久化字段：
+键名：`meting-app-state`
 
 ```json
 {
-  "downloads":     [],
-  "settings":      {},
-  "account":       { "uid": "", "nickname": "", "avatarUrl": "" },
-  "queue":         { "tracks": [], "currentIndex": -1, "playMode": "order", "volume": 0.7 },
-  "downloadTasks": []
+  "downloads":       [],
+  "settings":        {},
+  "account":         { "uid": "", "nickname": "", "avatarUrl": "" },
+  "queue":           { "tracks": [], "currentIndex": -1, "playMode": "order", "volume": 0.7 },
+  "downloadTasks":   [],
+  "filter":          { "search": null, "queue": null, "downloads": null, "liked": null },
+  "sidebarExpanded": { "myfavorites": false, "downloads": false, "status": false, "queue": false },
+  "favoritesTab":    "liked"
 }
 ```
+
+另有：
+
+- `meting-detail-meta`：详情页元信息缓存（最多 100 条）
+- `mscd-about-read-version`：已读「关于本站」的版本号
+
+### IndexedDB
+
+- `mscd-wiki` → `songWiki`：百科数据缓存（TTL 7 天，失败缓存 1 小时）
+- `mscd-fs` → `handles` → `download-dir`：File System Access 目录句柄
 
 ## 免责声明
 
