@@ -45,7 +45,12 @@ export async function getCachedWiki(ids) {
             req.onsuccess = () => {
                 const entry = req.result;
                 if (entry && !entry.failed && isFresh(entry)) {
-                    result.set(id, entry.data);
+                    const data = entry.data || {};
+                    result.set(id, {
+                        ...data,
+                        __summaryFetched: !!entry.summaryFetched,
+                        __publishFetched: !!entry.publishFetched,
+                    });
                 }
             };
         }
@@ -63,10 +68,20 @@ export async function setWikiBatch(entries) {
         const now = Date.now();
         for (const e of entries) {
             if (!e || !e.id) continue;
+            const data = e.data || null;
+            const summaryFetched = !!(data && data.__summaryFetched);
+            const publishFetched = !!(data && data.__publishFetched);
+            const cleanData = data ? { ...data } : null;
+            if (cleanData) {
+                delete cleanData.__summaryFetched;
+                delete cleanData.__publishFetched;
+            }
             store.put({
-                data: e.data || null,
-                failed: !e.data,
+                data: cleanData,
+                failed: !cleanData,
                 fetchedAt: now,
+                summaryFetched,
+                publishFetched,
             }, String(e.id));
         }
         tx.oncomplete = () => resolve();
@@ -86,7 +101,12 @@ export async function getAllWiki() {
             if (cursor) {
                 const entry = cursor.value;
                 if (entry && !entry.failed && isFresh(entry)) {
-                    result.set(String(cursor.key), entry.data);
+                    const data = entry.data || {};
+                    result.set(String(cursor.key), {
+                        ...data,
+                        __summaryFetched: !!entry.summaryFetched,
+                        __publishFetched: !!entry.publishFetched,
+                    });
                 }
                 cursor.continue();
             }
@@ -205,66 +225,110 @@ export class WikiFetcher {
         if (!total) return new Map();
 
         const cached = await getCachedWiki(uniqueIds);
-        const missing = uniqueIds.filter((id) => !cached.has(id));
 
-        const result = new Map(cached);
-        let done = result.size;
+        const result = new Map();
+        for (const id of uniqueIds) {
+            const entry = cached.get(id);
+            if (entry) {
+                result.set(id, {
+                    ...entry,
+                    __summaryFetched: !!entry.__summaryFetched,
+                    __publishFetched: !!entry.__publishFetched,
+                });
+            } else {
+                result.set(id, {
+                    genre: '', language: '', bpm: 0, bizTags: [], publishDate: '', hasAward: false,
+                    __summaryFetched: false,
+                    __publishFetched: false,
+                });
+            }
+        }
 
-        if (!missing.length) {
-            onProgress?.({ done, total, cached: done, fetched: 0 });
+        const missingSummary = uniqueIds.filter((id) => !result.get(id).__summaryFetched);
+        const missingPublish = uniqueIds.filter((id) => !result.get(id).__publishFetched);
+
+        if (!missingSummary.length && !missingPublish.length) {
+            onProgress?.({ done: total, total, cached: total, fetched: 0 });
             return result;
         }
 
-        this.ensureWorkers();
+        let done = total - missingSummary.length;
 
-        const publishPromise = fetchPublishDates(missing, this.detailBase);
+        if (missingSummary.length) {
+            this.ensureWorkers();
 
-        const batches = [];
-        for (let i = 0; i < missing.length; i += this.batchSize) {
-            batches.push(missing.slice(i, i + this.batchSize));
-        }
+            const batches = [];
+            for (let i = 0; i < missingSummary.length; i += this.batchSize) {
+                batches.push(missingSummary.slice(i, i + this.batchSize));
+            }
 
-        let cursor = 0;
-        const pendingWrites = [];
+            let cursor = 0;
+            const pendingWrites = [];
 
-        const workerLoop = async (worker) => {
-            while (true) {
-                if (myToken !== this.token) return;
-                const idx = cursor++;
-                if (idx >= batches.length) return;
-                const batch = batches[idx];
-                const results = await this.runBatch(worker, batch, myToken);
-                if (myToken !== this.token) return;
+            const workerLoop = async (worker) => {
+                while (true) {
+                    if (myToken !== this.token) return;
+                    const idx = cursor++;
+                    if (idx >= batches.length) return;
+                    const batch = batches[idx];
+                    const results = await this.runBatch(worker, batch, myToken);
+                    if (myToken !== this.token) return;
 
-                for (const item of results) {
-                    if (item && item.data) {
-                        result.set(String(item.id), item.data);
+                    for (const item of results) {
+                        if (!item) continue;
+                        const id = String(item.id);
+                        const prev = result.get(id) || {};
+                        if (item.data) {
+                            result.set(id, {
+                                ...prev,
+                                ...item.data,
+                                __summaryFetched: true,
+                            });
+                        } else {
+                            result.set(id, {
+                                ...prev,
+                                __summaryFetched: true,
+                            });
+                        }
                         done++;
                     }
+
+                    pendingWrites.push(setWikiBatch(results.map((r) => {
+                        const id = String(r.id);
+                        const prev = result.get(id) || {};
+                        if (r.data) {
+                            return {
+                                id,
+                                data: { ...prev, ...r.data, __summaryFetched: true },
+                            };
+                        }
+                        return {
+                            id,
+                            data: { ...prev, __summaryFetched: true },
+                        };
+                    })).catch(() => {}));
+
+                    onProgress?.({ done, total, cached: cached.size, fetched: done - cached.size });
                 }
+            };
 
-                pendingWrites.push(setWikiBatch(results.map((r) => ({
-                    id: r.id,
-                    data: r.data || null,
-                }))).catch(() => {}));
+            await Promise.all(this.workers.map((w) => workerLoop(w)));
+            await Promise.all(pendingWrites);
+        }
 
-                onProgress?.({ done, total, cached: cached.size, fetched: done - cached.size });
-            }
-        };
+        if (missingPublish.length) {
+            const publishMap = await fetchPublishDates(missingPublish, this.detailBase);
+            if (myToken !== this.token) return result;
 
-        await Promise.all(this.workers.map((w) => workerLoop(w)));
-        await Promise.all(pendingWrites);
-
-        const publishMap = await publishPromise;
-        if (myToken !== this.token) return result;
-
-        if (publishMap.size > 0) {
             const toUpdate = [];
-            for (const [id, ds] of publishMap) {
-                const entry = result.get(id);
-                if (!entry) continue;
-                if (entry.publishDate === ds) continue;
-                const updated = { ...entry, publishDate: ds };
+            for (const id of missingPublish) {
+                const prev = result.get(id) || {};
+                const ds = publishMap.get(id) || prev.publishDate || '';
+                const updated = {
+                    ...prev,
+                    publishDate: ds,
+                    __publishFetched: true,
+                };
                 result.set(id, updated);
                 toUpdate.push({ id, data: updated });
             }

@@ -59,7 +59,11 @@ export async function runWikiForTracks(ctx, tracks, options = {}) {
 
     const map = current.wikiMap;
     if (map instanceof Map && map.size > 0) {
-        const missing = ids.filter((id) => !map.has(id));
+        const missing = ids.filter((id) => {
+            const entry = map.get(id);
+            if (!entry) return true;
+            return !entry.__summaryFetched || !entry.__publishFetched;
+        });
         if (!missing.length) return;
     }
 

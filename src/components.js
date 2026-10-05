@@ -142,20 +142,20 @@ function formatSongDuration(sec) {
 function detailWikiField(song, key) {
     const state = store.get();
     const map = state.wikiMap;
-    if (map instanceof Map) {
-        const entry = map.get(String(song.id));
-        if (entry) {
-            if (key === 'bpm') {
-                const v = Number(entry.bpm);
-                return (v > 0) ? String(v) : '-';
-            }
-            const v = entry[key];
-            if (Array.isArray(v)) return v.length ? v.join(' / ') : '-';
-            return v ? String(v) : '-';
-        }
+    const entry = map instanceof Map ? map.get(String(song.id)) : null;
+    if (!entry) return '加载中…';
+    if (key === 'publishDate') {
+        if (!entry.__publishFetched) return '加载中…';
+        return entry.publishDate ? String(entry.publishDate) : '-';
     }
-    if (state.wikiProgress && state.wikiProgress.active) return '加载中…';
-    return '-';
+    if (!entry.__summaryFetched) return '加载中…';
+    if (key === 'bpm') {
+        const v = Number(entry.bpm);
+        return (v > 0) ? String(v) : '-';
+    }
+    const v = entry[key];
+    if (Array.isArray(v)) return v.length ? v.join(' / ') : '-';
+    return v ? String(v) : '-';
 }
 
 export function icon(name, filled = false) {

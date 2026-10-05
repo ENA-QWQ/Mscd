@@ -1287,13 +1287,17 @@ function bindSilentWiki() {
             lastKey = '';
             return;
         }
-        if (state.wikiProgress.active) return;
         const tracks = state.visibleTracks;
         if (!tracks || !tracks.length) return;
-        const ids = tracks.map((t) => String(t.id)).filter(Boolean);
-        if (!ids.length) return;
-        const key = ids.join(',');
+        const map = state.wikiMap instanceof Map ? state.wikiMap : null;
+        const key = tracks.map((t) => {
+            const entry = map ? map.get(String(t.id)) : null;
+            const s = entry && entry.__summaryFetched ? '1' : '0';
+            const p = entry && entry.__publishFetched ? '1' : '0';
+            return `${t.id}:${s}${p}`;
+        }).join(',');
         if (key === lastKey) return;
+        if (state.wikiProgress.active) return;
         lastKey = key;
         void runWikiForTracks(ctx, tracks, { silent: true });
     });
