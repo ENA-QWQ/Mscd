@@ -1317,10 +1317,10 @@ export function LikedView(ctx, options = {}) {
             tracks = [];
             loadError = null;
             render();
-        } else if (filterChanged || wikiChanged) {
+        } else if (filterChanged) {
             page = 1;
             render();
-        } else if (songViewChanged) {
+        } else if (wikiChanged || songViewChanged) {
             render();
         }
     });
