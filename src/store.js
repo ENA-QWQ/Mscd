@@ -350,6 +350,96 @@ class Store {
         this.notify();
     }
 
+    moveTrackInQueue(fromIndex, toIndex) {
+        const q = this.state.queue;
+        if (fromIndex === toIndex) return;
+        if (fromIndex < 0 || fromIndex >= q.tracks.length) return;
+        if (toIndex < 0 || toIndex >= q.tracks.length) return;
+        const tracks = [...q.tracks];
+        const [moved] = tracks.splice(fromIndex, 1);
+        tracks.splice(toIndex, 0, moved);
+        let currentIndex = q.currentIndex;
+        if (currentIndex === fromIndex) {
+            currentIndex = toIndex;
+        } else if (fromIndex < currentIndex && toIndex >= currentIndex) {
+            currentIndex -= 1;
+        } else if (fromIndex > currentIndex && toIndex <= currentIndex) {
+            currentIndex += 1;
+        }
+        this.state.queue = { ...q, tracks, currentIndex };
+        this.notify();
+        this.persist();
+    }
+
+    moveTracksInQueue(fromIndices, toIndex) {
+        const q = this.state.queue;
+        const indices = Array.from(new Set(fromIndices))
+            .filter((i) => Number.isInteger(i) && i >= 0 && i < q.tracks.length)
+            .sort((a, b) => a - b);
+        if (!indices.length) return;
+        const set = new Set(indices);
+        const moved = indices.map((i) => q.tracks[i]);
+        const remaining = q.tracks.filter((_, i) => !set.has(i));
+        let adjustedTo = toIndex;
+        for (const i of indices) {
+            if (i < toIndex) adjustedTo -= 1;
+        }
+        if (adjustedTo < 0) adjustedTo = 0;
+        if (adjustedTo > remaining.length) adjustedTo = remaining.length;
+        const tracks = [
+            ...remaining.slice(0, adjustedTo),
+            ...moved,
+            ...remaining.slice(adjustedTo),
+        ];
+        let currentIndex = q.currentIndex;
+        if (currentIndex >= 0) {
+            const currentSong = q.tracks[currentIndex];
+            const found = tracks.indexOf(currentSong);
+            currentIndex = found >= 0 ? found : -1;
+        }
+        this.state.queue = { ...q, tracks, currentIndex };
+        this.notify();
+        this.persist();
+    }
+
+    moveTrackInDownloads(fromIndex, toIndex) {
+        const list = this.state.downloads;
+        if (fromIndex === toIndex) return;
+        if (fromIndex < 0 || fromIndex >= list.length) return;
+        if (toIndex < 0 || toIndex >= list.length) return;
+        const downloads = [...list];
+        const [moved] = downloads.splice(fromIndex, 1);
+        downloads.splice(toIndex, 0, moved);
+        this.state.downloads = downloads;
+        this.notify();
+        this.persist();
+    }
+
+    moveTracksInDownloads(fromIndices, toIndex) {
+        const list = this.state.downloads;
+        const indices = Array.from(new Set(fromIndices))
+            .filter((i) => Number.isInteger(i) && i >= 0 && i < list.length)
+            .sort((a, b) => a - b);
+        if (!indices.length) return;
+        const set = new Set(indices);
+        const moved = indices.map((i) => list[i]);
+        const remaining = list.filter((_, i) => !set.has(i));
+        let adjustedTo = toIndex;
+        for (const i of indices) {
+            if (i < toIndex) adjustedTo -= 1;
+        }
+        if (adjustedTo < 0) adjustedTo = 0;
+        if (adjustedTo > remaining.length) adjustedTo = remaining.length;
+        const downloads = [
+            ...remaining.slice(0, adjustedTo),
+            ...moved,
+            ...remaining.slice(adjustedTo),
+        ];
+        this.state.downloads = downloads;
+        this.notify();
+        this.persist();
+    }
+
     disconnectAccount() {
         this.state.account = {
             uid: '',

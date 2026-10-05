@@ -23,6 +23,7 @@ import {
 import { getFieldsForView, buildFilterContext, evaluate, treeHasDynamicField } from './filter.js';
 import { getWikiFetcher, collectWikiOptions } from './wiki.js';
 import { openFilterEditor } from './filter-editor.js';
+import { attachListGestures } from './list-gestures.js';
 
 function hexToRgb(hex) {
     let h = String(hex || '').replace('#', '');
@@ -1427,6 +1428,11 @@ export function QueueView(ctx) {
     const listHost = el('div');
     root.appendChild(listHost);
 
+    const songListEl = el('div', { class: 'song-list' });
+    const paginationHost = el('div');
+    listHost.appendChild(songListEl);
+    listHost.appendChild(paginationHost);
+
     let lastTracks = null;
     let lastIndex = -1;
     let lastPlaying = null;
@@ -1435,6 +1441,7 @@ export function QueueView(ctx) {
     let lastPerPage = null;
     let lastFilter = null;
     let lastWikiMap = null;
+    let gestures = null;
 
     function render() {
         const state = store.get();
@@ -1473,10 +1480,13 @@ export function QueueView(ctx) {
         lastFilter = filter;
         lastWikiMap = state.wikiMap;
 
-        listHost.innerHTML = '';
+        songListEl.innerHTML = '';
+        paginationHost.innerHTML = '';
 
         if (!q.tracks.length) {
-            listHost.appendChild(EmptyState('队列为空', 'list'));
+            const emptyEl = EmptyState('队列为空', 'list');
+            emptyEl.style.gridColumn = '1 / -1';
+            songListEl.appendChild(emptyEl);
             store.setVisibleTracks([]);
             return;
         }
@@ -1497,7 +1507,9 @@ export function QueueView(ctx) {
         });
 
         if (!items.length) {
-            listHost.appendChild(EmptyState('没有匹配的歌曲', 'search'));
+            const emptyEl = EmptyState('没有匹配的歌曲', 'search');
+            emptyEl.style.gridColumn = '1 / -1';
+            songListEl.appendChild(emptyEl);
             store.setVisibleTracks([]);
             return;
         }
@@ -1511,7 +1523,6 @@ export function QueueView(ctx) {
         store.setAllTracks(q.tracks);
         store.setFilteredTracks(items.map((it) => it.song));
 
-        const list = el('div', { class: 'song-list' });
         for (const { song, index } of slice) {
             const row = SongRow(song, songRowHandlers(song, ctx, {
                 hidePlayNextMenu: true,
@@ -1524,12 +1535,19 @@ export function QueueView(ctx) {
                 if (q.isPlaying) row.classList.add('is-playing');
             }
 
-            list.appendChild(row);
+            row.dataset.index = String(index);
+            songListEl.appendChild(row);
         }
-        listHost.appendChild(list);
+
+        if (!gestures) {
+            gestures = attachListGestures(songListEl, {
+                kind: 'queue',
+                canReorder: () => !search && !filter,
+            });
+        }
 
         if (totalPages > 1) {
-            listHost.appendChild(Pagination({
+            paginationHost.appendChild(Pagination({
                 page: currentPage,
                 totalPages,
                 onPage: (p) => store.update({ queuePage: p }),
@@ -1570,7 +1588,13 @@ export function QueueView(ctx) {
 
     return {
         node: root,
-        destroy: () => unsubscribe(),
+        destroy: () => {
+            if (gestures) {
+                gestures.destroy();
+                gestures = null;
+            }
+            unsubscribe();
+        },
     };
 }
 
@@ -2004,12 +2028,18 @@ export function DownloadsView(ctx) {
     const listHost = el('div');
     root.appendChild(listHost);
 
+    const songListEl = el('div', { class: 'song-list' });
+    const paginationHost = el('div');
+    listHost.appendChild(songListEl);
+    listHost.appendChild(paginationHost);
+
     let lastDownloads = null;
     let lastSearch = null;
     let lastPage = null;
     let lastPerPage = null;
     let lastFilter = null;
     let lastWikiMap = null;
+    let gestures = null;
 
     async function startDownloadAll() {
         const downloads = store.get().downloads;
@@ -2139,10 +2169,13 @@ export function DownloadsView(ctx) {
         lastFilter = filter;
         lastWikiMap = state.wikiMap;
 
-        listHost.innerHTML = '';
+        songListEl.innerHTML = '';
+        paginationHost.innerHTML = '';
 
         if (!state.downloads.length) {
-            listHost.appendChild(EmptyState('下载列表为空', 'download'));
+            const emptyEl = EmptyState('下载列表为空', 'download');
+            emptyEl.style.gridColumn = '1 / -1';
+            songListEl.appendChild(emptyEl);
             store.setVisibleTracks([]);
             return;
         }
@@ -2161,7 +2194,9 @@ export function DownloadsView(ctx) {
         }
 
         if (!filtered.length) {
-            listHost.appendChild(EmptyState('没有匹配的歌曲', 'search'));
+            const emptyEl = EmptyState('没有匹配的歌曲', 'search');
+            emptyEl.style.gridColumn = '1 / -1';
+            songListEl.appendChild(emptyEl);
             store.setVisibleTracks([]);
             return;
         }
@@ -2175,9 +2210,9 @@ export function DownloadsView(ctx) {
         store.setAllTracks(state.downloads);
         store.setFilteredTracks(filtered);
 
-        const list = el('div', { class: 'song-list' });
+        const downloadsAll = state.downloads;
         for (const song of slice) {
-            list.appendChild(SongRow(song, {
+            const row = SongRow(song, {
                 selectable: true,
                 selected: state.selection.some((s) => s.id === song.id),
                 onToggleSelect: (s) => store.toggleSelection(s),
@@ -2196,12 +2231,21 @@ export function DownloadsView(ctx) {
                     store.update({ downloads });
                     store.persist();
                 },
-            }));
+            });
+            const realIndex = downloadsAll.indexOf(song);
+            if (realIndex >= 0) row.dataset.index = String(realIndex);
+            songListEl.appendChild(row);
         }
-        listHost.appendChild(list);
+
+        if (!gestures) {
+            gestures = attachListGestures(songListEl, {
+                kind: 'downloads',
+                canReorder: () => !search && !filter,
+            });
+        }
 
         if (totalPages > 1) {
-            listHost.appendChild(Pagination({
+            paginationHost.appendChild(Pagination({
                 page: currentPage,
                 totalPages,
                 onPage: (p) => store.update({ downloadsPage: p }),
@@ -2213,7 +2257,13 @@ export function DownloadsView(ctx) {
 
     return {
         node: root,
-        destroy: () => unsubscribe(),
+        destroy: () => {
+            if (gestures) {
+                gestures.destroy();
+                gestures = null;
+            }
+            unsubscribe();
+        },
     };
 }
 
