@@ -11,6 +11,13 @@ const FLIP_DURATION_SETTLE = 240;
 
 const PLACEHOLDER_ID = '__drag-placeholder__';
 
+const MOBILE_QUERY = '(max-width: 900px)';
+
+function isMobile() {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia(MOBILE_QUERY).matches;
+}
+
 function getZoom() {
     try {
         const z = getComputedStyle(document.documentElement).zoom;
@@ -54,6 +61,12 @@ export function attachListGestures(listEl, options) {
     const kind = options.kind;
     const canReorder = options.canReorder || (() => true);
 
+    if (isMobile()) {
+        return {
+            destroy: () => {},
+        };
+    }
+
     listEl.style.userSelect = 'none';
     listEl.style.webkitUserSelect = 'none';
 
@@ -73,8 +86,6 @@ export function attachListGestures(listEl, options) {
     let dragGroupRows = null;
     let dragCommitted = false;
     let ghost = null;
-    let ghostOffsetX = 0;
-    let ghostOffsetY = 0;
     let placeholder = null;
     let selectBox = null;
     let initialSelection = null;
@@ -285,18 +296,12 @@ export function attachListGestures(listEl, options) {
 
         const zoom = getZoom();
         const sourceRect = sourceRow.getBoundingClientRect();
-        const sourceTop = sourceRect.top;
-        const sourceLeft = sourceRect.left;
 
         let totalHeight = 0;
-        let maxWidth = 0;
         for (const r of groupRows) {
-            const rr = r.getBoundingClientRect();
-            totalHeight += rr.height / zoom;
-            if (rr.width > maxWidth) maxWidth = rr.width;
+            totalHeight += r.getBoundingClientRect().height / zoom;
         }
         if (totalHeight <= 0) totalHeight = sourceRect.height / zoom;
-        const width = maxWidth || sourceRect.width || 360;
 
         placeholder = document.createElement('div');
         placeholder.className = 'list-drag-placeholder';
@@ -325,7 +330,6 @@ export function attachListGestures(listEl, options) {
         ghost.style.position = 'fixed';
         ghost.style.left = '0';
         ghost.style.top = '0';
-        ghost.style.width = width + 'px';
         ghost.style.margin = '0';
         ghost.style.zIndex = '9999';
         ghost.style.pointerEvents = 'none';
@@ -333,19 +337,44 @@ export function attachListGestures(listEl, options) {
         ghost.style.transformOrigin = 'top left';
         ghost.style.background = 'var(--bg-menu, #fff)';
         ghost.style.overflow = 'hidden';
+        ghost.style.display = 'none';
 
-        for (const r of groupRows) {
-            const clone = cloneRowForPreview(r);
+        if (dragIndices.length > 1) {
+            ghost.style.width = '220px';
+            ghost.classList.add('list-drag-ghost--multi');
+
+            const stack = document.createElement('div');
+            stack.className = 'list-drag-ghost__stack';
+            const maxCovers = Math.min(3, groupRows.length);
+            for (let i = 0; i < maxCovers; i++) {
+                const cover = document.createElement('div');
+                cover.className = 'list-drag-ghost__cover';
+                cover.style.left = (i * 14) + 'px';
+                cover.style.zIndex = String(maxCovers - i);
+                const img = groupRows[i].querySelector('.song-cover img');
+                if (img) {
+                    const newImg = document.createElement('img');
+                    newImg.src = img.src;
+                    newImg.alt = '';
+                    cover.appendChild(newImg);
+                }
+                stack.appendChild(cover);
+            }
+            ghost.appendChild(stack);
+
+            const label = document.createElement('div');
+            label.className = 'list-drag-ghost__label';
+            label.textContent = `已选中 ${dragIndices.length} 首`;
+            ghost.appendChild(label);
+        } else {
+            const sourceWidth = sourceRect.width / zoom;
+            ghost.style.width = Math.min(sourceWidth, 280) + 'px';
+            const clone = cloneRowForPreview(groupRows[0]);
             clone.style.width = '100%';
             ghost.appendChild(clone);
         }
 
         document.body.appendChild(ghost);
-
-        ghost.style.transform = `translate(${sourceLeft / zoom}px, ${sourceTop / zoom}px)`;
-
-        ghostOffsetX = e.clientX - sourceLeft;
-        ghostOffsetY = e.clientY - sourceTop;
 
         updateDrag(e);
     }
@@ -355,11 +384,15 @@ export function attachListGestures(listEl, options) {
         if (placeholder.parentNode !== listEl) return;
 
         const zoom = getZoom();
-        const screenX = (e.clientX - ghostOffsetX) / zoom;
-        const screenY = (e.clientY - ghostOffsetY) / zoom;
-        ghost.style.transform = `translate(${screenX}px, ${screenY}px)`;
+        ghost.style.transform = `translate(${e.clientX / zoom + 12}px, ${e.clientY / zoom + 12}px)`;
 
         const listRect = listEl.getBoundingClientRect();
+        const insideList = e.clientX >= listRect.left
+            && e.clientX <= listRect.right
+            && e.clientY >= listRect.top
+            && e.clientY <= listRect.bottom;
+        ghost.style.display = insideList ? 'none' : '';
+
         const curLocalY = (e.clientY - listRect.top) / zoom;
 
         const metrics = scanRows();

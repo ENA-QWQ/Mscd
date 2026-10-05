@@ -7889,3 +7889,44 @@ body.list-gesture-active .song-list {
     user-select: none;
     -webkit-user-select: none;
 }
+
+.list-drag-ghost--multi {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+}
+
+.list-drag-ghost__stack {
+    position: relative;
+    width: 72px;
+    height: 44px;
+    flex-shrink: 0;
+}
+
+.list-drag-ghost__cover {
+    position: absolute;
+    top: 0;
+    width: 44px;
+    height: 44px;
+    background: var(--bg-cover);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.list-drag-ghost__cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.list-drag-ghost__label {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
