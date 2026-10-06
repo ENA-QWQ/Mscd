@@ -22,6 +22,7 @@ import { initRouter } from './src/router.js';
 import { initWikiProgressUI, getAllWiki, collectWikiOptions } from './src/wiki.js';
 import { initPlaybackView } from './src/playback-view.js';
 import { initSidebarTrees } from './src/sidebar-tree.js';
+import { initGlobalListGestures } from './src/list-gestures.js';
 
 const api = new Meting(config);
 const player = new Player(api, config);
@@ -469,6 +470,7 @@ const searchActions = {
 
 const ctx = { api, store, player, downloader, config, searchActions };
 ctx.openParseModal = () => openParseModal(ctx);
+ctx.openBatchAddModal = (songs, mode) => openBatchAddModal(songs, ctx, mode);
 
 function bindSidebar() {
     const nav = document.getElementById('side-nav');
@@ -1702,6 +1704,7 @@ initRouter(ctx);
 initPlaybackView(ctx);
 bindRouter();
 initSidebarTrees(ctx);
+initGlobalListGestures(ctx);
 initWikiProgressUI(store);
 
 (function scheduleAboutAutoShow() {

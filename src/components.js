@@ -455,6 +455,7 @@ export function SongRow(song, handlers = {}) {
         class: 'song-row' + (isDetail ? ' song-row--detail' : '') + (isGrid ? ' song-row--grid' : ''),
         dataset: { id: song.id },
     });
+    row.__song = song;
 
     const queueState = store.get().queue;
     const playingSong = queueState.currentIndex >= 0 ? queueState.tracks[queueState.currentIndex] : null;

@@ -7930,3 +7930,10 @@ body.list-gesture-active .song-list {
     color: var(--text-primary);
     white-space: nowrap;
 }
+
+.side-nav a.is-drop-target {
+    color: #fff;
+}
+.side-nav a.is-drop-target::before {
+    width: 100%;
+}
