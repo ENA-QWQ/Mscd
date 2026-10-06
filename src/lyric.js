@@ -29,10 +29,16 @@ function parseAny(text) {
                     }
                     const merged = parts.join('').trim();
                     if (merged) {
-                        const line = { time: obj.t / 1000, text: merged, translation: '' };
+                        const line = {
+                            time: obj.t / 1000,
+                            text: merged,
+                            translation: '',
+                        };
                         if (allTimed && words.length) {
                             line.words = words;
                             hasWordTimestamps = true;
+                        } else {
+                            line.isMeta = true;
                         }
                         lines.push(line);
                     }
@@ -41,7 +47,7 @@ function parseAny(text) {
             continue;
         }
 
-        if (/^\[(ar|ti|al|by|offset):/i.test(s)) continue;
+        if (/^\[(ar|ti|al|by|offset|re|ve|kana):/i.test(s)) continue;
 
         const yrcMatch = s.match(/^\[(\d+),(\d+)\](.*)$/);
         if (yrcMatch) {
@@ -107,28 +113,6 @@ function parseAny(text) {
     };
 }
 
-function mergeLines(sources) {
-    const map = new Map();
-    for (const src of sources) {
-        if (!src || !src.lines) continue;
-        for (const line of src.lines) {
-            const key = `${Math.round((line.time ?? 0) * 1000)}|${line.text || ''}`;
-            const existing = map.get(key);
-            const hasWords = !!(line.words && line.words.length);
-            if (!existing || (!existing.words && hasWords)) {
-                map.set(key, line);
-            }
-        }
-    }
-    const lines = Array.from(map.values());
-    lines.sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
-    return {
-        lines,
-        hasTimestamps: lines.some(l => (l.time ?? -1) >= 0),
-        hasWordTimestamps: lines.some(l => l.words && l.words.length),
-    };
-}
-
 function mergeTranslation(lines, tlyricText) {
     if (!lines || !lines.length || !tlyricText) return;
     const re = /^\[(\d+):(\d+)(?:[.:](\d+))?\](.*)$/;
@@ -147,6 +131,7 @@ function mergeTranslation(lines, tlyricText) {
     if (!entries.length) return;
     for (const line of lines) {
         if (line.translation) continue;
+        if (line.isMeta) continue;
         let best = null;
         let bestDiff = 0.5;
         for (const e of entries) {
@@ -158,6 +143,18 @@ function mergeTranslation(lines, tlyricText) {
         }
         if (best) line.translation = best.text;
     }
+}
+
+function dedupeLines(lines) {
+    const seen = new Set();
+    const out = [];
+    for (const line of lines) {
+        const key = `${Math.round((line.time ?? 0) * 1000)}|${line.text || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(line);
+    }
+    return out;
 }
 
 export function parseLrc(text) {
@@ -223,18 +220,27 @@ export async function loadLyric(api, song) {
         parsed = l;
         if (y && y.hasWordTimestamps && y.lines.length) {
             const yLines = y.lines;
+            const usedY = new Set();
             for (const line of parsed.lines) {
+                if (line.isMeta) continue;
                 let best = null;
+                let bestIdx = -1;
                 let bestDiff = 0.5;
-                for (const yl of yLines) {
+                for (let i = 0; i < yLines.length; i++) {
+                    if (usedY.has(i)) continue;
+                    const yl = yLines[i];
                     if (!yl.words || !yl.words.length) continue;
                     const diff = Math.abs(yl.time - line.time);
                     if (diff < bestDiff) {
                         bestDiff = diff;
                         best = yl;
+                        bestIdx = i;
                     }
                 }
-                if (best) line.words = best.words;
+                if (best) {
+                    usedY.add(bestIdx);
+                    line.words = best.words;
+                }
             }
             parsed.hasWordTimestamps = parsed.lines.some((ln) => ln.words && ln.words.length);
         }
@@ -247,6 +253,8 @@ export async function loadLyric(api, song) {
         lyricCache.set(key, empty);
         return empty;
     }
+
+    parsed.lines = dedupeLines(parsed.lines);
 
     if (tlyricText) mergeTranslation(parsed.lines, tlyricText);
 
