@@ -1,6 +1,6 @@
 export const config = {
     backend: 'https://api.qijieya.cn/meting/',
-    proxy: 'https://mscdownload.pages.dev/proxy?url=',
+    proxy: 'https://mscdownload.legspcpd.asia/proxy?url=',
 
     backends: {
         meting: {
