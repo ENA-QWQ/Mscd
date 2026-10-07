@@ -808,13 +808,40 @@ export class Downloader {
     async retryTrack(taskId, trackId) {
         const task = store.get().downloadTasks.find((t) => t.id === taskId);
         if (!task || !task.tracks) return;
+        const track = task.tracks.find((t) => t.id === trackId);
+        if (!track) return;
+        if (track.status !== 'error' && track.status !== 'cancelled' && track.status !== 'skipped') return;
+
+        const state = this.taskStates.get(taskId);
+        if (state && task.status === 'active') {
+            store.updateTaskTrack(taskId, trackId, {
+                status: 'queued',
+                bytes: 0,
+                totalBytes: 0,
+                progress: 0,
+                speed: 0,
+                eta: null,
+                error: null,
+                paused: false,
+                startedAt: null,
+                finishedAt: null,
+            });
+            const idx = task.tracks.findIndex((t) => t.id === trackId);
+            if (idx >= 0) {
+                if (state.pendingIndices && !state.pendingIndices.includes(idx)) {
+                    state.pendingIndices.unshift(idx);
+                }
+                if (state.priorityQueue && !state.priorityQueue.includes(trackId)) {
+                    state.priorityQueue.unshift(trackId);
+                }
+            }
+            return;
+        }
+
         if (task.type === 'batch') {
             await this.retryTask(taskId);
             return;
         }
-        const track = task.tracks.find((t) => t.id === trackId);
-        if (!track) return;
-        if (track.status !== 'error' && track.status !== 'cancelled') return;
 
         const song = {
             id: track.songId,
@@ -1634,9 +1661,8 @@ export class Downloader {
             }
         };
 
-        const pendingIndices = tracks
-            .map((t, i) => (t.status === 'queued' ? i : -1))
-            .filter((i) => i >= 0);
+        const pendingIndices = [];
+        state.pendingIndices = pendingIndices;
 
         const takeNext = () => {
             while (state.priorityQueue.length) {
@@ -1653,18 +1679,33 @@ export class Downloader {
         };
 
         try {
-            const workerCount = Math.max(1, Math.min(concurrency, pendingIndices.length));
-            const workers = Array.from({ length: workerCount }, async () => {
-                while (true) {
-                    if (state.abortController.signal.aborted) return;
-                    const idx = takeNext();
-                    if (idx === -1) return;
-                    try {
-                        await worker(songs[idx], idx);
-                    } catch {}
-                }
-            });
-            await Promise.all(workers);
+            while (true) {
+                if (state.abortController.signal.aborted) break;
+
+                const live = store.get().downloadTasks.find((t) => t.id === taskId);
+                if (!live) break;
+
+                pendingIndices.length = 0;
+                tracks.forEach((t, i) => {
+                    const cur = live.tracks.find((x) => x.id === t.id);
+                    if (cur && cur.status === 'queued') pendingIndices.push(i);
+                });
+
+                if (!pendingIndices.length) break;
+
+                const workerCount = Math.max(1, Math.min(concurrency, pendingIndices.length));
+                const workers = Array.from({ length: workerCount }, async () => {
+                    while (true) {
+                        if (state.abortController.signal.aborted) return;
+                        const idx = takeNext();
+                        if (idx === -1) return;
+                        try {
+                            await worker(songs[idx], idx);
+                        } catch {}
+                    }
+                });
+                await Promise.all(workers);
+            }
 
             await Promise.all(tagPromises);
 
