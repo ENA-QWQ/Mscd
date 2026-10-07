@@ -1,5 +1,14 @@
 import { config } from '../config.js';
 import { store } from './store.js';
+import {
+    initMediaSession,
+    updateMetadata,
+    setPlaybackState,
+    setPositionStateThrottled,
+    forcePositionUpdate,
+    clearMetadata,
+    setupActionHandlers,
+} from './media-session.js';
 
 const PLAY_TIMEOUT = 12000;
 
@@ -45,6 +54,44 @@ export class Player {
         this.audio.addEventListener('error', () => this.handleError());
 
         this.audio.volume = store.get().queue.volume;
+
+        this.mediaSessionReady = !!initMediaSession();
+        if (this.mediaSessionReady) {
+            setupActionHandlers(this);
+            this.bindMediaSessionSync();
+        }
+    }
+
+    bindMediaSessionSync() {
+        let lastSongId = '';
+        let lastIsPlaying = null;
+        let lastHasSong = null;
+
+        store.subscribe((state) => {
+            const q = state.queue;
+            const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+            const songId = song ? String(song.id) : '';
+            const hasSong = !!song;
+
+            if (songId !== lastSongId || hasSong !== lastHasSong) {
+                lastSongId = songId;
+                lastHasSong = hasSong;
+                if (song) {
+                    updateMetadata(song);
+                } else {
+                    clearMetadata();
+                }
+            }
+
+            if (q.isPlaying !== lastIsPlaying) {
+                lastIsPlaying = q.isPlaying;
+                if (!song) {
+                    setPlaybackState('none');
+                } else {
+                    setPlaybackState(q.isPlaying ? 'playing' : 'paused');
+                }
+            }
+        });
     }
 
     on(event, cb) {
@@ -328,6 +375,10 @@ export class Player {
             duration: this.audio.duration || 0,
         });
 
+        if (this.mediaSessionReady && this.audio.duration) {
+            setPositionStateThrottled(this.audio.duration, this.audio.currentTime);
+        }
+
         if (!this.persistTimer) {
             this.persistTimer = setTimeout(() => {
                 this.persistTimer = null;
@@ -350,6 +401,10 @@ export class Player {
         store.update({
             queue: { ...q, duration: this.audio.duration || 0, currentTime: this.audio.currentTime || 0 },
         });
+
+        if (this.mediaSessionReady && this.audio.duration) {
+            forcePositionUpdate(this.audio.duration, this.audio.currentTime);
+        }
     }
 
     handleError() {
@@ -374,6 +429,10 @@ export class Player {
         const clamped = Math.max(0, Math.min(1, percent));
         this.audio.currentTime = clamped * this.audio.duration;
         store.persist();
+
+        if (this.mediaSessionReady) {
+            forcePositionUpdate(this.audio.duration, this.audio.currentTime);
+        }
     }
 
     setVolume(v) {
@@ -412,5 +471,6 @@ export class Player {
         this.audio.removeAttribute('src');
         this.audio.load();
         this.events.clear();
+        clearMetadata();
     }
 }
