@@ -5,6 +5,33 @@ const FS_DB_NAME = 'mscd-fs';
 const FS_STORE_NAME = 'handles';
 const FS_DIR_KEY = 'download-dir';
 
+const coverCache = new Map();
+const coverPending = new Map();
+const MAX_COVER_CACHE = 20;
+
+class Semaphore {
+    constructor(limit) {
+        this.limit = Math.max(1, limit);
+        this.active = 0;
+        this.queue = [];
+    }
+    acquire() {
+        if (this.active < this.limit) {
+            this.active++;
+            return Promise.resolve();
+        }
+        return new Promise((resolve) => this.queue.push(resolve));
+    }
+    release() {
+        if (this.queue.length) {
+            const resolve = this.queue.shift();
+            resolve();
+        } else {
+            this.active--;
+        }
+    }
+}
+
 function openFsDb() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(FS_DB_NAME, 1);
@@ -94,15 +121,19 @@ async function pickUniqueFilename(dirHandle, name, usedSet) {
             i++;
             continue;
         }
+        if (usedSet) usedSet.add(candidate);
         try {
             await dirHandle.getFileHandle(candidate);
-            candidate = `${base} (${i})${ext}`;
-            i++;
         } catch (err) {
-            if (err.name !== 'NotFoundError') throw err;
-            if (usedSet) usedSet.add(candidate);
+            if (err.name !== 'NotFoundError') {
+                if (usedSet) usedSet.delete(candidate);
+                throw err;
+            }
             return candidate;
         }
+        if (usedSet) usedSet.delete(candidate);
+        candidate = `${base} (${i})${ext}`;
+        i++;
     }
 }
 
@@ -326,23 +357,42 @@ function buildPictureBlock(picData, mimeType) {
     return concatUint8(parts);
 }
 
+function cacheCover(key, value) {
+    if (coverCache.size >= MAX_COVER_CACHE) {
+        const oldest = coverCache.keys().next().value;
+        coverCache.delete(oldest);
+    }
+    coverCache.set(key, value);
+}
+
 async function fetchCoverAsBytes(coverUrl) {
     if (!coverUrl) return null;
 
-    const url = config.proxy && !coverUrl.startsWith(config.proxy)
-        ? config.proxy + encodeURIComponent(coverUrl)
-        : coverUrl;
+    if (coverCache.has(coverUrl)) return coverCache.get(coverUrl);
+    if (coverPending.has(coverUrl)) return coverPending.get(coverUrl);
 
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const data = new Uint8Array(await res.arrayBuffer());
-        const ct = res.headers.get('content-type') || 'image/jpeg';
-        const mime = ct.split(';')[0].trim() || 'image/jpeg';
-        return { data, mime };
-    } catch {
-        return null;
-    }
+    const promise = (async () => {
+        const url = config.proxy && !coverUrl.startsWith(config.proxy)
+            ? config.proxy + encodeURIComponent(coverUrl)
+            : coverUrl;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            const data = new Uint8Array(await res.arrayBuffer());
+            const ct = res.headers.get('content-type') || 'image/jpeg';
+            const mime = ct.split(';')[0].trim() || 'image/jpeg';
+            const result = { data, mime };
+            cacheCover(coverUrl, result);
+            return result;
+        } catch {
+            return null;
+        } finally {
+            coverPending.delete(coverUrl);
+        }
+    })();
+
+    coverPending.set(coverUrl, promise);
+    return promise;
 }
 
 async function addMp3Tags(blob, { title, artist, album, coverUrl }) {
@@ -467,14 +517,14 @@ async function addFlacTags(blob, { title, artist, album, coverUrl }) {
             result.splice(insertAt + 1, 0, { type: 6, data: pictureData });
         }
 
-        const audioData = bytes.slice(offset);
+        const audioData = bytes.subarray(offset);
 
         let totalSize = 4;
         for (const b of result) totalSize += 4 + b.data.length;
         totalSize += audioData.length;
 
         const out = new Uint8Array(totalSize);
-        out.set(bytes.slice(0, 4), 0);
+        out.set(bytes.subarray(0, 4), 0);
 
         let pos = 4;
         for (let i = 0; i < result.length; i++) {
@@ -1077,6 +1127,7 @@ export class Downloader {
 
         const { retry, retryDelay } = this.config.download;
         const concurrency = store.get().settings.concurrency ?? this.config.download.concurrency;
+        const tagConcurrency = Math.max(2, Math.min(4, concurrency));
         const total = songs.length;
         const taskId = newTaskId();
 
@@ -1125,6 +1176,9 @@ export class Downloader {
         const dirCache = new Map();
         const lyricDirCache = new Map();
 
+        const tagSem = new Semaphore(tagConcurrency);
+        const tagPromises = [];
+
         const worker = async (song, index) => {
             const trackId = tracks[index].id;
 
@@ -1139,8 +1193,6 @@ export class Downloader {
 
             const controller = new AbortController();
             state.trackControllers.set(trackId, controller);
-
-            let writable = null;
 
             try {
                 updateTrack(trackId, { status: 'resolving', startedAt: Date.now() });
@@ -1216,50 +1268,71 @@ export class Downloader {
                 }
 
                 updateTrack(trackId, { status: 'tagging' });
-                const finalBlob = await this.writeTags(blob, meta);
 
-                const targetDir = await resolveCategoryDir(dirHandle, song, dirCache);
-                const filename = await pickUniqueFilename(targetDir, meta.filename, usedNames);
-                const fileHandle = await targetDir.getFileHandle(filename, { create: true });
-                const w = await fileHandle.createWritable();
-                await w.write(finalBlob);
-                await w.close();
-
-                if (song._withLyric) {
-                    const lrc = await this.fetchLyricText(song);
-                    if (lrc) {
-                        const lyricMode = store.get().settings.lyricSaveMode || 'same';
-                        let lrcDir;
-                        if (lyricMode === 'separate') {
-                            lrcDir = await getOrCreateSubdir(dirHandle, '歌词', lyricDirCache);
-                        } else {
-                            lrcDir = targetDir;
+                const tagPromise = (async () => {
+                    await tagSem.acquire();
+                    try {
+                        if (state.abortController.signal.aborted) {
+                            throw new Error('已取消');
                         }
-                        const lrcName = filename.replace(/\.(mp3|flac)$/i, '.lrc');
-                        const uniqueLrc = await pickUniqueFilename(lrcDir, lrcName, usedNames);
-                        const lrcHandle = await lrcDir.getFileHandle(uniqueLrc, { create: true });
-                        const lrcWritable = await lrcHandle.createWritable();
-                        await lrcWritable.write(lrc);
-                        await lrcWritable.close();
+
+                        const finalBlob = await this.writeTags(blob, meta);
+
+                        const targetDir = await resolveCategoryDir(dirHandle, song, dirCache);
+                        const filename = await pickUniqueFilename(targetDir, meta.filename, usedNames);
+                        const fileHandle = await targetDir.getFileHandle(filename, { create: true });
+                        const w = await fileHandle.createWritable();
+                        await w.write(finalBlob);
+                        await w.close();
+
+                        if (song._withLyric) {
+                            const lrc = await this.fetchLyricText(song);
+                            if (lrc) {
+                                const lyricMode = store.get().settings.lyricSaveMode || 'same';
+                                let lrcDir;
+                                if (lyricMode === 'separate') {
+                                    lrcDir = await getOrCreateSubdir(dirHandle, '歌词', lyricDirCache);
+                                } else {
+                                    lrcDir = targetDir;
+                                }
+                                const lrcName = filename.replace(/\.(mp3|flac)$/i, '.lrc');
+                                const uniqueLrc = await pickUniqueFilename(lrcDir, lrcName, usedNames);
+                                const lrcHandle = await lrcDir.getFileHandle(uniqueLrc, { create: true });
+                                const lrcWritable = await lrcHandle.createWritable();
+                                await lrcWritable.write(lrc);
+                                await lrcWritable.close();
+                            }
+                        }
+
+                        updateTrack(trackId, {
+                            status: 'done',
+                            bytes,
+                            totalBytes: contentLength || bytes,
+                            progress: 1,
+                            speed: 0,
+                            eta: 0,
+                            finishedAt: Date.now(),
+                        });
+
+                        return { ok: true, filename };
+                    } catch (err) {
+                        const cancelled = isCancelledError(err) || state.abortController.signal.aborted;
+                        updateTrack(trackId, {
+                            status: cancelled ? 'cancelled' : 'error',
+                            error: cancelled ? null : err.message,
+                            speed: 0,
+                            eta: 0,
+                            finishedAt: Date.now(),
+                        });
+                        return { ok: false, error: err, song };
+                    } finally {
+                        tagSem.release();
                     }
-                }
+                })();
 
-                updateTrack(trackId, {
-                    status: 'done',
-                    bytes,
-                    totalBytes: contentLength || bytes,
-                    progress: 1,
-                    speed: 0,
-                    eta: 0,
-                    finishedAt: Date.now(),
-                });
-
-                return { filename };
+                tagPromises.push(tagPromise);
+                return { ok: true };
             } catch (err) {
-                if (writable) {
-                    try { await writable.abort(); } catch {}
-                    state.writers.delete(trackId);
-                }
                 const cancelled = controller.signal.aborted || state.abortController.signal.aborted || isCancelledError(err);
                 updateTrack(trackId, {
                     status: cancelled ? 'cancelled' : 'error',
@@ -1275,28 +1348,18 @@ export class Downloader {
         };
 
         try {
-            const pool = await runPool(
-                songs,
-                concurrency,
-                worker,
-                () => state.abortController.signal.aborted
-            );
+            await runPool(songs, concurrency, worker, () => state.abortController.signal.aborted);
+            const tagResults = await Promise.all(tagPromises);
 
             const successful = [];
             const errors = [];
 
-            for (let i = 0; i < pool.length; i++) {
-                const r = pool[i];
+            for (const r of tagResults) {
                 if (!r) continue;
                 if (r.ok) {
-                    if (r.value && r.value.filename) {
-                        successful.push(r.value);
-                    }
-                } else {
-                    const cancelled = isCancelledError(r.error) || state.abortController.signal.aborted;
-                    if (!cancelled) {
-                        errors.push({ song: r.item, error: r.error?.message || '未知错误' });
-                    }
+                    if (r.filename) successful.push(r);
+                } else if (!isCancelledError(r.error)) {
+                    errors.push({ song: r.song, error: r.error?.message || '未知错误' });
                 }
             }
 
@@ -1345,6 +1408,7 @@ export class Downloader {
 
         const { retry, retryDelay } = this.config.download;
         const concurrency = store.get().settings.concurrency ?? this.config.download.concurrency;
+        const tagConcurrency = Math.max(2, Math.min(4, concurrency));
         const total = songs.length;
         const taskId = newTaskId();
 
@@ -1388,6 +1452,9 @@ export class Downloader {
         });
 
         const updateTrack = (trackId, patch) => store.updateTaskTrack(taskId, trackId, patch);
+
+        const tagSem = new Semaphore(tagConcurrency);
+        const tagPromises = [];
 
         const worker = async (song, index) => {
             const trackId = tracks[index].id;
@@ -1470,24 +1537,45 @@ export class Downloader {
                 }
 
                 updateTrack(trackId, { status: 'tagging' });
-                const finalBlob = await this.writeTags(blob, meta);
 
-                let lyric = null;
-                if (song._withLyric) {
-                    lyric = await this.fetchLyricText(song);
-                }
+                const tagPromise = (async () => {
+                    await tagSem.acquire();
+                    try {
+                        if (state.abortController.signal.aborted) {
+                            throw new Error('已取消');
+                        }
+                        const finalBlob = await this.writeTags(blob, meta);
+                        let lyric = null;
+                        if (song._withLyric) {
+                            lyric = await this.fetchLyricText(song);
+                        }
+                        updateTrack(trackId, {
+                            status: 'done',
+                            bytes,
+                            totalBytes: contentLength || bytes,
+                            progress: 1,
+                            speed: 0,
+                            eta: 0,
+                            finishedAt: Date.now(),
+                        });
+                        return { ok: true, meta, blob: finalBlob, lyric };
+                    } catch (err) {
+                        const cancelled = isCancelledError(err) || state.abortController.signal.aborted;
+                        updateTrack(trackId, {
+                            status: cancelled ? 'cancelled' : 'error',
+                            error: cancelled ? null : err.message,
+                            speed: 0,
+                            eta: 0,
+                            finishedAt: Date.now(),
+                        });
+                        return { ok: false, error: err, song };
+                    } finally {
+                        tagSem.release();
+                    }
+                })();
 
-                updateTrack(trackId, {
-                    status: 'done',
-                    bytes,
-                    totalBytes: contentLength || bytes,
-                    progress: 1,
-                    speed: 0,
-                    eta: 0,
-                    finishedAt: Date.now(),
-                });
-
-                return { meta, blob: finalBlob, lyric };
+                tagPromises.push(tagPromise);
+                return { ok: true };
             } catch (err) {
                 const cancelled = controller.signal.aborted || state.abortController.signal.aborted || isCancelledError(err);
                 updateTrack(trackId, {
@@ -1504,28 +1592,18 @@ export class Downloader {
         };
 
         try {
-            const pool = await runPool(
-                songs,
-                concurrency,
-                worker,
-                () => state.abortController.signal.aborted
-            );
+            await runPool(songs, concurrency, worker, () => state.abortController.signal.aborted);
+            const tagResults = await Promise.all(tagPromises);
 
             const successful = [];
             const errors = [];
 
-            for (let i = 0; i < pool.length; i++) {
-                const r = pool[i];
+            for (const r of tagResults) {
                 if (!r) continue;
-                if (r.ok) {
-                    if (r.value && r.value.meta) {
-                        successful.push(r.value);
-                    }
-                } else {
-                    const cancelled = isCancelledError(r.error) || state.abortController.signal.aborted;
-                    if (!cancelled) {
-                        errors.push({ song: r.item, error: r.error?.message || '未知错误' });
-                    }
+                if (r.ok && r.meta) {
+                    successful.push(r);
+                } else if (!r.ok && !isCancelledError(r.error)) {
+                    errors.push({ song: r.song, error: r.error?.message || '未知错误' });
                 }
             }
 

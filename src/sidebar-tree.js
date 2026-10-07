@@ -12,7 +12,7 @@ let pendingRender = false;
 let lastUid = '';
 let lastSignature = '';
 
-const PENDING_TRACK_STATUSES = new Set(['resolving', 'downloading', 'tagging']);
+const PENDING_TRACK_STATUSES = new Set(['resolving', 'downloading']);
 
 const PER_PAGE = {
     liked: 20,

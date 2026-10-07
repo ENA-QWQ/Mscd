@@ -2311,6 +2311,7 @@ const TRACK_STATUS_LABEL = {
 
 const TRACK_FILTERS = [
     { key: 'downloading', label: '下载中' },
+    { key: 'tagging', label: '写入标签' },
     { key: 'queued', label: '排队中' },
     { key: 'done', label: '已完成' },
     { key: 'error', label: '失败' },
@@ -2320,8 +2321,9 @@ const TRACK_FILTERS = [
 function matchFilter(track, filter) {
     if (filter === 'all') return track.status !== 'removed';
     if (filter === 'downloading') {
-        return track.status === 'downloading' || track.status === 'resolving' || track.status === 'tagging';
+        return track.status === 'downloading' || track.status === 'resolving';
     }
+    if (filter === 'tagging') return track.status === 'tagging';
     if (filter === 'queued') return track.status === 'queued';
     if (filter === 'done') return track.status === 'done';
     if (filter === 'error') return track.status === 'error' || track.status === 'cancelled' || track.status === 'skipped';
@@ -2379,9 +2381,10 @@ function getTaskStats(task) {
         return stats;
     }
 
-    const doneCount = tracks.filter((t) => t.status === 'done').length;
+    const doneCount = tracks.filter((t) => t.status === 'done' || t.status === 'tagging').length;
+    const taggingCount = tracks.filter((t) => t.status === 'tagging').length;
     const activeCount = tracks.filter((t) =>
-        t.status === 'downloading' || t.status === 'resolving' || t.status === 'tagging'
+        t.status === 'downloading' || t.status === 'resolving'
     ).length;
     const queuedCount = tracks.filter((t) => t.status === 'queued').length;
     const failedCount = tracks.filter((t) => t.status === 'error').length;
@@ -2400,6 +2403,7 @@ function getTaskStats(task) {
     stats.push({ text: `${doneCount} / ${task.total || tracks.length}` });
     stats.push({ text: formatBytes(task.bytes || 0) });
     if (activeCount > 0) stats.push({ text: `下载中 ${activeCount}` });
+    if (taggingCount > 0) stats.push({ text: `写入标签 ${taggingCount}` });
     if (queuedCount > 0) stats.push({ text: `排队 ${queuedCount}` });
     const sp = formatSpeed(totalSpeed);
     if (sp) stats.push({ text: sp });
