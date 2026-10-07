@@ -181,7 +181,25 @@ async function fetchWithRetry(url, retries, delay, signal, extraHeaders) {
     throw lastErr || new Error('请求失败');
 }
 
-async function downloadWithThreads(url, { retries, retryDelay, threads = 8, signal, onProgress }) {
+async function streamToBlob(response, onChunk, checkPause) {
+    if (!response.body) {
+        return await response.blob();
+    }
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    while (true) {
+        if (checkPause) await checkPause();
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        total += value.length;
+        onChunk?.(value.length, total);
+    }
+    return new Blob(chunks);
+}
+
+async function downloadWithThreads(url, { retries, retryDelay, threads = 8, signal, onProgress, checkPause }) {
     let totalSize = 0;
     let supportRanges = false;
 
@@ -210,7 +228,7 @@ async function downloadWithThreads(url, { retries, retryDelay, threads = 8, sign
         const cl = Number(res.headers.get('content-length')) || totalSize;
         return await streamToBlob(res, (chunk, total) => {
             onProgress?.(total, cl || total);
-        });
+        }, checkPause);
     }
 
     const threadCount = Math.max(1, Math.min(threads, Math.ceil(totalSize / MIN_SIZE)));
@@ -249,6 +267,7 @@ async function downloadWithThreads(url, { retries, retryDelay, threads = 8, sign
         const parts = [];
         let localBytes = 0;
         while (true) {
+            if (checkPause) await checkPause();
             const { done, value } = await reader.read();
             if (done) break;
             parts.push(value);
@@ -262,23 +281,6 @@ async function downloadWithThreads(url, { retries, retryDelay, threads = 8, sign
     await Promise.all(tasks);
 
     onProgress?.(totalSize, totalSize);
-    return new Blob(chunks);
-}
-
-async function streamToBlob(response, onChunk) {
-    if (!response.body) {
-        return await response.blob();
-    }
-    const reader = response.body.getReader();
-    const chunks = [];
-    let total = 0;
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        total += value.length;
-        onChunk?.(value.length, total);
-    }
     return new Blob(chunks);
 }
 
@@ -558,28 +560,6 @@ function triggerDownload(blob, filename) {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-async function runPool(items, concurrency, worker, shouldStop) {
-    const results = new Array(items.length);
-    let cursor = 0;
-    const workers = Array.from(
-        { length: Math.max(1, Math.min(concurrency, items.length)) },
-        async () => {
-            while (true) {
-                if (shouldStop && shouldStop()) return;
-                const i = cursor++;
-                if (i >= items.length) return;
-                try {
-                    results[i] = { ok: true, value: await worker(items[i], i) };
-                } catch (err) {
-                    results[i] = { ok: false, error: err, item: items[i], index: i };
-                }
-            }
-        }
-    );
-    await Promise.all(workers);
-    return results;
-}
-
 function applyNamingFormat(song, format) {
     const tpl = String(format || '').trim() || '{title} - {artist}';
     return tpl
@@ -642,6 +622,26 @@ function isCancelledError(err) {
     return msg.includes('取消') || msg.includes('abort');
 }
 
+function buildCheckPause(state, trackId, controller) {
+    return async () => {
+        if (state.abortController.signal.aborted || controller.signal.aborted) {
+            const e = new Error('已取消');
+            e.name = 'AbortError';
+            throw e;
+        }
+        while (state.paused.has(trackId)) {
+            await new Promise((resolve) => {
+                state.pauseResolvers.set(trackId, resolve);
+            });
+            if (state.abortController.signal.aborted || controller.signal.aborted) {
+                const e = new Error('已取消');
+                e.name = 'AbortError';
+                throw e;
+            }
+        }
+    };
+}
+
 export class Downloader {
     constructor(api, cfg = config) {
         this.api = api;
@@ -662,6 +662,11 @@ export class Downloader {
             try { c.abort(); } catch {}
         }
         state.trackControllers.clear();
+        for (const resolve of state.pauseResolvers.values()) {
+            try { resolve(); } catch {}
+        }
+        state.pauseResolvers.clear();
+        state.paused.clear();
         if (state.writers) {
             for (const w of state.writers.values()) {
                 try { w.abort(); } catch {}
@@ -676,9 +681,65 @@ export class Downloader {
         state.packageRequested = true;
     }
 
+    pauseTrack(taskId, trackId) {
+        const state = this.taskStates.get(taskId);
+        if (!state) return;
+        state.paused.add(trackId);
+        store.updateTaskTrack(taskId, trackId, { paused: true });
+    }
+
+    resumeTrack(taskId, trackId) {
+        const state = this.taskStates.get(taskId);
+        if (!state) return;
+        state.paused.delete(trackId);
+        const resolve = state.pauseResolvers.get(trackId);
+        if (resolve) {
+            state.pauseResolvers.delete(trackId);
+            try { resolve(); } catch {}
+        }
+        store.updateTaskTrack(taskId, trackId, { paused: false });
+    }
+
+    pauseTask(taskId) {
+        const state = this.taskStates.get(taskId);
+        if (!state) return;
+        const task = store.get().downloadTasks.find((t) => t.id === taskId);
+        if (!task || !task.tracks) return;
+        for (const track of task.tracks) {
+            if (track.status === 'downloading' || track.status === 'queued' || track.status === 'resolving' || track.status === 'tagging') {
+                this.pauseTrack(taskId, track.id);
+            }
+        }
+    }
+
+    resumeTask(taskId) {
+        const state = this.taskStates.get(taskId);
+        if (!state) return;
+        const task = store.get().downloadTasks.find((t) => t.id === taskId);
+        if (!task || !task.tracks) return;
+        for (const track of task.tracks) {
+            if (track.paused) {
+                this.resumeTrack(taskId, track.id);
+            }
+        }
+    }
+
+    prioritizeTrack(taskId, trackId) {
+        const state = this.taskStates.get(taskId);
+        if (!state) return;
+        if (state.priorityQueue.includes(trackId)) return;
+        state.priorityQueue.unshift(trackId);
+    }
+
     cancelTrack(taskId, trackId) {
         const state = this.taskStates.get(taskId);
         if (!state) return;
+        state.paused.delete(trackId);
+        const resolve = state.pauseResolvers.get(trackId);
+        if (resolve) {
+            state.pauseResolvers.delete(trackId);
+            try { resolve(); } catch {}
+        }
         const c = state.trackControllers.get(trackId);
         if (c) {
             try { c.abort(); } catch {}
@@ -691,6 +752,127 @@ export class Downloader {
                 state.writers.delete(trackId);
             }
         }
+    }
+
+    removeTrackFromTask(taskId, trackId) {
+        const tasks = store.get().downloadTasks;
+        const idx = tasks.findIndex((t) => t.id === taskId);
+        if (idx === -1) return;
+        const task = tasks[idx];
+        if (!task.tracks) return;
+        const tracks = task.tracks.filter((t) => t.id !== trackId);
+        const total = tracks.length;
+        const done = tracks.filter((t) => t.status === 'done' || t.status === 'tagging').length;
+        const bytes = tracks.reduce((s, t) => s + (t.bytes || 0), 0);
+        const totalBytes = tracks.reduce((s, t) => s + (t.totalBytes || 0), 0);
+        store.update({
+            downloadTasks: tasks.map((t, i) =>
+                i === idx ? { ...t, tracks, total, done, bytes, totalBytes } : t
+            ),
+        });
+        store.persist();
+    }
+
+    async promoteTrack(taskId, trackId) {
+        const task = store.get().downloadTasks.find((t) => t.id === taskId);
+        if (!task || !task.tracks) return;
+        const track = task.tracks.find((t) => t.id === trackId);
+        if (!track) return;
+        if (track.status === 'done' || track.status === 'error' || track.status === 'cancelled') return;
+
+        this.cancelTrack(taskId, trackId);
+
+        const song = {
+            id: track.songId,
+            title: track.title,
+            artist: track.artist,
+            album: track.album || '',
+            pic: track.pic || '',
+            _quality: track._quality,
+            _withLyric: track._withLyric,
+            _lyricOnly: track._lyricOnly,
+        };
+
+        this.removeTrackFromTask(taskId, trackId);
+
+        const mode = store.get().settings.downloadMode;
+        try {
+            if (mode === 'stream') {
+                await this.downloadToDisk(song, song._quality);
+            } else {
+                await this.downloadOne(song, song._quality);
+            }
+        } catch {}
+    }
+
+    async retryTrack(taskId, trackId) {
+        const task = store.get().downloadTasks.find((t) => t.id === taskId);
+        if (!task || !task.tracks) return;
+        if (task.type === 'batch') {
+            await this.retryTask(taskId);
+            return;
+        }
+        const track = task.tracks.find((t) => t.id === trackId);
+        if (!track) return;
+        if (track.status !== 'error' && track.status !== 'cancelled') return;
+
+        const song = {
+            id: track.songId,
+            title: track.title,
+            artist: track.artist,
+            album: track.album || '',
+            pic: track.pic || '',
+            _quality: track._quality,
+            _withLyric: track._withLyric,
+            _lyricOnly: track._lyricOnly,
+        };
+
+        store.update({
+            downloadTasks: store.get().downloadTasks.filter((t) => t.id !== taskId),
+        });
+
+        const mode = store.get().settings.downloadMode;
+        try {
+            if (mode === 'stream') {
+                await this.downloadToDisk(song, track._quality);
+            } else {
+                await this.downloadOne(song, track._quality);
+            }
+        } catch {}
+    }
+
+    async retryTask(taskId) {
+        const task = store.get().downloadTasks.find((t) => t.id === taskId);
+        if (!task || !task.tracks) return false;
+
+        const retryable = task.tracks.filter((t) =>
+            t.status !== 'done'
+            && t.status !== 'tagging'
+            && t.status !== 'moved'
+            && t.status !== 'removed'
+        );
+        if (!retryable.length) return false;
+
+        if (task.type === 'single') {
+            await this.retryTrack(taskId, retryable[0].id);
+            return true;
+        }
+
+        if (task.mode === 'batch-zip') {
+            await this.downloadAsZip(null, null, { resumeTaskId: taskId });
+        } else {
+            await this.downloadBatchToDisk(null, null, { resumeTaskId: taskId });
+        }
+        return true;
+    }
+
+    removeTask(taskId) {
+        const tasks = store.get().downloadTasks;
+        const next = tasks.filter((t) => t.id !== taskId);
+        if (next.length === tasks.length) return;
+        this.taskStates.delete(taskId);
+        store.update({ downloadTasks: next });
+        store.persist();
     }
 
     async prepare(song, quality) {
@@ -757,6 +939,10 @@ export class Downloader {
             abortController: new AbortController(),
             trackControllers: new Map(),
             packageRequested: false,
+            paused: new Set(),
+            pauseResolvers: new Map(),
+            priorityQueue: [],
+            mode: 'single',
         };
         this.taskStates.set(taskId, state);
 
@@ -765,6 +951,11 @@ export class Downloader {
             songId: song.id,
             title: song.title || '未知歌曲',
             artist: song.artist || '',
+            album: song.album || '',
+            pic: song.pic || '',
+            _quality: song._quality ?? quality,
+            _withLyric: withLyric,
+            _lyricOnly: song._lyricOnly || false,
             status: 'resolving',
             bytes: 0,
             totalBytes: 0,
@@ -772,12 +963,14 @@ export class Downloader {
             speed: 0,
             eta: null,
             error: null,
+            paused: false,
             startedAt: Date.now(),
             finishedAt: null,
         };
 
         store.upsertDownloadTask(taskId, {
             type: 'single',
+            mode: 'single',
             label: `下载：${song.title || '未知歌曲'}`,
             status: 'active',
             phase: 'resolving',
@@ -796,6 +989,7 @@ export class Downloader {
 
         const controller = new AbortController();
         state.trackControllers.set(trackId, controller);
+        const checkPause = buildCheckPause(state, trackId, controller);
 
         try {
             if (song._lyricOnly) {
@@ -845,6 +1039,7 @@ export class Downloader {
                 retryDelay,
                 threads,
                 signal: controller.signal,
+                checkPause,
                 onProgress: (downloaded, total) => {
                     bytes = downloaded;
                     contentLength = total;
@@ -937,6 +1132,10 @@ export class Downloader {
             trackControllers: new Map(),
             writers: new Map(),
             packageRequested: false,
+            paused: new Set(),
+            pauseResolvers: new Map(),
+            priorityQueue: [],
+            mode: 'single',
         };
         this.taskStates.set(taskId, state);
 
@@ -945,6 +1144,11 @@ export class Downloader {
             songId: song.id,
             title: song.title || '未知歌曲',
             artist: song.artist || '',
+            album: song.album || '',
+            pic: song.pic || '',
+            _quality: song._quality ?? quality,
+            _withLyric: withLyric,
+            _lyricOnly: song._lyricOnly || false,
             status: 'resolving',
             bytes: 0,
             totalBytes: 0,
@@ -952,12 +1156,14 @@ export class Downloader {
             speed: 0,
             eta: null,
             error: null,
+            paused: false,
             startedAt: Date.now(),
             finishedAt: null,
         };
 
         store.upsertDownloadTask(taskId, {
             type: 'single',
+            mode: 'single',
             label: `下载：${song.title || '未知歌曲'}`,
             status: 'active',
             phase: 'resolving',
@@ -975,6 +1181,7 @@ export class Downloader {
         const updateTrack = (patch) => store.updateTaskTrack(taskId, trackId, patch);
         const controller = new AbortController();
         state.trackControllers.set(trackId, controller);
+        const checkPause = buildCheckPause(state, trackId, controller);
 
         try {
             if (song._lyricOnly) {
@@ -1027,6 +1234,7 @@ export class Downloader {
                 retryDelay,
                 threads,
                 signal: controller.signal,
+                checkPause,
                 onProgress: (downloaded, total) => {
                     bytes = downloaded;
                     contentLength = total;
@@ -1117,9 +1325,7 @@ export class Downloader {
         }
     }
 
-    async downloadBatchToDisk(songs, quality) {
-        if (!songs.length) throw new Error('下载列表为空');
-
+    async downloadBatchToDisk(songs, quality, options = {}) {
         const dirHandle = await getSavedDirHandle();
         if (!dirHandle) throw new Error('未选择本地目录');
         const ok = await ensureDirPermission(dirHandle, true);
@@ -1128,48 +1334,127 @@ export class Downloader {
         const { retry, retryDelay } = this.config.download;
         const concurrency = store.get().settings.concurrency ?? this.config.download.concurrency;
         const tagConcurrency = Math.max(2, Math.min(4, concurrency));
-        const total = songs.length;
-        const taskId = newTaskId();
+
+        let taskId;
+        let tracks;
+
+        if (options.resumeTaskId) {
+            const existing = store.get().downloadTasks.find((t) => t.id === options.resumeTaskId);
+            if (!existing || !existing.tracks) throw new Error('任务不存在');
+            taskId = existing.id;
+
+            tracks = existing.tracks.map((t) => {
+                if (
+                    t.status !== 'done'
+                    && t.status !== 'tagging'
+                    && t.status !== 'moved'
+                    && t.status !== 'removed'
+                ) {
+                    return {
+                        ...t,
+                        status: 'queued',
+                        bytes: 0,
+                        totalBytes: 0,
+                        progress: 0,
+                        speed: 0,
+                        eta: null,
+                        error: null,
+                        paused: false,
+                        startedAt: null,
+                        finishedAt: null,
+                    };
+                }
+                return t;
+            });
+
+            songs = tracks.map((t) => ({
+                id: t.songId,
+                title: t.title,
+                artist: t.artist,
+                album: t.album || '',
+                pic: t.pic || '',
+                _quality: t._quality,
+                _withLyric: t._withLyric,
+                _lyricOnly: t._lyricOnly,
+            }));
+
+            quality = tracks[0]?._quality ?? quality;
+
+            const total = tracks.length;
+            const done = tracks.filter((t) => t.status === 'done' || t.status === 'tagging').length;
+            const bytes = tracks.reduce((s, t) => s + (t.bytes || 0), 0);
+            const totalBytes = tracks.reduce((s, t) => s + (t.totalBytes || 0), 0);
+
+            store.update({
+                downloadTasks: store.get().downloadTasks.map((t) =>
+                    t.id === taskId ? {
+                        ...t,
+                        status: 'active',
+                        phase: 'downloading',
+                        tracks,
+                        done,
+                        bytes,
+                        totalBytes,
+                        errors: [],
+                        finishedAt: null,
+                    } : t
+                ),
+            });
+        } else {
+            if (!songs.length) throw new Error('下载列表为空');
+            taskId = newTaskId();
+            const total = songs.length;
+            tracks = songs.map((song, index) => ({
+                id: `trk-${taskId}-${index}`,
+                songId: song.id,
+                title: song.title || '未知歌曲',
+                artist: song.artist || '',
+                album: song.album || '',
+                pic: song.pic || '',
+                _quality: song._quality ?? quality,
+                _withLyric: !!song._withLyric,
+                _lyricOnly: !!song._lyricOnly,
+                status: 'queued',
+                bytes: 0,
+                totalBytes: 0,
+                progress: 0,
+                speed: 0,
+                eta: null,
+                error: null,
+                paused: false,
+                startedAt: null,
+                finishedAt: null,
+            }));
+
+            store.upsertDownloadTask(taskId, {
+                type: 'batch',
+                mode: 'batch-disk',
+                label: `批量下载 ${total} 首`,
+                status: 'active',
+                phase: 'downloading',
+                done: 0,
+                total,
+                bytes: 0,
+                totalBytes: 0,
+                packagingProgress: null,
+                errors: [],
+                startedAt: Date.now(),
+                finishedAt: null,
+                tracks,
+            });
+        }
 
         const state = {
             abortController: new AbortController(),
             trackControllers: new Map(),
             writers: new Map(),
             packageRequested: false,
+            paused: new Set(),
+            pauseResolvers: new Map(),
+            priorityQueue: [],
+            mode: 'batch-disk',
         };
         this.taskStates.set(taskId, state);
-
-        const tracks = songs.map((song, index) => ({
-            id: `trk-${taskId}-${index}`,
-            songId: song.id,
-            title: song.title || '未知歌曲',
-            artist: song.artist || '',
-            status: 'queued',
-            bytes: 0,
-            totalBytes: 0,
-            progress: 0,
-            speed: 0,
-            eta: null,
-            error: null,
-            startedAt: null,
-            finishedAt: null,
-        }));
-
-        store.upsertDownloadTask(taskId, {
-            type: 'batch',
-            label: `批量下载 ${total} 首`,
-            status: 'active',
-            phase: 'downloading',
-            done: 0,
-            total,
-            bytes: 0,
-            totalBytes: 0,
-            packagingProgress: null,
-            errors: [],
-            startedAt: Date.now(),
-            finishedAt: null,
-            tracks,
-        });
 
         const updateTrack = (trackId, patch) => store.updateTaskTrack(taskId, trackId, patch);
         const usedNames = new Set();
@@ -1187,12 +1472,13 @@ export class Downloader {
             const cur = store.get().downloadTasks.find((t) => t.id === taskId);
             if (!cur) throw new Error('任务已移除');
             const track = cur.tracks.find((t) => t.id === trackId);
-            if (!track || track.status === 'removed' || track.status === 'cancelled' || track.status === 'skipped') {
+            if (!track || track.status !== 'queued') {
                 return { skipped: true };
             }
 
             const controller = new AbortController();
             state.trackControllers.set(trackId, controller);
+            const checkPause = buildCheckPause(state, trackId, controller);
 
             try {
                 updateTrack(trackId, { status: 'resolving', startedAt: Date.now() });
@@ -1247,6 +1533,7 @@ export class Downloader {
                     retryDelay,
                     threads,
                     signal: controller.signal,
+                    checkPause,
                     onProgress: (downloaded, total) => {
                         bytes = downloaded;
                         contentLength = total;
@@ -1347,21 +1634,39 @@ export class Downloader {
             }
         };
 
-        try {
-            await runPool(songs, concurrency, worker, () => state.abortController.signal.aborted);
-            const tagResults = await Promise.all(tagPromises);
+        const pendingIndices = tracks
+            .map((t, i) => (t.status === 'queued' ? i : -1))
+            .filter((i) => i >= 0);
 
-            const successful = [];
-            const errors = [];
-
-            for (const r of tagResults) {
-                if (!r) continue;
-                if (r.ok) {
-                    if (r.filename) successful.push(r);
-                } else if (!isCancelledError(r.error)) {
-                    errors.push({ song: r.song, error: r.error?.message || '未知错误' });
+        const takeNext = () => {
+            while (state.priorityQueue.length) {
+                const id = state.priorityQueue.shift();
+                const idx = tracks.findIndex((t) => t.id === id);
+                if (idx === -1) continue;
+                const pos = pendingIndices.indexOf(idx);
+                if (pos >= 0) {
+                    pendingIndices.splice(pos, 1);
+                    return idx;
                 }
             }
+            return pendingIndices.length ? pendingIndices.shift() : -1;
+        };
+
+        try {
+            const workerCount = Math.max(1, Math.min(concurrency, pendingIndices.length));
+            const workers = Array.from({ length: workerCount }, async () => {
+                while (true) {
+                    if (state.abortController.signal.aborted) return;
+                    const idx = takeNext();
+                    if (idx === -1) return;
+                    try {
+                        await worker(songs[idx], idx);
+                    } catch {}
+                }
+            });
+            await Promise.all(workers);
+
+            await Promise.all(tagPromises);
 
             const cur = store.get().downloadTasks.find((t) => t.id === taskId);
             if (cur) {
@@ -1372,10 +1677,21 @@ export class Downloader {
                 }
             }
 
+            const finalTask = store.get().downloadTasks.find((t) => t.id === taskId);
+            const allErrors = (finalTask?.tracks || [])
+                .filter((t) => t.status === 'error')
+                .map((t) => ({
+                    song: { id: t.songId, title: t.title, artist: t.artist },
+                    error: t.error || '未知错误',
+                }));
+            const successCount = (finalTask?.tracks || []).filter(
+                (t) => t.status === 'done' || t.status === 'tagging'
+            ).length;
+
             store.upsertDownloadTask(taskId, {
                 status: 'done',
                 phase: 'done',
-                errors,
+                errors: allErrors,
                 finishedAt: Date.now(),
             });
 
@@ -1383,73 +1699,148 @@ export class Downloader {
 
             return {
                 taskId,
-                successful: successful.length,
-                failed: errors.length,
-                errors,
+                successful: successCount,
+                failed: allErrors.length,
+                errors: allErrors,
             };
         } catch (err) {
             const cancelled = isCancelledError(err) || state.abortController.signal.aborted;
-
             this.taskStates.delete(taskId);
-
             store.upsertDownloadTask(taskId, {
                 status: cancelled ? 'cancelled' : 'error',
                 phase: 'error',
                 errors: cancelled ? [] : [{ song: null, error: err.message }],
                 finishedAt: Date.now(),
             });
-
             throw err;
         }
     }
 
-    async downloadAsZip(songs, quality) {
-        if (!songs.length) throw new Error('下载列表为空');
-
+    async downloadAsZip(songs, quality, options = {}) {
         const { retry, retryDelay } = this.config.download;
         const concurrency = store.get().settings.concurrency ?? this.config.download.concurrency;
         const tagConcurrency = Math.max(2, Math.min(4, concurrency));
-        const total = songs.length;
-        const taskId = newTaskId();
+
+        let taskId;
+        let tracks;
+
+        if (options.resumeTaskId) {
+            const existing = store.get().downloadTasks.find((t) => t.id === options.resumeTaskId);
+            if (!existing || !existing.tracks) throw new Error('任务不存在');
+            taskId = existing.id;
+
+            tracks = existing.tracks.map((t) => {
+                if (
+                    t.status !== 'done'
+                    && t.status !== 'tagging'
+                    && t.status !== 'moved'
+                    && t.status !== 'removed'
+                ) {
+                    return {
+                        ...t,
+                        status: 'queued',
+                        bytes: 0,
+                        totalBytes: 0,
+                        progress: 0,
+                        speed: 0,
+                        eta: null,
+                        error: null,
+                        paused: false,
+                        startedAt: null,
+                        finishedAt: null,
+                    };
+                }
+                return t;
+            });
+
+            songs = tracks.map((t) => ({
+                id: t.songId,
+                title: t.title,
+                artist: t.artist,
+                album: t.album || '',
+                pic: t.pic || '',
+                _quality: t._quality,
+                _withLyric: t._withLyric,
+                _lyricOnly: t._lyricOnly,
+            }));
+
+            quality = tracks[0]?._quality ?? quality;
+
+            const total = tracks.length;
+            const done = tracks.filter((t) => t.status === 'done' || t.status === 'tagging').length;
+            const bytes = tracks.reduce((s, t) => s + (t.bytes || 0), 0);
+            const totalBytes = tracks.reduce((s, t) => s + (t.totalBytes || 0), 0);
+
+            store.update({
+                downloadTasks: store.get().downloadTasks.map((t) =>
+                    t.id === taskId ? {
+                        ...t,
+                        status: 'active',
+                        phase: 'downloading',
+                        tracks,
+                        done,
+                        bytes,
+                        totalBytes,
+                        packagingProgress: null,
+                        errors: [],
+                        finishedAt: null,
+                    } : t
+                ),
+            });
+        } else {
+            if (!songs.length) throw new Error('下载列表为空');
+            taskId = newTaskId();
+            const total = songs.length;
+            tracks = songs.map((song, index) => ({
+                id: `trk-${taskId}-${index}`,
+                songId: song.id,
+                title: song.title || '未知歌曲',
+                artist: song.artist || '',
+                album: song.album || '',
+                pic: song.pic || '',
+                _quality: song._quality ?? quality,
+                _withLyric: !!song._withLyric,
+                _lyricOnly: !!song._lyricOnly,
+                status: 'queued',
+                bytes: 0,
+                totalBytes: 0,
+                progress: 0,
+                speed: 0,
+                eta: null,
+                error: null,
+                paused: false,
+                startedAt: null,
+                finishedAt: null,
+            }));
+
+            store.upsertDownloadTask(taskId, {
+                type: 'batch',
+                mode: 'batch-zip',
+                label: `批量下载 ${total} 首`,
+                status: 'active',
+                phase: 'downloading',
+                done: 0,
+                total,
+                bytes: 0,
+                totalBytes: 0,
+                packagingProgress: null,
+                errors: [],
+                startedAt: Date.now(),
+                finishedAt: null,
+                tracks,
+            });
+        }
 
         const state = {
             abortController: new AbortController(),
             trackControllers: new Map(),
             packageRequested: false,
+            paused: new Set(),
+            pauseResolvers: new Map(),
+            priorityQueue: [],
+            mode: 'batch-zip',
         };
         this.taskStates.set(taskId, state);
-
-        const tracks = songs.map((song, index) => ({
-            id: `trk-${taskId}-${index}`,
-            songId: song.id,
-            title: song.title || '未知歌曲',
-            artist: song.artist || '',
-            status: 'queued',
-            bytes: 0,
-            totalBytes: 0,
-            progress: 0,
-            speed: 0,
-            eta: null,
-            error: null,
-            startedAt: null,
-            finishedAt: null,
-        }));
-
-        store.upsertDownloadTask(taskId, {
-            type: 'batch',
-            label: `批量下载 ${total} 首`,
-            status: 'active',
-            phase: 'downloading',
-            done: 0,
-            total,
-            bytes: 0,
-            totalBytes: 0,
-            packagingProgress: null,
-            errors: [],
-            startedAt: Date.now(),
-            finishedAt: null,
-            tracks,
-        });
 
         const updateTrack = (trackId, patch) => store.updateTaskTrack(taskId, trackId, patch);
 
@@ -1468,12 +1859,13 @@ export class Downloader {
             const cur = store.get().downloadTasks.find((t) => t.id === taskId);
             if (!cur) throw new Error('任务已移除');
             const track = cur.tracks.find((t) => t.id === trackId);
-            if (!track || track.status === 'removed' || track.status === 'cancelled' || track.status === 'skipped') {
+            if (!track || track.status !== 'queued') {
                 return { skipped: true };
             }
 
             const controller = new AbortController();
             state.trackControllers.set(trackId, controller);
+            const checkPause = buildCheckPause(state, trackId, controller);
 
             try {
                 updateTrack(trackId, { status: 'resolving', startedAt: Date.now() });
@@ -1516,6 +1908,7 @@ export class Downloader {
                     retryDelay,
                     threads,
                     signal: controller.signal,
+                    checkPause,
                     onProgress: (downloaded, total) => {
                         bytes = downloaded;
                         contentLength = total;
@@ -1591,21 +1984,39 @@ export class Downloader {
             }
         };
 
-        try {
-            await runPool(songs, concurrency, worker, () => state.abortController.signal.aborted);
-            const tagResults = await Promise.all(tagPromises);
+        const pendingIndices = tracks
+            .map((t, i) => (t.status === 'queued' ? i : -1))
+            .filter((i) => i >= 0);
 
-            const successful = [];
-            const errors = [];
-
-            for (const r of tagResults) {
-                if (!r) continue;
-                if (r.ok && r.meta) {
-                    successful.push(r);
-                } else if (!r.ok && !isCancelledError(r.error)) {
-                    errors.push({ song: r.song, error: r.error?.message || '未知错误' });
+        const takeNext = () => {
+            while (state.priorityQueue.length) {
+                const id = state.priorityQueue.shift();
+                const idx = tracks.findIndex((t) => t.id === id);
+                if (idx === -1) continue;
+                const pos = pendingIndices.indexOf(idx);
+                if (pos >= 0) {
+                    pendingIndices.splice(pos, 1);
+                    return idx;
                 }
             }
+            return pendingIndices.length ? pendingIndices.shift() : -1;
+        };
+
+        try {
+            const workerCount = Math.max(1, Math.min(concurrency, pendingIndices.length));
+            const workers = Array.from({ length: workerCount }, async () => {
+                while (true) {
+                    if (state.abortController.signal.aborted) return;
+                    const idx = takeNext();
+                    if (idx === -1) return;
+                    try {
+                        await worker(songs[idx], idx);
+                    } catch {}
+                }
+            });
+            await Promise.all(workers);
+
+            await Promise.all(tagPromises);
 
             const cur = store.get().downloadTasks.find((t) => t.id === taskId);
             if (cur) {
@@ -1616,25 +2027,88 @@ export class Downloader {
                 }
             }
 
+            if (state.abortController.signal.aborted) {
+                this.taskStates.delete(taskId);
+                store.upsertDownloadTask(taskId, {
+                    status: 'cancelled',
+                    phase: 'error',
+                    errors: [],
+                    finishedAt: Date.now(),
+                });
+                throw new Error('已取消');
+            }
+
+            const finalTask = store.get().downloadTasks.find((t) => t.id === taskId);
+            const successful = [];
+            const errors = [];
+
+            for (const track of (finalTask?.tracks || [])) {
+                if (track.status === 'done' || track.status === 'tagging') {
+                    const filename = buildBaseName({
+                        title: track.title,
+                        artist: track.artist,
+                        album: track.album,
+                    }) + getExtension(track._quality);
+                    successful.push({ track, filename });
+                } else if (track.status === 'error') {
+                    errors.push({
+                        song: { id: track.songId, title: track.title, artist: track.artist },
+                        error: track.error || '未知错误',
+                    });
+                }
+            }
+
+            if (!successful.length) {
+                this.taskStates.delete(taskId);
+                store.upsertDownloadTask(taskId, {
+                    status: 'cancelled',
+                    phase: 'error',
+                    errors,
+                    finishedAt: Date.now(),
+                });
+                return { taskId, successful: 0, failed: errors.length, errors };
+            }
+
             store.upsertDownloadTask(taskId, {
                 phase: 'packaging',
                 packagingProgress: 0,
                 errors,
             });
 
-            if (!successful.length) {
-                throw new Error('没有可打包的歌曲');
-            }
-
             const zip = new window.JSZip();
-            for (const { meta, blob, lyric } of successful) {
-                if (meta.filename.endsWith('.lrc')) {
-                    if (lyric) zip.file(meta.filename, lyric);
-                } else {
-                    zip.file(meta.filename, blob);
-                    if (lyric) {
-                        zip.file(meta.filename.replace(/\.(mp3|flac)$/i, '.lrc'), lyric);
+            const categoryMode = store.get().settings.batchCategory || 'none';
+            for (const { track, filename } of successful) {
+                let blob = null;
+                try {
+                    const raw = await this.api.resolveAudio(
+                        { id: track.songId },
+                        track._quality
+                    );
+                    if (raw) {
+                        const res = await fetch(proxied(raw));
+                        if (res.ok) {
+                            blob = await res.blob();
+                            const meta = {
+                                ext: getExtension(track._quality),
+                                title: track.title,
+                                artist: track.artist,
+                                album: track.album,
+                                cover: track.pic,
+                            };
+                            blob = await this.writeTags(blob, meta);
+                        }
                     }
+                } catch {}
+                if (blob) {
+                    let folder = '';
+                    if (categoryMode === 'artist') {
+                        const a = getMainArtist(track.artist);
+                        if (a) folder = sanitizeFilename(a) + '/';
+                    } else if (categoryMode === 'album') {
+                        const al = track.album;
+                        if (al) folder = sanitizeFilename(al) + '/';
+                    }
+                    zip.file(folder + filename, blob);
                 }
             }
 
@@ -1672,16 +2146,13 @@ export class Downloader {
             };
         } catch (err) {
             const cancelled = isCancelledError(err) || state.abortController.signal.aborted;
-
             this.taskStates.delete(taskId);
-
             store.upsertDownloadTask(taskId, {
                 status: cancelled ? 'cancelled' : 'error',
                 phase: 'error',
                 errors: cancelled ? [] : [{ song: null, error: err.message }],
                 finishedAt: Date.now(),
             });
-
             throw err;
         }
     }

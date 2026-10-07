@@ -3662,13 +3662,34 @@ body.has-selection .multi-select-bar {
 
 .task-track {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) 64px minmax(0, 1fr) minmax(0, 1.4fr) 24px;
+    grid-template-columns: minmax(0, 260px) 56px minmax(0, 1fr) 128px;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     padding: 8px 10px;
     background: transparent;
     font-size: .75rem;
     transition: background .2s ease;
+}
+
+.task-track__progress-meta {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
+}
+
+.task-track__progress-meta .task-track__progress {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.task-track__progress-meta .task-track__meta {
+    flex: 0 0 240px;
+    width: 240px;
+    min-width: 0;
+    padding-left: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .task-track__info {
@@ -3724,6 +3745,8 @@ body.has-selection .multi-select-bar {
 }
 
 .task-track__progress {
+    flex: 1 1 0;
+    min-width: 0;
     height: 4px;
     background: var(--progress-track);
     overflow: hidden;
@@ -3746,10 +3769,12 @@ body.has-selection .multi-select-bar {
 }
 
 .task-track__meta {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 8px;
+    padding-left: 8px;
     font-size: .68rem;
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
@@ -3766,32 +3791,28 @@ body.has-selection .multi-select-bar {
     white-space: nowrap;
 }
 
-.task-track__remove {
-    width: 22px;
-    height: 22px;
+.task-track__buttons {
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--text-tertiary);
-    transition: color .2s ease;
+    justify-content: flex-end;
+    gap: 0;
+    flex-shrink: 0;
 }
 
-.task-track__remove:hover {
+.task-track__btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.task-track__btn svg {
+    width: 13px;
+    height: 13px;
+}
+
+.task-track__btn--danger:hover {
     color: var(--danger);
-}
-
-.task-track__remove svg {
-    width: 14px;
-    height: 14px;
-}
-
-.task-track__spacer {
-    display: block;
-    width: 22px;
-    height: 22px;
 }
 
 .task-track-empty {
@@ -4439,13 +4460,8 @@ body.has-selection .multi-select-bar {
 
     /* 状态 */
     .task-track {
-        grid-template-columns: minmax(0, 1.4fr) 60px minmax(0, 1fr) 24px;
-    }
-
-    .task-track__meta {
-        grid-column: 1 / -1;
-        justify-content: flex-start;
-        margin-top: 4px;
+        grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr) 108px;
+        gap: 6px;
     }
 
     .status-task__stats {
@@ -4566,14 +4582,19 @@ body.has-selection .multi-select-bar {
     }
 
     .task-track {
-        grid-template-columns: minmax(0, 1fr) 60px 22px;
-        gap: 8px;
-        padding: 8px;
+        grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr) 96px;
+        gap: 4px;
+        padding: 8px 6px;
     }
 
-    .task-track__progress,
-    .task-track__meta {
-        grid-column: 1 / -1;
+    .task-track__btn {
+        width: 22px;
+        height: 22px;
+    }
+
+    .task-track__btn svg {
+        width: 12px;
+        height: 12px;
     }
 
     .task-track__status {

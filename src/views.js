@@ -2561,54 +2561,117 @@ export function StatusView(ctx) {
         }
     }
 
+    function makeTaskIconBtn(name, title, onClick, danger) {
+        const btn = el('button', {
+            class: `ena-btn ena-btn--icon task-track__btn${danger ? ' task-track__btn--danger' : ''}`,
+            title,
+            type: 'button',
+        }, icon(name));
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onClick();
+        });
+        return btn;
+    }
+
     function rebuildActions(cache, task) {
-        const canToggle = task.type === 'batch' || (task.tracks && task.tracks.length > 1);
-        const canPackage = task.status === 'active' && task.phase !== 'packaging' && task.phase !== 'done' && task.type === 'batch';
-        const canCancel = task.status === 'active' && task.phase !== 'packaging' && task.phase !== 'done';
-        const key = `${canToggle}|${canPackage}|${canCancel}`;
+        const isActive = task.status === 'active';
+        const isZip = task.mode === 'batch-zip';
+        const canPackage = isActive && isZip && task.phase !== 'packaging' && task.phase !== 'done';
+        const canToggleExpand = true;
+        const tracksArr = task.tracks || [];
+        const anyPaused = tracksArr.some((t) => t.paused);
+        const hasUnfinished = tracksArr.some((t) =>
+            t.status === 'downloading' || t.status === 'queued' || t.status === 'resolving' || t.status === 'tagging'
+        );
+
+        const key = `${isActive}|${canPackage}|${anyPaused}|${hasUnfinished}`;
 
         if (cache.actionsKey !== key) {
             cache.actionsKey = key;
             cache.actionsEl.innerHTML = '';
             cache.actionButtons = {};
 
-            if (canToggle) {
-                const toggleBtn = el('button', { class: 'ena-btn ena-btn--sm ena-btn--ghost' });
-                toggleBtn.addEventListener('click', () => {
+            if (isActive && hasUnfinished) {
+                const pauseBtn = makeTaskIconBtn(
+                    anyPaused ? 'play' : 'pause',
+                    anyPaused ? '继续' : '暂停',
+                    () => {
+                        if (anyPaused) downloader.resumeTask(task.id);
+                        else downloader.pauseTask(task.id);
+                    }
+                );
+                cache.actionsEl.appendChild(pauseBtn);
+                cache.actionButtons.pause = pauseBtn;
+            }
+
+            if (isActive) {
+                const cancelBtn = makeTaskIconBtn('close', '取消', () => {
+                    confirmDialog('确定取消该任务吗？').then((ok) => {
+                        if (!ok) return;
+                        downloader.abort(task.id);
+                        Toast('已取消任务', 'warning', 1600);
+                    });
+                });
+                cache.actionsEl.appendChild(cancelBtn);
+            }
+
+            if (canPackage) {
+                const pkgBtn = makeTaskIconBtn('package', '立即打包', () => {
+                    confirmDialog('立即打包？排队中和后续的歌曲将被跳过。').then((ok) => {
+                        if (!ok) return;
+                        downloader.packageNow(task.id);
+                        Toast('已请求立即打包', 'info', 1600);
+                    });
+                });
+                cache.actionsEl.appendChild(pkgBtn);
+            }
+
+            if (!isActive) {
+                const retryBtn = makeTaskIconBtn('refresh', '重试', () => {
+                    downloader.retryTask(task.id)
+                        .then((ok) => {
+                            if (!ok) Toast('没有可重试的曲目', 'warning', 1600);
+                        })
+                        .catch((err) => {
+                            Toast(err?.message || '重试失败', 'danger', 2000);
+                        });
+                });
+                cache.actionsEl.appendChild(retryBtn);
+
+                const removeTaskBtn = makeTaskIconBtn('close', '移除任务', () => {
+                    downloader.removeTask(task.id);
+                });
+                cache.actionsEl.appendChild(removeTaskBtn);
+            }
+
+            if (canToggleExpand) {
+                const toggleBtn = makeTaskIconBtn('chevron-down', '展开/折叠', () => {
                     expandOverrides.set(task.id, !isTaskExpanded(task));
                     scheduleRender();
                 });
                 cache.actionsEl.appendChild(toggleBtn);
                 cache.actionButtons.toggle = toggleBtn;
             }
-
-            if (canPackage) {
-                const pkgBtn = el('button', { class: 'ena-btn ena-btn--sm' }, '立即打包');
-                pkgBtn.addEventListener('click', async () => {
-                    const ok = await confirmDialog('立即打包？排队中和后续的歌曲将被跳过。');
-                    if (!ok) return;
-                    downloader.packageNow(task.id);
-                    Toast('已请求立即打包', 'info', 1600);
-                });
-                cache.actionsEl.appendChild(pkgBtn);
-            }
-
-            if (canCancel) {
-                const cancelBtn = el('button', { class: 'ena-btn ena-btn--sm ena-btn--danger' }, '取消');
-                cancelBtn.addEventListener('click', async () => {
-                    const ok = await confirmDialog('确定取消该任务吗？');
-                    if (!ok) return;
-                    downloader.abort(task.id);
-                    Toast('已取消任务', 'warning', 1600);
-                });
-                cache.actionsEl.appendChild(cancelBtn);
-            }
         }
 
         if (cache.actionButtons.toggle) {
-            const text = isTaskExpanded(task) ? '收起' : '展开';
-            if (cache.actionButtons.toggle.textContent !== text) {
-                cache.actionButtons.toggle.textContent = text;
+            const svg = cache.actionButtons.toggle.querySelector('svg');
+            if (svg) {
+                svg.style.transform = isTaskExpanded(task) ? 'rotate(180deg)' : '';
+                svg.style.transition = 'transform .25s var(--ease)';
+            }
+        }
+
+        if (cache.actionButtons.pause) {
+            const anyPausedNow = tracksArr.some((t) => t.paused);
+            const wantIcon = anyPausedNow ? 'play' : 'pause';
+            const wantTitle = anyPausedNow ? '继续' : '暂停';
+            if (cache.actionButtons.pause.dataset.icon !== wantIcon) {
+                cache.actionButtons.pause.dataset.icon = wantIcon;
+                cache.actionButtons.pause.innerHTML = '';
+                cache.actionButtons.pause.appendChild(icon(wantIcon));
+                cache.actionButtons.pause.title = wantTitle;
             }
         }
     }
@@ -2630,21 +2693,17 @@ export function StatusView(ctx) {
 
         const metaEl = el('div', { class: 'task-track__meta' });
 
-        const removeBtn = el('button', { class: 'task-track__remove', title: '移除' }, icon('close'));
-        removeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            downloader.cancelTrack(task.id, track.id);
-            store.removeTaskTrack(task.id, track.id);
-        });
+        const buttonsEl = el('div', { class: 'task-track__buttons' });
 
-        const spacer = el('span', { class: 'task-track__spacer' });
+        const progressMetaEl = el('div', { class: 'task-track__progress-meta' },
+            progressWrap,
+            metaEl
+        );
 
         row.appendChild(info);
         row.appendChild(statusEl);
-        row.appendChild(progressWrap);
-        row.appendChild(metaEl);
-        row.appendChild(removeBtn);
-        row.appendChild(spacer);
+        row.appendChild(progressMetaEl);
+        row.appendChild(buttonsEl);
 
         const rowCache = {
             row,
@@ -2653,13 +2712,114 @@ export function StatusView(ctx) {
             statusEl,
             progressBar,
             metaEl,
-            removeBtn,
-            spacer,
+            buttonsEl,
+            actionButtons: {},
+            buttonsKey: null,
             lastStatus: null,
-            lastRemovable: null,
         };
         cache.trackRows.set(track.id, rowCache);
         return rowCache;
+    }
+
+    function makeTrackIconBtn(name, title, onClick, danger) {
+        const btn = el('button', {
+            class: `ena-btn ena-btn--icon task-track__btn${danger ? ' task-track__btn--danger' : ''}`,
+            title,
+            type: 'button',
+        }, icon(name));
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onClick();
+        });
+        return btn;
+    }
+
+    function rebuildTrackButtons(rowCache, task, track) {
+        const isActive = task.status === 'active';
+        const isFailed = track.status === 'error' || track.status === 'cancelled';
+        const isUnfinished = track.status === 'downloading' || track.status === 'queued' || track.status === 'resolving';
+        const isQueued = track.status === 'queued';
+        const paused = !!track.paused;
+
+        let key = 'none';
+        if (isActive && (isUnfinished || track.status === 'tagging')) {
+            key = `active|${isUnfinished}|${isQueued}|${paused}|${track.status}`;
+        } else if (isFailed) {
+            key = `failed|${track.status}`;
+        } else if (track.status === 'done') {
+            key = 'done';
+        }
+
+        if (rowCache.buttonsKey === key) {
+            if (rowCache.actionButtons.pause) {
+                const wantIcon = paused ? 'play' : 'pause';
+                if (rowCache.actionButtons.pause.dataset.icon !== wantIcon) {
+                    rowCache.actionButtons.pause.dataset.icon = wantIcon;
+                    rowCache.actionButtons.pause.innerHTML = '';
+                    rowCache.actionButtons.pause.appendChild(icon(wantIcon));
+                    rowCache.actionButtons.pause.title = paused ? '继续' : '暂停';
+                }
+            }
+            return;
+        }
+        rowCache.buttonsKey = key;
+        rowCache.buttonsEl.innerHTML = '';
+        rowCache.actionButtons = {};
+
+        if (isActive && (isUnfinished || track.status === 'tagging')) {
+            if (isUnfinished) {
+                const pauseBtn = makeTrackIconBtn(
+                    paused ? 'play' : 'pause',
+                    paused ? '继续' : '暂停',
+                    () => {
+                        if (track.paused) downloader.resumeTrack(task.id, track.id);
+                        else downloader.pauseTrack(task.id, track.id);
+                    }
+                );
+                pauseBtn.dataset.icon = paused ? 'play' : 'pause';
+                rowCache.buttonsEl.appendChild(pauseBtn);
+                rowCache.actionButtons.pause = pauseBtn;
+
+                const promoteBtn = makeTrackIconBtn('external-link', '移至独立任务', () => {
+                    downloader.promoteTrack(task.id, track.id);
+                });
+                rowCache.buttonsEl.appendChild(promoteBtn);
+
+                const cancelBtn = makeTrackIconBtn('close', '取消', () => {
+                    downloader.cancelTrack(task.id, track.id);
+                    store.removeTaskTrack(task.id, track.id);
+                });
+                rowCache.buttonsEl.appendChild(cancelBtn);
+
+                const prioBtn = makeTrackIconBtn('arrow-up', '优先下载', () => {
+                    downloader.prioritizeTrack(task.id, track.id);
+                    Toast('已设为优先', 'info', 1200);
+                });
+                if (!isQueued) prioBtn.disabled = true;
+                rowCache.buttonsEl.appendChild(prioBtn);
+            } else {
+                const cancelBtn = makeTrackIconBtn('close', '取消', () => {
+                    downloader.cancelTrack(task.id, track.id);
+                    store.removeTaskTrack(task.id, track.id);
+                });
+                rowCache.buttonsEl.appendChild(cancelBtn);
+            }
+        } else if (isFailed || track.status === 'done') {
+            if (isFailed) {
+                const retryBtn = makeTrackIconBtn('refresh', '重试', () => {
+                    downloader.retryTrack(task.id, track.id)
+                        .catch((err) => {
+                            Toast(err?.message || '重试失败', 'danger', 2000);
+                        });
+                });
+                rowCache.buttonsEl.appendChild(retryBtn);
+            }
+
+            const removeBtn = makeTrackIconBtn('close', '移除', () => {
+                downloader.removeTrackFromTask(task.id, track.id);
+            });
+            rowCache.buttonsEl.appendChild(removeBtn);
+        }
     }
 
     function updateTrackRow(rowCache, task, track) {
@@ -2680,18 +2840,7 @@ export function StatusView(ctx) {
         rowCache.progressBar.style.width = `${pct}%`;
 
         updateTrackMeta(rowCache.metaEl, track);
-
-        const removable = task.status === 'active'
-            && task.phase !== 'packaging'
-            && task.phase !== 'done'
-            && track.status !== 'removed'
-            && track.status !== 'cancelled';
-
-        if (rowCache.lastRemovable !== removable) {
-            rowCache.lastRemovable = removable;
-            rowCache.removeBtn.style.display = removable ? '' : 'none';
-            rowCache.spacer.style.display = removable ? 'none' : '';
-        }
+        rebuildTrackButtons(rowCache, task, track);
     }
 
     function updateExpandedContent(container, task, cache) {
