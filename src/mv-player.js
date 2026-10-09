@@ -22,6 +22,13 @@ export class MVPlayer {
     }
 
     bindVideoEvents(v) {
+        v.addEventListener('loadeddata', () => {
+            if (store.get().playbackMode !== 'mv') return;
+            requestAnimationFrame(() => {
+                v.classList.add('is-ready');
+            });
+        });
+
         v.addEventListener('timeupdate', () => {
             if (store.get().playbackMode !== 'mv') return;
             const s = store.get().mvState;
@@ -100,6 +107,11 @@ export class MVPlayer {
         const urlData = await this.api.mvUrl(mvid, br);
         const v = this.getVideo();
         if (!v) return;
+
+        v.style.transition = 'none';
+        v.classList.remove('is-ready');
+        void v.offsetWidth;
+        v.style.transition = '';
 
         this._switchingSrc = true;
         const target = initialTime != null ? initialTime : v.currentTime;
@@ -268,6 +280,10 @@ export class MVPlayer {
         try { v.pause(); } catch {}
         v.removeAttribute('src');
         try { v.load(); } catch {}
+        v.style.transition = 'none';
+        v.classList.remove('is-ready');
+        void v.offsetWidth;
+        v.style.transition = '';
         this._switchingSrc = false;
     }
 

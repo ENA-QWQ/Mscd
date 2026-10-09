@@ -8137,6 +8137,35 @@ body.playback-mode-mv .mv-controls {
     background: transparent;
 }
 
+.mv-loading {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    transition: top .42s var(--ease);
+}
+
+body.mv-web-fullscreen .mv-loading {
+    top: 0;
+}
+
+.mv-loading .loading-bars {
+    width: 44px;
+    height: 34px;
+    gap: 6px;
+}
+
+.mv-loading .loading-bars span {
+    width: 5px;
+    background: rgba(255, 255, 255, .9);
+}
+
 .mv-video {
     position: absolute;
     top: 52px;
@@ -8145,8 +8174,13 @@ body.playback-mode-mv .mv-controls {
     height: calc(100% - 52px);
     object-fit: contain;
     background: #000;
-    z-index: 0;
-    transition: top .42s var(--ease), height .42s var(--ease);
+    z-index: 2;
+    clip-path: inset(100% 0 0 0);
+    transition: top .42s var(--ease), height .42s var(--ease), clip-path .5s var(--ease);
+}
+
+.mv-video.is-ready {
+    clip-path: inset(0 0 0 0);
 }
 
 body.mv-web-fullscreen .mv-video {

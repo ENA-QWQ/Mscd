@@ -214,7 +214,13 @@ export function initPlaybackView(ctx) {
     mvVideo.preload = 'metadata';
     mvVideo.setAttribute('webkit-playsinline', 'true');
 
-    const mvPanel = el('div', { class: 'playback-panel playback-panel--mv' }, mvVideo);
+    const mvLoading = el('div', { class: 'mv-loading' },
+        el('div', { class: 'loading-bars' },
+            el('span'), el('span'), el('span')
+        )
+    );
+
+    const mvPanel = el('div', { class: 'playback-panel playback-panel--mv' }, mvLoading, mvVideo);
 
     const slider = el('div', { class: 'playback-slider' }, songPanel, mvPanel);
 
