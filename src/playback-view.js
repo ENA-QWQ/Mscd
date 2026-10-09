@@ -33,7 +33,11 @@ export function initPlaybackView(ctx) {
         title: '收起',
     }, icon('chevron-left'));
 
-    const topBar = el('div', { class: 'playback-overlay__top' }, closeBtn);
+    const mvTopTitle = el('div', { class: 'mv-top-title' });
+    const mvTopArtist = el('div', { class: 'mv-top-artist' });
+    const mvTopInfo = el('div', { class: 'mv-top-info' }, mvTopTitle, mvTopArtist);
+
+    const topBar = el('div', { class: 'playback-overlay__top' }, closeBtn, mvTopInfo);
 
     const coverEl = el('div', { class: 'playback-cover' });
     const titleEl = el('div', { class: 'playback-title' });
@@ -199,9 +203,48 @@ export function initPlaybackView(ctx) {
         mobileControlsEl
     );
 
-    const overlay = el('div', { class: 'playback-overlay' }, bg, glow, scrim, topBar, inner, mobileBottomEl);
+    const songPanel = el('div', { class: 'playback-panel playback-panel--song' },
+        inner,
+        mobileBottomEl
+    );
+
+    const mvVideo = document.createElement('video');
+    mvVideo.className = 'mv-video';
+    mvVideo.playsInline = true;
+    mvVideo.preload = 'metadata';
+    mvVideo.setAttribute('webkit-playsinline', 'true');
+
+    const mvPanel = el('div', { class: 'playback-panel playback-panel--mv' }, mvVideo);
+
+    const slider = el('div', { class: 'playback-slider' }, songPanel, mvPanel);
+
+    const overlay = el('div', { class: 'playback-overlay' }, bg, glow, scrim, topBar, slider);
 
     document.body.appendChild(overlay);
+
+    let autoHideTimer = null;
+    const AUTO_HIDE_DELAY = 3000;
+
+    function showBars() {
+        if (store.get().playbackMode !== 'mv') return;
+        if (!document.body.classList.contains('mv-web-fullscreen')) {
+            document.body.classList.remove('mv-bars-hidden');
+            if (autoHideTimer) {
+                clearTimeout(autoHideTimer);
+                autoHideTimer = null;
+            }
+            return;
+        }
+        document.body.classList.remove('mv-bars-hidden');
+        if (autoHideTimer) clearTimeout(autoHideTimer);
+        autoHideTimer = setTimeout(() => {
+            document.body.classList.add('mv-bars-hidden');
+        }, AUTO_HIDE_DELAY);
+    }
+
+    overlay.addEventListener('mousemove', showBars);
+    overlay.addEventListener('touchstart', showBars, { passive: true });
+    overlay.addEventListener('click', showBars);
 
     let currentSongId = '';
     let currentTitleText = '';
@@ -738,7 +781,13 @@ export function initPlaybackView(ctx) {
         store.update({ playbackOpen: false });
     }
 
-    closeBtn.addEventListener('click', closePlayback);
+    closeBtn.addEventListener('click', () => {
+        if (store.get().playbackMode === 'mv') {
+            if (ctx.mvPlayer) ctx.mvPlayer.exitMv();
+            return;
+        }
+        closePlayback();
+    });
 
     lyricEl.addEventListener('wheel', onWheel, { passive: false });
     lyricEl.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -746,9 +795,13 @@ export function initPlaybackView(ctx) {
     lyricEl.addEventListener('touchend', onTouchEnd, { passive: true });
 
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && store.get().playbackOpen) {
-            closePlayback();
+        if (e.key !== 'Escape') return;
+        if (!store.get().playbackOpen) return;
+        if (store.get().playbackMode === 'mv') {
+            if (ctx.mvPlayer) ctx.mvPlayer.exitMv();
+            return;
         }
+        closePlayback();
     });
 
     mobilePrevBtn.addEventListener('click', () => player.prev());
@@ -844,8 +897,43 @@ export function initPlaybackView(ctx) {
     let lastSongKey = '';
     let wasPlaybackOpen = !!store.get().playbackOpen;
     let closeTimer = null;
+    let lastPlaybackMode = store.get().playbackMode || 'song';
+
+    function applyPlaybackMode(mode) {
+        const isMv = mode === 'mv';
+        overlay.classList.toggle('playback-mode-mv', isMv);
+        document.body.classList.toggle('playback-mode-mv', isMv);
+        closeBtn.title = isMv ? '返回歌曲' : '收起';
+        if (isMv) {
+            showBars();
+        } else {
+            if (autoHideTimer) {
+                clearTimeout(autoHideTimer);
+                autoHideTimer = null;
+            }
+            document.body.classList.remove('mv-bars-hidden');
+            overlay.classList.remove('is-web-fullscreen');
+            document.body.classList.remove('mv-web-fullscreen');
+        }
+    }
+
+    applyPlaybackMode(lastPlaybackMode);
 
     store.subscribe((state) => {
+        if (state.playbackMode !== lastPlaybackMode) {
+            lastPlaybackMode = state.playbackMode;
+            applyPlaybackMode(state.playbackMode);
+        }
+
+        if (state.playbackMode === 'mv') {
+            const mv = state.mvState;
+            const detail = mv.detail;
+            const titleText = detail ? (detail.name || '') : '';
+            const artistText = detail ? (detail.artistName || '') : '';
+            if (mvTopTitle.textContent !== titleText) mvTopTitle.textContent = titleText;
+            if (mvTopArtist.textContent !== artistText) mvTopArtist.textContent = artistText;
+        }
+
         const q = state.queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
 
@@ -902,6 +990,7 @@ export function initPlaybackView(ctx) {
             if (switchingTimer) clearTimeout(switchingTimer);
             if (followTimer) clearTimeout(followTimer);
             if (closeTimer) clearTimeout(closeTimer);
+            if (autoHideTimer) clearTimeout(autoHideTimer);
             if (titleScrollRAF) cancelAnimationFrame(titleScrollRAF);
             if (titleResizeTimer) clearTimeout(titleResizeTimer);
             window.removeEventListener('resize', updateSpacerHeight);

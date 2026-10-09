@@ -41,6 +41,8 @@ export class Player {
         this.events = new Map();
         this.pendingCancel = null;
         this.persistTimer = null;
+        this.mvPlayer = null;
+        this.currentAudioSongId = '';
 
         const q = store.get().queue;
         const cur = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
@@ -208,6 +210,7 @@ export class Player {
             this.audio.pause();
             this.audio.src = proxiedAudio(url);
             this.audio.load();
+            this.currentAudioSongId = String(song.id || '');
 
             this.emit('trackchange', song);
 
@@ -253,6 +256,10 @@ export class Player {
     }
 
     toggle() {
+        if (store.get().playbackMode === 'mv' && this.mvPlayer) {
+            return this.mvPlayer.toggle();
+        }
+
         const q = store.get().queue;
 
         if (!this.audio.src || q.currentIndex < 0) {
@@ -286,6 +293,10 @@ export class Player {
         const q = store.get().queue;
         if (q.tracks.length === 0) return;
 
+        if (store.get().playbackMode === 'mv' && this.mvPlayer) {
+            return this.mvPlayer.next();
+        }
+
         const idx = this.getNextIndex(1, false);
         if (idx === -1) {
             store.update({ queue: { ...q, isPlaying: false } });
@@ -298,6 +309,10 @@ export class Player {
     prev() {
         const q = store.get().queue;
         if (q.tracks.length === 0) return;
+
+        if (store.get().playbackMode === 'mv' && this.mvPlayer) {
+            return this.mvPlayer.prev();
+        }
 
         if (this.audio.currentTime > 3) {
             this.audio.currentTime = 0;
@@ -341,6 +356,9 @@ export class Player {
     }
 
     handleEnded() {
+        if (store.get().playbackMode === 'mv' && this.mvPlayer) {
+            return this.mvPlayer.handleEnded();
+        }
         const q = store.get().queue;
 
         if (q.playMode === 'repeat-one') {
@@ -391,10 +409,18 @@ export class Player {
         const q = store.get().queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
 
-        if (song && this.resumeState && this.resumeState.songId === song.id && this.resumeState.time > 0) {
-            try {
-                this.audio.currentTime = this.resumeState.time;
-            } catch {}
+        if (song && this.resumeState && this.resumeState.songId === song.id) {
+            let targetTime = 0;
+            if (this.resumeState.ratio != null && this.audio.duration) {
+                targetTime = this.resumeState.ratio * this.audio.duration;
+            } else if (this.resumeState.time > 0) {
+                targetTime = this.resumeState.time;
+            }
+            if (targetTime > 0) {
+                try {
+                    this.audio.currentTime = targetTime;
+                } catch {}
+            }
         }
         this.resumeState = null;
 
@@ -425,6 +451,9 @@ export class Player {
     }
 
     seek(percent) {
+        if (store.get().playbackMode === 'mv' && this.mvPlayer) {
+            return this.mvPlayer.seek(percent);
+        }
         if (!this.audio.duration) return;
         const clamped = Math.max(0, Math.min(1, percent));
         this.audio.currentTime = clamped * this.audio.duration;
@@ -438,6 +467,7 @@ export class Player {
     setVolume(v) {
         const vol = Math.max(0, Math.min(1, v));
         this.audio.volume = vol;
+        if (this.mvPlayer) this.mvPlayer.setVolume(vol);
         store.update({ queue: { ...store.get().queue, volume: vol } });
         store.persist();
     }

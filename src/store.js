@@ -70,6 +70,19 @@ function createInitialState() {
         filteredTracks: [],
 
         playbackOpen: false,
+        playbackMode: 'song',
+
+        mvState: {
+            mvid: '',
+            detail: null,
+            brs: [],
+            currentBr: 1080,
+            url: '',
+            loading: false,
+            error: null,
+            duration: 0,
+            currentTime: 0,
+        },
 
         wikiMap: new Map(),
         wikiOptions: { genre: [], language: [], bizTags: [] },
@@ -111,6 +124,7 @@ function createInitialState() {
             batchCategory: 'none',
             lyricSaveMode: 'same',
             songView: 'tile',
+            mvQuality: 1080,
         },
     };
 }

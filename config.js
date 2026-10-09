@@ -20,6 +20,7 @@ export const config = {
         playlist: 'netease',
         artist: 'netease',
         user: 'netease',
+        mv: 'netease',
     },
 
     timeout: 15000,

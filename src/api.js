@@ -93,6 +93,7 @@ function normalizeSong(raw) {
         pic: raw.pic ?? raw.cover ?? '',
         lrc: raw.lrc ?? '',
         duration: raw.duration ?? 0,
+        mv: raw.mv != null ? String(raw.mv) : (raw.mvid != null ? String(raw.mvid) : ''),
     };
 }
 
@@ -258,6 +259,7 @@ class NeteaseAdapter {
             pic,
             lrc: '',
             duration,
+            mv: item.mv != null ? String(item.mv) : (item.mvid != null ? String(item.mvid) : ''),
         };
     }
 
@@ -594,6 +596,36 @@ class NeteaseAdapter {
         const songs = (data?.songs || []).map(s => this.normalizeSong(s)).filter(Boolean);
         return { songs };
     }
+
+    async mvDetail(mvid) {
+        const data = await this.request('/mv/detail', { mvid });
+        const detail = data?.data;
+        if (!detail) throw new Error('无法获取 MV 详情');
+        return {
+            id: String(detail.id ?? mvid),
+            name: detail.name ?? '',
+            artistName: detail.artistName ?? '',
+            cover: upgradeToHttps(detail.cover ?? ''),
+            duration: Number(detail.duration ?? 0),
+            playCount: detail.playCount ?? 0,
+            publishTime: detail.publishTime ?? '',
+            brs: Array.isArray(detail.brs)
+                ? detail.brs.filter(b => b && typeof b.br === 'number')
+                : [],
+        };
+    }
+
+    async mvUrl(id, r = 1080) {
+        const data = await this.request('/mv/url', { id, r });
+        const item = data?.data;
+        if (!item || !item.url) throw new Error('无法获取 MV 地址');
+        return {
+            url: upgradeToHttps(item.url),
+            r: item.r ?? r,
+            size: item.size ?? 0,
+            expi: item.expi ?? 0,
+        };
+    }
 }
 
 export class Meting {
@@ -760,6 +792,22 @@ export class Meting {
 
     async playlistTrackAll(id, options = {}) {
         return this.pick('user').playlistTrackAll(id, options);
+    }
+
+    async mvDetail(mvid) {
+        const adapter = this.pick('mv');
+        if (typeof adapter.mvDetail !== 'function') {
+            throw new Error('当前后端不支持 MV 详情');
+        }
+        return adapter.mvDetail(mvid);
+    }
+
+    async mvUrl(id, r) {
+        const adapter = this.pick('mv');
+        if (typeof adapter.mvUrl !== 'function') {
+            throw new Error('当前后端不支持 MV 地址');
+        }
+        return adapter.mvUrl(id, r);
     }
 
     async fetchAllPlaylistTracks(id, totalCount) {
