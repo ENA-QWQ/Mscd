@@ -8,6 +8,7 @@ const FS_DIR_KEY = 'download-dir';
 const coverCache = new Map();
 const coverPending = new Map();
 const MAX_COVER_CACHE = 20;
+const AUTO_RETRY_MAX = 1;
 
 class Semaphore {
     constructor(limit) {
@@ -760,11 +761,16 @@ export class Downloader {
         if (idx === -1) return;
         const task = tasks[idx];
         if (!task.tracks) return;
-        const tracks = task.tracks.filter((t) => t.id !== trackId);
-        const total = tracks.length;
-        const done = tracks.filter((t) => t.status === 'done' || t.status === 'tagging').length;
-        const bytes = tracks.reduce((s, t) => s + (t.bytes || 0), 0);
-        const totalBytes = tracks.reduce((s, t) => s + (t.totalBytes || 0), 0);
+        const tracks = task.tracks.map((t) =>
+            t.id === trackId
+                ? { ...t, status: 'removed', speed: 0, eta: 0, progress: 0, paused: false, bytes: 0, totalBytes: 0 }
+                : t
+        );
+        const active = tracks.filter((t) => t.status !== 'removed');
+        const total = active.length;
+        const done = active.filter((t) => t.status === 'done' || t.status === 'tagging').length;
+        const bytes = active.reduce((s, t) => s + (t.bytes || 0), 0);
+        const totalBytes = active.reduce((s, t) => s + (t.totalBytes || 0), 0);
         store.update({
             downloadTasks: tasks.map((t, i) =>
                 i === idx ? { ...t, tracks, total, done, bytes, totalBytes } : t
@@ -810,38 +816,48 @@ export class Downloader {
         if (!task || !task.tracks) return;
         const track = task.tracks.find((t) => t.id === trackId);
         if (!track) return;
-        if (track.status !== 'error' && track.status !== 'cancelled' && track.status !== 'skipped') return;
 
-        const state = this.taskStates.get(taskId);
-        if (state && task.status === 'active') {
-            store.updateTaskTrack(taskId, trackId, {
-                status: 'queued',
-                bytes: 0,
-                totalBytes: 0,
-                progress: 0,
-                speed: 0,
-                eta: null,
-                error: null,
-                paused: false,
-                startedAt: null,
-                finishedAt: null,
-            });
-            const idx = task.tracks.findIndex((t) => t.id === trackId);
-            if (idx >= 0) {
-                if (state.pendingIndices && !state.pendingIndices.includes(idx)) {
-                    state.pendingIndices.unshift(idx);
+        const isBatch = task.type === 'batch';
+
+        if (isBatch) {
+            const retryableStatus = track.status === 'error'
+                || track.status === 'cancelled'
+                || track.status === 'skipped'
+                || track.status === 'queued';
+            if (!retryableStatus) return;
+
+            const state = this.taskStates.get(taskId);
+            if (state && task.status === 'active') {
+                store.updateTaskTrack(taskId, trackId, {
+                    status: 'queued',
+                    bytes: 0,
+                    totalBytes: 0,
+                    progress: 0,
+                    speed: 0,
+                    eta: null,
+                    error: null,
+                    paused: false,
+                    startedAt: null,
+                    finishedAt: null,
+                });
+                const idx = task.tracks.findIndex((t) => t.id === trackId);
+                if (idx >= 0) {
+                    if (state.pendingIndices && !state.pendingIndices.includes(idx)) {
+                        state.pendingIndices.unshift(idx);
+                    }
+                    if (state.priorityQueue && !state.priorityQueue.includes(trackId)) {
+                        state.priorityQueue.unshift(trackId);
+                    }
                 }
-                if (state.priorityQueue && !state.priorityQueue.includes(trackId)) {
-                    state.priorityQueue.unshift(trackId);
-                }
+                state.resumeRequested = true;
+                return;
             }
-            return;
-        }
 
-        if (task.type === 'batch') {
             await this.retryTask(taskId);
             return;
         }
+
+        if (track.status !== 'error' && track.status !== 'cancelled' && track.status !== 'skipped') return;
 
         const song = {
             id: track.songId,
@@ -859,13 +875,11 @@ export class Downloader {
         });
 
         const mode = store.get().settings.downloadMode;
-        try {
-            if (mode === 'stream') {
-                await this.downloadToDisk(song, track._quality);
-            } else {
-                await this.downloadOne(song, track._quality);
-            }
-        } catch {}
+        if (mode === 'stream') {
+            await this.downloadToDisk(song, track._quality);
+        } else {
+            await this.downloadOne(song, track._quality);
+        }
     }
 
     async retryTask(taskId) {
@@ -881,7 +895,26 @@ export class Downloader {
         if (!retryable.length) return false;
 
         if (task.type === 'single') {
-            await this.retryTrack(taskId, retryable[0].id);
+            const track = retryable[0];
+            const song = {
+                id: track.songId,
+                title: track.title,
+                artist: track.artist,
+                album: track.album || '',
+                pic: track.pic || '',
+                _quality: track._quality,
+                _withLyric: track._withLyric,
+                _lyricOnly: track._lyricOnly,
+            };
+            store.update({
+                downloadTasks: store.get().downloadTasks.filter((t) => t.id !== taskId),
+            });
+            const mode = store.get().settings.downloadMode;
+            if (mode === 'stream') {
+                await this.downloadToDisk(song, track._quality);
+            } else {
+                await this.downloadOne(song, track._quality);
+            }
             return true;
         }
 
@@ -1480,6 +1513,7 @@ export class Downloader {
             pauseResolvers: new Map(),
             priorityQueue: [],
             mode: 'batch-disk',
+            autoRetriedTracks: new Set(),
         };
         this.taskStates.set(taskId, state);
 
@@ -1648,6 +1682,25 @@ export class Downloader {
                 return { ok: true };
             } catch (err) {
                 const cancelled = controller.signal.aborted || state.abortController.signal.aborted || isCancelledError(err);
+                if (!cancelled && !state.autoRetriedTracks.has(trackId)) {
+                    state.autoRetriedTracks.add(trackId);
+                    store.updateTaskTrack(taskId, trackId, {
+                        status: 'queued',
+                        bytes: 0,
+                        totalBytes: 0,
+                        progress: 0,
+                        speed: 0,
+                        eta: null,
+                        error: null,
+                        paused: false,
+                        startedAt: null,
+                        finishedAt: null,
+                    });
+                    if (state.pendingIndices && !state.pendingIndices.includes(index)) {
+                        state.pendingIndices.unshift(index);
+                    }
+                    return;
+                }
                 updateTrack(trackId, {
                     status: cancelled ? 'cancelled' : 'error',
                     error: cancelled ? null : err.message,
@@ -1691,7 +1744,22 @@ export class Downloader {
                     if (cur && cur.status === 'queued') pendingIndices.push(i);
                 });
 
-                if (!pendingIndices.length) break;
+                if (!pendingIndices.length) {
+                    if (state.resumeRequested) {
+                        state.resumeRequested = false;
+                        continue;
+                    }
+                    await new Promise((r) => setTimeout(r, 30));
+                    const live2 = store.get().downloadTasks.find((t) => t.id === taskId);
+                    if (!live2) break;
+                    pendingIndices.length = 0;
+                    tracks.forEach((t, i) => {
+                        const cur = live2.tracks.find((x) => x.id === t.id);
+                        if (cur && cur.status === 'queued') pendingIndices.push(i);
+                    });
+                    if (!pendingIndices.length) break;
+                    continue;
+                }
 
                 const workerCount = Math.max(1, Math.min(concurrency, pendingIndices.length));
                 const workers = Array.from({ length: workerCount }, async () => {
@@ -1880,6 +1948,7 @@ export class Downloader {
             pauseResolvers: new Map(),
             priorityQueue: [],
             mode: 'batch-zip',
+            autoRetriedTracks: new Set(),
         };
         this.taskStates.set(taskId, state);
 
@@ -2012,6 +2081,25 @@ export class Downloader {
                 return { ok: true };
             } catch (err) {
                 const cancelled = controller.signal.aborted || state.abortController.signal.aborted || isCancelledError(err);
+                if (!cancelled && !state.autoRetriedTracks.has(trackId)) {
+                    state.autoRetriedTracks.add(trackId);
+                    store.updateTaskTrack(taskId, trackId, {
+                        status: 'queued',
+                        bytes: 0,
+                        totalBytes: 0,
+                        progress: 0,
+                        speed: 0,
+                        eta: null,
+                        error: null,
+                        paused: false,
+                        startedAt: null,
+                        finishedAt: null,
+                    });
+                    if (state.pendingIndices && !state.pendingIndices.includes(index)) {
+                        state.pendingIndices.unshift(index);
+                    }
+                    return;
+                }
                 updateTrack(trackId, {
                     status: cancelled ? 'cancelled' : 'error',
                     error: cancelled ? null : err.message,
@@ -2025,9 +2113,8 @@ export class Downloader {
             }
         };
 
-        const pendingIndices = tracks
-            .map((t, i) => (t.status === 'queued' ? i : -1))
-            .filter((i) => i >= 0);
+        const pendingIndices = [];
+        state.pendingIndices = pendingIndices;
 
         const takeNext = () => {
             while (state.priorityQueue.length) {
@@ -2044,18 +2131,48 @@ export class Downloader {
         };
 
         try {
-            const workerCount = Math.max(1, Math.min(concurrency, pendingIndices.length));
-            const workers = Array.from({ length: workerCount }, async () => {
-                while (true) {
-                    if (state.abortController.signal.aborted) return;
-                    const idx = takeNext();
-                    if (idx === -1) return;
-                    try {
-                        await worker(songs[idx], idx);
-                    } catch {}
+            while (true) {
+                if (state.abortController.signal.aborted) break;
+
+                const live = store.get().downloadTasks.find((t) => t.id === taskId);
+                if (!live) break;
+
+                pendingIndices.length = 0;
+                tracks.forEach((t, i) => {
+                    const cur = live.tracks.find((x) => x.id === t.id);
+                    if (cur && cur.status === 'queued') pendingIndices.push(i);
+                });
+
+                if (!pendingIndices.length) {
+                    if (state.resumeRequested) {
+                        state.resumeRequested = false;
+                        continue;
+                    }
+                    await new Promise((r) => setTimeout(r, 30));
+                    const live2 = store.get().downloadTasks.find((t) => t.id === taskId);
+                    if (!live2) break;
+                    pendingIndices.length = 0;
+                    tracks.forEach((t, i) => {
+                        const cur = live2.tracks.find((x) => x.id === t.id);
+                        if (cur && cur.status === 'queued') pendingIndices.push(i);
+                    });
+                    if (!pendingIndices.length) break;
+                    continue;
                 }
-            });
-            await Promise.all(workers);
+
+                const workerCount = Math.max(1, Math.min(concurrency, pendingIndices.length));
+                const workers = Array.from({ length: workerCount }, async () => {
+                    while (true) {
+                        if (state.abortController.signal.aborted) return;
+                        const idx = takeNext();
+                        if (idx === -1) return;
+                        try {
+                            await worker(songs[idx], idx);
+                        } catch {}
+                    }
+                });
+                await Promise.all(workers);
+            }
 
             await Promise.all(tagPromises);
 
