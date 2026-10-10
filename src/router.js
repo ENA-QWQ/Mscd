@@ -10,7 +10,13 @@ function parseUrl() {
 
     if (name === 'song') {
         if (!id) return { kind: 'home' };
-        return { kind: 'playback', songId: decodeURIComponent(id) };
+        const mode = params.get('mode') || 'song';
+        return { kind: 'playback', songId: decodeURIComponent(id), mode };
+    }
+
+    if (name === 'mv') {
+        if (!id) return { kind: 'home' };
+        return { kind: 'mv', mvid: decodeURIComponent(id) };
     }
 
     if (name === 'artist' || name === 'album' || name === 'playlist') {
@@ -42,7 +48,12 @@ export function buildUrl(state) {
         const q = state.queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
         const id = song?.id;
-        if (id) return `#/song/${encodeURIComponent(id)}`;
+        if (id) {
+            if (state.playbackMode === 'mv') {
+                return `#/song/${encodeURIComponent(id)}?mode=mv`;
+            }
+            return `#/song/${encodeURIComponent(id)}`;
+        }
     }
 
     const detail = state.search.detail;
@@ -148,6 +159,43 @@ export function initRouter(ctx) {
                     history.replaceState({ __app: true, __depth: 0 }, '', '#/');
                     store.update({ playbackOpen: false, view: 'search' });
                     searchActions.resetToHome();
+                } else if (parsed.mode === 'mv' && ctx.mvPlayer) {
+                    const q = store.get().queue;
+                    const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+                    if (song && song.mv) await ctx.mvPlayer.enterMv(song);
+                }
+                return;
+            }
+
+            if (parsed.kind === 'mv') {
+                if (!ctx.mvPlayer) return;
+                try {
+                    const detail = await ctx.api.mvDetail(parsed.mvid);
+                    const song = {
+                        id: parsed.mvid,
+                        title: detail.name || '',
+                        artist: detail.artistName || '',
+                        album: '',
+                        pic: detail.cover || '',
+                        mv: parsed.mvid,
+                        duration: detail.duration ? detail.duration / 1000 : 0,
+                    };
+                    store.update({
+                        queue: {
+                            ...store.get().queue,
+                            tracks: [song],
+                            currentIndex: 0,
+                            currentTime: 0,
+                            duration: 0,
+                            isPlaying: true,
+                            error: null,
+                        },
+                        playbackOpen: true,
+                    });
+                    await ctx.mvPlayer.enterMv(song);
+                } catch {
+                    history.replaceState({ __app: true, __depth: 0 }, '', '#/');
+                    store.update({ playbackOpen: false });
                 }
                 return;
             }

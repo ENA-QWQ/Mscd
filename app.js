@@ -24,10 +24,13 @@ import { initWikiProgressUI, getAllWiki, collectWikiOptions } from './src/wiki.j
 import { initPlaybackView } from './src/playback-view.js';
 import { initSidebarTrees } from './src/sidebar-tree.js';
 import { initGlobalListGestures } from './src/list-gestures.js';
+import { MVPlayer } from './src/mv-player.js';
 
 const api = new Meting(config);
 const player = new Player(api, config);
 const downloader = new Downloader(api, config);
+const mvPlayer = new MVPlayer(api, player, store);
+player.mvPlayer = mvPlayer;
 
 store.applyTheme();
 
@@ -37,6 +40,33 @@ const MODE_ICONS = {
     'repeat-one': '<path d="M11 4v1.466a.25.25 0 0 0 .41.192l2.36-1.966a.25.25 0 0 0 0-.384l-2.36-1.966a.25.25 0 0 0-.41.192V3H5a5 5 0 0 0-4.48 7.223.5.5 0 0 0 .896-.446A4 4 0 0 1 5 4zm4.48 1.777a.5.5 0 0 0-.896.446A4 4 0 0 1 11 12H5.001v-1.466a.25.25 0 0 0-.41-.192l-2.36 1.966a.25.25 0 0 0 0 .384l2.36 1.966a.25.25 0 0 0 .41-.192V13h6a5 5 0 0 0 4.48-7.223Z"/><path d="M9 5.5a.5.5 0 0 0-.854-.354l-1.75 1.75a.5.5 0 1 0 .708.708L8 6.707V10.5a.5.5 0 0 0 1 0z"/>',
     'repeat-all': '<path d="M11 5.466V4H5a4 4 0 0 0-3.584 5.777.5.5 0 1 1-.896.446A5 5 0 0 1 5 3h6V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m3.81.086a.5.5 0 0 1 .67.225A5 5 0 0 1 11 13H5v1.466a.25.25 0 0 1-.41.192l-2.36-1.966a.25.25 0 0 1 0-.384l2.36-1.966a.25.25 0 0 1 .41.192V12h6a4 4 0 0 0 3.585-5.777.5.5 0 0 1 .225-.67Z"/>',
 };
+
+const mvFetchedIds = new Set();
+
+async function ensureSongMv(song) {
+    if (!song || !song.id) return;
+    const cur = song.mv == null ? '' : String(song.mv);
+    if (cur !== '' && cur !== '0') return;
+    const key = String(song.id);
+    if (mvFetchedIds.has(key)) return;
+    mvFetchedIds.add(key);
+    try {
+        const netease = api.adapters && api.adapters.netease;
+        const detail = netease && typeof netease.song === 'function'
+            ? await netease.song(song.id)
+            : await api.song(song.id);
+        if (!detail) return;
+        const mv = detail.mv == null ? '' : String(detail.mv);
+        if (mv === '' || mv === '0') return;
+        const q = store.get().queue;
+        const idx = q.tracks.findIndex((t) => String(t.id) === key);
+        if (idx < 0) return;
+        const tracks = [...q.tracks];
+        tracks[idx] = { ...tracks[idx], mv };
+        store.update({ queue: { ...q, tracks } });
+        store.persist();
+    } catch {}
+}
 
 function formatTime(sec) {
     if (!sec || !isFinite(sec) || isNaN(sec)) return '0:00';
@@ -469,7 +499,7 @@ const searchActions = {
     },
 };
 
-const ctx = { api, store, player, downloader, config, searchActions };
+const ctx = { api, store, player, downloader, config, searchActions, mvPlayer };
 ctx.openParseModal = () => openParseModal(ctx);
 ctx.openBatchAddModal = (songs, mode) => openBatchAddModal(songs, ctx, mode);
 
@@ -592,6 +622,7 @@ function bindPlayerBar() {
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
     const modeBtn = document.getElementById('mode-btn');
+    const mvBtn = document.getElementById('mv-btn');
     const queueBtn = document.getElementById('queue-btn');
     const playerMoreWrap = document.getElementById('player-more-wrap');
     const playerMoreBtn = document.getElementById('player-more-btn');
@@ -608,7 +639,6 @@ function bindPlayerBar() {
     const volumeSlider = document.getElementById('volume-slider');
     const playIcon = document.getElementById('play-icon');
     const modeIconEl = modeBtn.querySelector('svg');
-
     if (!playBtn) return;
 
     const volumePopup = volumeWrap.querySelector('.volume-popup');
@@ -641,6 +671,143 @@ function bindPlayerBar() {
     modeBtn.addEventListener('click', () => {
         const mode = player.cycleMode();
         Toast(`已切换到${modeLabels[mode]}`, 'info', 1400);
+    });
+
+    if (mvBtn) {
+        mvBtn.addEventListener('click', async () => {
+            const state = store.get();
+            if (state.playbackMode === 'mv') {
+                mvPlayer.exitMv();
+                return;
+            }
+            const q = state.queue;
+            const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+            if (!song) {
+                Toast('当前没有播放歌曲', 'warning', 1600);
+                return;
+            }
+            let mvId = song.mv != null ? String(song.mv) : '';
+            if (mvId === '') {
+                try {
+                    const netease = api.adapters && api.adapters.netease;
+                    const detail = netease && typeof netease.song === 'function'
+                        ? await netease.song(song.id)
+                        : await api.song(song.id);
+                    if (detail && detail.mv != null && String(detail.mv) !== '' && String(detail.mv) !== '0') {
+                        mvId = String(detail.mv);
+                        const idx = q.tracks.findIndex((t) => String(t.id) === String(song.id));
+                        if (idx >= 0) {
+                            const tracks = [...q.tracks];
+                            tracks[idx] = { ...tracks[idx], mv: mvId };
+                            store.update({ queue: { ...q, tracks } });
+                            store.persist();
+                        }
+                    }
+                } catch {}
+            }
+            if (mvId === '' || mvId === '0') {
+                Toast('当前歌曲没有官方 MV', 'warning', 1600);
+                return;
+            }
+            store.update({ playbackOpen: true });
+            await mvPlayer.enterMv({ ...song, mv: mvId });
+        });
+    }
+
+    const mvQualityBtn = document.getElementById('mv-quality-btn');
+    const mvQualityMenu = document.getElementById('mv-quality-menu');
+    const mvWebFullscreenBtn = document.getElementById('mv-web-fullscreen-btn');
+    const mvFullscreenBtn = document.getElementById('mv-fullscreen-btn');
+
+    if (mvQualityBtn && mvQualityMenu) {
+        if (mvQualityMenu.parentNode !== document.body) {
+            document.body.appendChild(mvQualityMenu);
+        }
+
+        function closeMvQualityMenu() {
+            mvQualityMenu.classList.remove('is-open');
+        }
+
+        function openMvQualityMenu() {
+            const rect = mvQualityBtn.getBoundingClientRect();
+            mvQualityMenu.style.left = `${rect.left + rect.width / 2}px`;
+            mvQualityMenu.style.top = `${rect.top - 8}px`;
+            mvQualityMenu.style.right = 'auto';
+            mvQualityMenu.style.bottom = 'auto';
+            mvQualityMenu.style.transform = 'translate(-50%, -100%)';
+            mvQualityMenu.classList.add('is-open');
+        }
+
+        mvQualityBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (mvQualityMenu.classList.contains('is-open')) {
+                closeMvQualityMenu();
+            } else {
+                openMvQualityMenu();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!mvQualityMenu.contains(e.target) && !mvQualityBtn.contains(e.target)) {
+                closeMvQualityMenu();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeMvQualityMenu();
+        });
+
+        window.addEventListener('resize', closeMvQualityMenu);
+        window.addEventListener('scroll', closeMvQualityMenu, true);
+
+        store.subscribe((state) => {
+            if (state.playbackMode !== 'mv') closeMvQualityMenu();
+        });
+    }
+
+    if (mvWebFullscreenBtn) {
+        mvWebFullscreenBtn.addEventListener('click', () => {
+            const overlay = document.querySelector('.playback-overlay');
+            if (!overlay) return;
+            const next = !overlay.classList.contains('is-web-fullscreen');
+            overlay.classList.toggle('is-web-fullscreen', next);
+            document.body.classList.toggle('mv-web-fullscreen', next);
+        });
+    }
+
+    if (mvFullscreenBtn) {
+        mvFullscreenBtn.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                document.documentElement.requestFullscreen();
+            }
+        });
+    }
+
+    let preNativeWebFullscreen = false;
+
+    document.addEventListener('fullscreenchange', () => {
+        const isNative = !!document.fullscreenElement;
+        const state = store.get();
+        const overlay = document.querySelector('.playback-overlay');
+        document.body.classList.toggle('mv-native-fullscreen', isNative);
+
+        if (isNative) {
+            if (state.playbackMode === 'mv') {
+                preNativeWebFullscreen = document.body.classList.contains('mv-web-fullscreen');
+                if (overlay) overlay.classList.add('is-web-fullscreen');
+                document.body.classList.add('mv-web-fullscreen');
+            } else {
+                preNativeWebFullscreen = false;
+            }
+        } else {
+            if (!preNativeWebFullscreen) {
+                if (overlay) overlay.classList.remove('is-web-fullscreen');
+                document.body.classList.remove('mv-web-fullscreen');
+            }
+            preNativeWebFullscreen = false;
+        }
     });
 
     queueBtn.addEventListener('click', () => {
@@ -899,7 +1066,10 @@ function bindPlayerBar() {
         if (curSong) loadPlayerLyric(curSong);
     }
 
-    player.on('trackchange', (song) => loadPlayerLyric(song));
+    player.on('trackchange', (song) => {
+        loadPlayerLyric(song);
+        ensureSongMv(song);
+    });
     player.on('timeupdate', () => updatePlayerLyricHighlight());
 
     store.subscribe((state) => {
@@ -916,9 +1086,57 @@ function bindPlayerBar() {
         const q = state.queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
 
+        if (mvBtn) {
+            const isMv = state.playbackMode === 'mv';
+            const mvStr = song && song.mv != null ? String(song.mv) : '';
+            const hasMv = mvStr !== '' && mvStr !== '0';
+            const mvUnknown = mvStr === '';
+            mvBtn.disabled = !isMv && !hasMv && !mvUnknown;
+            const title = isMv
+                ? '返回歌曲'
+                : (hasMv ? '播放 MV' : (mvUnknown ? '检测 MV…' : '无官方 MV'));
+            if (mvBtn.title !== title) mvBtn.title = title;
+            const svgEl = mvBtn.querySelector('svg');
+            const wantIcon = isMv ? 'music' : 'video';
+            if (svgEl && svgEl.dataset.icon !== wantIcon) {
+                svgEl.dataset.icon = wantIcon;
+                svgEl.innerHTML = isMv
+                    ? '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'
+                    : '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>';
+            }
+        }
+
         if (playerMoreMenuEl) {
             playerMoreMenuEl.querySelectorAll('.player-more-item').forEach((item) => {
                 item.disabled = !song;
+            });
+        }
+
+        if (mvQualityMenu && state.playbackMode === 'mv') {
+            const brs = state.mvState.brs || [];
+            const brKey = brs.map((b) => b.br).join(',');
+            if (mvQualityMenu.dataset.built !== brKey) {
+                mvQualityMenu.dataset.built = brKey;
+                mvQualityMenu.innerHTML = '';
+                for (const br of brs) {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'mv-quality-item';
+                    item.textContent = `${br.br}P`;
+                    item.dataset.br = String(br.br);
+                    item.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        mvQualityMenu.classList.remove('is-open');
+                        const target = Number(br.br);
+                        if (Number.isFinite(target)) {
+                            mvPlayer.switchQuality(target);
+                        }
+                    });
+                    mvQualityMenu.appendChild(item);
+                }
+            }
+            mvQualityMenu.querySelectorAll('.mv-quality-item').forEach((item) => {
+                item.classList.toggle('is-active', Number(item.dataset.br) === Number(state.mvState.currentBr));
             });
         }
 
@@ -954,8 +1172,9 @@ function bindPlayerBar() {
             }
         }
 
-        const total = q.duration || 0;
-        const cur = q.currentTime || 0;
+        const isMvMode = state.playbackMode === 'mv';
+        const total = isMvMode ? (state.mvState.duration || 0) : (q.duration || 0);
+        const cur = isMvMode ? (state.mvState.currentTime || 0) : (q.currentTime || 0);
         progressBar.style.width = total > 0 ? `${(cur / total) * 100}%` : '0%';
         currentEl.textContent = formatTime(cur);
         durationEl.textContent = formatTime(total);
