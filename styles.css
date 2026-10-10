@@ -5963,6 +5963,26 @@ body.playback-open {
         clip-path: inset(100% 0 0 0);
     }
 
+    body.playback-open.playback-mode-mv .player-bar {
+        clip-path: inset(0 0 0 0);
+        background: rgba(18, 18, 18, .35);
+        backdrop-filter: blur(20px) saturate(1.5);
+        -webkit-backdrop-filter: blur(20px) saturate(1.5);
+        --text-primary: #f5f5f5;
+        --text-secondary: rgba(255, 255, 255, .75);
+        --text-tertiary: rgba(255, 255, 255, .5);
+        --progress-track: rgba(255, 255, 255, .2);
+        --progress-track-hover: rgba(255, 255, 255, .3);
+        --hover-bg: rgba(255, 255, 255, .12);
+        --bg-cover: rgba(255, 255, 255, .12);
+        --border-line: rgba(255, 255, 255, .3);
+        --hover-text: #ffffff;
+    }
+
+    body.playback-open.playback-mode-mv .player-right {
+        display: flex;
+    }
+
     .playback-overlay {
         bottom: calc(var(--player-bar-height) + var(--mobile-nav-height));
     }
