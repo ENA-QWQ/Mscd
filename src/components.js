@@ -733,7 +733,7 @@ export function shouldShowAbout(cfg) {
     return getAboutReadVersion() !== version;
 }
 
-export function AccountButton({ account, onConnect, onDisconnect, themeMode = 'auto', onCycleThemeMode, onOpenAbout }) {
+export function AccountButton({ account, onConnect, onDisconnect, onOpenAbout }) {
     if (!account || !account.connected) {
         if (sharedAccountMenu) sharedAccountMenu.classList.remove('is-open');
         const btn = el('button', {
@@ -766,21 +766,6 @@ export function AccountButton({ account, onConnect, onDisconnect, themeMode = 'a
         class: 'ena-btn ena-btn--sm account-btn account-btn--connected',
         title: account.nickname || '已连接',
     }, avatarEl, el('span', { class: 'account-btn__name', text: account.nickname || '已连接' }));
-
-    const modeIcons = { auto: 'monitor', light: 'sun', dark: 'moon' };
-    const modeLabels = { auto: '主题：自动', light: '主题：日间', dark: '主题：夜间' };
-    const currentMode = themeMode || 'auto';
-    const themeModeBtn = el('button', { class: 'account-menu__item' },
-        icon(modeIcons[currentMode]),
-        el('span', { text: modeLabels[currentMode] })
-    );
-    themeModeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const order = ['auto', 'light', 'dark'];
-        const next = order[(order.indexOf(currentMode) + 1) % order.length];
-        onCycleThemeMode?.(next);
-    });
-    sharedAccountMenu.appendChild(themeModeBtn);
 
     const disconnectBtn = el('button', { class: 'account-menu__item' },
         icon('log-out'),

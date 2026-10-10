@@ -1465,16 +1465,12 @@ function bindAccountButton() {
         const account = store.get().account;
         host.appendChild(AccountButton({
             account,
-            themeMode: store.get().settings.themeMode || 'auto',
             onConnect: openAccountModal,
             onDisconnect: async () => {
                 const ok = await confirmDialog('确定断开当前账户吗？');
                 if (!ok) return;
                 store.disconnectAccount();
                 Toast('已断开账户连接', 'success', 1400);
-            },
-            onCycleThemeMode: (mode) => {
-                store.setThemeMode(mode);
             },
             onOpenAbout: () => openAboutModal(ctx),
         }));
