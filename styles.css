@@ -4124,7 +4124,8 @@ body.has-selection .multi-select-bar {
     }
 
     .top-bar-actions .parse-btn,
-    .top-bar-actions .multi-select-btn {
+    .top-bar-actions .multi-select-btn,
+    .top-bar-actions .view-switcher-btn {
         display: none;
     }
 
