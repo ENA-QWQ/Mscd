@@ -3,6 +3,9 @@ import {
     generateThemeVars,
     applyThemeVars,
     clearThemeVars,
+    applyColorScheme,
+    resolveMode,
+    onSystemThemeChange,
 } from './theme.js';
 
 const STORAGE_KEY = 'meting-app-state';
@@ -253,6 +256,12 @@ class Store {
     constructor() {
         this.state = loadPersisted(createInitialState());
         this.listeners = new Set();
+
+        onSystemThemeChange(() => {
+            if ((this.state.settings.themeMode || 'auto') !== 'auto') return;
+            this.applyTheme();
+            this.notify();
+        });
     }
 
     get() {
@@ -584,15 +593,14 @@ class Store {
     applyTheme() {
         const { themeColor, themeMode } = this.state.settings;
         const mode = themeMode || 'auto';
-        if (!themeColor) {
-            if (mode === 'dark') {
-                applyThemeVars(generateThemeVars('#2d2d2d', 'dark'));
-            } else {
-                clearThemeVars();
-            }
+        const resolved = resolveMode(mode);
+
+        if (!themeColor && resolved === 'light') {
+            clearThemeVars();
             return;
         }
-        applyThemeVars(generateThemeVars(themeColor, mode));
+        applyThemeVars(generateThemeVars(themeColor || '#2d2d2d', resolved));
+        applyColorScheme(resolved);
     }
 
     setTheme(themeColor) {

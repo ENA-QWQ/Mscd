@@ -1,6 +1,7 @@
 import { config } from './config.js';
 import { Meting } from './src/api.js';
 import { store } from './src/store.js';
+import { resolveMode } from './src/theme.js';
 import { Player } from './src/player.js';
 import { Downloader } from './src/downloader.js';
 import { loadLyric, findCurrentIndex } from './src/lyric.js';
@@ -1231,6 +1232,17 @@ function bindAccountButton() {
         parseBtn.addEventListener('click', () => ctx.openParseModal());
         host.appendChild(parseBtn);
 
+        const currentMode = store.get().settings.themeMode || 'auto';
+        const isDark = resolveMode(currentMode) === 'dark';
+        const themeBtn = document.createElement('button');
+        themeBtn.className = 'ena-btn ena-btn--icon';
+        themeBtn.title = isDark ? '切换到日间模式' : '切换到夜间模式';
+        themeBtn.appendChild(icon(isDark ? 'sun' : 'moon'));
+        themeBtn.addEventListener('click', () => {
+            store.setThemeMode(isDark ? 'light' : 'dark');
+        });
+        host.appendChild(themeBtn);
+
         const account = store.get().account;
         host.appendChild(AccountButton({
             account,
@@ -1260,7 +1272,7 @@ function bindAccountButton() {
     store.subscribe((state) => {
         const current = state.account;
         const currentMode = state.settings.themeMode || 'auto';
-        const key = `${current.connected}|${current.uid}|${current.nickname}|${current.avatarUrl}|${currentMode}`;
+        const key = `${current.connected}|${current.uid}|${current.nickname}|${current.avatarUrl}|${resolveMode(currentMode)}`;
         if (host.__lastAccountKey === key) return;
         host.__lastAccountKey = key;
         render();

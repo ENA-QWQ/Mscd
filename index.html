@@ -9,6 +9,28 @@
         document.documentElement.style.setProperty('--page-zoom', '0.9');
         document.documentElement.style.zoom = '0.9';
     </script>
+    <script>
+        // Pre-paint theme resolve so dark mode never flashes light on load.
+        (function () {
+            var mode = 'auto';
+            try {
+                var raw = localStorage.getItem('meting-app-state');
+                if (raw) {
+                    var saved = JSON.parse(raw);
+                    var m = saved && saved.settings && saved.settings.themeMode;
+                    if (m === 'light' || m === 'dark' || m === 'auto') mode = m;
+                }
+            } catch (e) { }
+
+            var dark = mode === 'dark' ||
+                (mode === 'auto' && window.matchMedia &&
+                    window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+            var root = document.documentElement;
+            root.style.setProperty('color-scheme', dark ? 'dark' : 'light');
+            root.style.setProperty('--bg-page', dark ? '#171717' : '#f0f0f0');
+        })();
+    </script>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@callmebill/lxgw-wenkai-web@latest/style.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

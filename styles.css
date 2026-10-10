@@ -10,6 +10,9 @@
     --danger: #ef4444;
     --info: #3b82f6;
     --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --bg-page: #f0f0f0;
+
+    color-scheme: light;
 
     --bg-top: rgba(232, 232, 232, .92);
     --bg-side: rgba(245, 245, 245, .94);
@@ -41,6 +44,19 @@
     --overlay-detail: rgba(255, 255, 255, 0.72);
     --waveform: #000000;
     --hover-text: #2d2d2d;
+    --scrollbar-thumb: #d4d4d4;
+    --scrollbar-thumb-hover: #b8b8b8;
+    --scrim: rgba(0, 0, 0, 0.45);
+    --tree-bg-2: rgba(0, 0, 0, 0.025);
+    --tree-bg-3: rgba(0, 0, 0, 0.05);
+}
+
+/* Fallback for users whose OS is dark and no inline color-scheme is set yet. */
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --bg-page: #171717;
+    }
 }
 
 * {
@@ -53,7 +69,7 @@
 @supports (-moz-appearance: none) {
     * {
         scrollbar-width: thin;
-        scrollbar-color: #d4d4d4 transparent;
+        scrollbar-color: var(--scrollbar-thumb) transparent;
     }
 }
 
@@ -68,7 +84,7 @@ body {
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     background: url(imgs/bg.webp) center / cover fixed;
-    background-color: #f0f0f0;
+    background-color: var(--bg-page, #f0f0f0);
     color: var(--text-primary);
     position: relative;
 }
@@ -103,11 +119,11 @@ body::before {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #d4d4d4;
+    background: var(--scrollbar-thumb);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #b8b8b8;
+    background: var(--scrollbar-thumb-hover);
 }
 
 ::-webkit-scrollbar-corner {
@@ -1226,7 +1242,7 @@ body.playback-open .player-cover {
 }
 
 .ena-toast {
-    --toast-accent: #10b981;
+    --toast-accent: var(--success);
     position: relative;
     width: 280px;
     pointer-events: auto;
@@ -1284,15 +1300,15 @@ body.playback-open .player-cover {
 }
 
 .ena-toast--warning {
-    --toast-accent: #f59e0b;
+    --toast-accent: var(--warning);
 }
 
 .ena-toast--danger {
-    --toast-accent: #ef4444;
+    --toast-accent: var(--danger);
 }
 
 .ena-toast--info {
-    --toast-accent: #3b82f6;
+    --toast-accent: var(--info);
 }
 
 /* ==================== 模态框 ==================== */
@@ -1318,7 +1334,7 @@ body.playback-open .player-cover {
 .ena-modal__overlay {
     position: absolute;
     inset: 0;
-    background: rgba(31, 41, 55, .5);
+    background: var(--scrim);
     opacity: 0;
     transition: opacity .3s var(--ease);
 }
@@ -6582,8 +6598,6 @@ body.playback-open {
 
 .side-tree {
     --tree-bg-1: transparent;
-    --tree-bg-2: rgba(0, 0, 0, 0.025);
-    --tree-bg-3: rgba(0, 0, 0, 0.05);
     display: grid;
     grid-template-rows: 0fr;
     overflow: clip;
@@ -7276,7 +7290,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(31, 41, 55, .5);
+    background: var(--scrim);
     opacity: 1;
     transition: opacity .25s var(--ease);
 }
