@@ -5960,6 +5960,11 @@ body.playback-open {
     }
 
     .playback-overlay__top {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
         padding: 8px 12px;
     }
 
@@ -5973,6 +5978,7 @@ body.playback-open {
         grid-template-rows: auto minmax(0, 1fr);
         gap: 12px;
         height: calc(100% - 52px - 104px);
+        margin-top: 52px;
         padding: 0 16px 12px;
         min-width: 0;
     }
