@@ -1,5 +1,6 @@
 import { el } from './dom.js';
 import { store } from './store.js';
+import { THEME_MODES } from './theme.js';
 import {
     icon,
     SongRow,
@@ -3094,6 +3095,7 @@ export function SettingsView(ctx) {
     let themeCustomEl = null;
     let themeBtnEl = null;
     let namingFormatInput = null;
+    const themeModeInputs = new Map();
 
     function buildRadioGroup({ label, name, inputMap, onChange }) {
         const group = el('div', { class: 'setting-group' });
@@ -3139,6 +3141,25 @@ export function SettingsView(ctx) {
         const settings = store.get().settings;
         const group = el('div', { class: 'setting-group' });
         group.appendChild(el('div', { class: 'setting-label', text: '外观' }));
+
+        group.appendChild(el('div', { class: 'setting-sublabel', text: '主题模式' }));
+
+        const modeOptions = el('div', { class: 'ena-radio-group' });
+        for (const m of THEME_MODES) {
+            const input = el('input', { type: 'radio', name: 'theme-mode' });
+            input.checked = (settings.themeMode || 'auto') === m.id;
+            input.addEventListener('change', () => {
+                if (input.checked) store.setThemeMode(m.id);
+            });
+            themeModeInputs.set(m.id, input);
+
+            modeOptions.appendChild(el('label', { class: 'ena-radio' },
+                input,
+                el('span', { class: 'dot' }),
+                el('span', { text: m.label })
+            ));
+        }
+        group.appendChild(modeOptions);
 
         group.appendChild(el('div', { class: 'setting-sublabel', text: '主题色' }));
 
@@ -3558,6 +3579,11 @@ export function SettingsView(ctx) {
                 themeBtnEl.style.borderBottomColor = '';
                 themeBtnEl.style.color = '';
             }
+        }
+
+        for (const [id, input] of themeModeInputs) {
+            const want = id === (settings.themeMode || 'auto');
+            if (input.checked !== want) input.checked = want;
         }
 
         if (namingFormatInput && document.activeElement !== namingFormatInput) {

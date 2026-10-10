@@ -1,3 +1,9 @@
+export const THEME_MODES = [
+    { id: 'auto', label: '跟随系统' },
+    { id: 'light', label: '日间' },
+    { id: 'dark', label: '夜间' },
+];
+
 export const THEME_VAR_NAMES = [
     '--bg-top', '--bg-side', '--bg-player', '--bg-input', '--bg-menu', '--bg-float',
     '--bg-overlay', '--bg-surface', '--bg-surface-hover', '--bg-subtle', '--bg-cover', '--bg-wipe',
@@ -6,7 +12,42 @@ export const THEME_VAR_NAMES = [
     '--hover-bg', '--progress-track', '--progress-track-hover',
     '--range-track', '--overlay-cover', '--overlay-detail',
     '--fill', '--border-line', '--hover-text',
+    '--scrollbar-thumb', '--scrollbar-thumb-hover', '--scrim',
+    '--waveform', '--success', '--warning', '--danger', '--info',
+    '--tree-bg-2', '--tree-bg-3',
 ];
+
+const DARK_QUERY = '(prefers-color-scheme: dark)';
+
+let darkQuery = null;
+
+function getDarkQuery() {
+    if (darkQuery !== null) return darkQuery;
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    darkQuery = window.matchMedia(DARK_QUERY);
+    return darkQuery;
+}
+
+export function prefersDark() {
+    const q = getDarkQuery();
+    return q ? q.matches : false;
+}
+
+export function onSystemThemeChange(handler) {
+    const q = getDarkQuery();
+    if (!q) return;
+    if (typeof q.addEventListener === 'function') {
+        q.addEventListener('change', handler);
+    } else if (typeof q.addListener === 'function') {
+        q.addListener(handler);
+    }
+}
+
+/** 'auto' follows the OS; 'light' and 'dark' are pinned. */
+export function resolveMode(mode) {
+    if (mode === 'light' || mode === 'dark') return mode;
+    return prefersDark() ? 'dark' : 'light';
+}
 
 export function hexToRgb(hex) {
     let h = String(hex || '').replace('#', '');
@@ -43,11 +84,14 @@ function hsla(h, s, l, a) {
 
 export function generateThemeVars(themeHex, mode = 'auto') {
     const { h, s, l } = hexToHsl(themeHex);
-    const isLight = mode === 'auto' ? l >= 0.5 : mode === 'light';
+    const resolved = resolveMode(mode);
+    const isLight = resolved === 'light';
 
+    // Lifts dark accents so they stay visible against dark surfaces, while
+    // keeping enough contrast for the white text drawn on top of them.
     let accentHex = themeHex;
-    if (mode === 'dark' && l < 0.5) {
-        accentHex = hsl(h, s, 50);
+    if (!isLight && l < 0.5) {
+        accentHex = hsl(h, s, 40);
     }
 
     const sBg = Math.min(0.42, Math.max(0.04, s * 0.55));
@@ -89,6 +133,16 @@ export function generateThemeVars(themeHex, mode = 'auto') {
             '--range-track': hsla(h, sBg, 0, 0.14),
             '--overlay-cover': hsla(h, sBg, 0, 0.5),
             '--overlay-detail': hsla(h, sBg, 94, 0.75),
+            '--scrollbar-thumb': hsl(h, 0, 83),
+            '--scrollbar-thumb-hover': hsl(h, 0, 72),
+            '--scrim': hsla(0, 0, 0, 0.45),
+            '--waveform': '#000000',
+            '--success': '#10b981',
+            '--warning': '#f59e0b',
+            '--danger': '#ef4444',
+            '--info': '#3b82f6',
+            '--tree-bg-2': hsla(h, sBg, 0, 0.025),
+            '--tree-bg-3': hsla(h, sBg, 0, 0.05),
         };
     }
 
@@ -119,6 +173,16 @@ export function generateThemeVars(themeHex, mode = 'auto') {
         '--range-track': hsla(h, sBg, 100, 0.18),
         '--overlay-cover': hsla(h, sBg, 0, 0.6),
         '--overlay-detail': hsla(h, sBg, 8, 0.8),
+        '--scrollbar-thumb': hsl(h, 0, 26),
+        '--scrollbar-thumb-hover': hsl(h, 0, 36),
+        '--scrim': hsla(h, sBg, 0, 0.6),
+        '--waveform': hsl(h, sBg, 92),
+        '--success': hsl(158, 0.64, 45),
+        '--warning': hsl(38, 0.92, 55),
+        '--danger': hsl(0, 0.84, 63),
+        '--info': hsl(214, 0.9, 66),
+        '--tree-bg-2': hsla(h, sBg, 100, 0.03),
+        '--tree-bg-3': hsla(h, sBg, 100, 0.06),
     };
 }
 
@@ -129,9 +193,19 @@ export function applyThemeVars(vars) {
     }
 }
 
+const PAGE_BG = { light: '#f0f0f0', dark: '#171717' };
+
+export function applyColorScheme(mode) {
+    const resolved = resolveMode(mode);
+    const root = document.documentElement;
+    root.style.setProperty('color-scheme', resolved);
+    root.style.setProperty('--bg-page', PAGE_BG[resolved]);
+}
+
 export function clearThemeVars() {
     const root = document.documentElement;
     for (const name of THEME_VAR_NAMES) {
         root.style.removeProperty(name);
     }
+    applyColorScheme('light');
 }
