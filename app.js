@@ -5,6 +5,7 @@ import { resolveMode } from './src/theme.js';
 import { Player } from './src/player.js';
 import { Downloader } from './src/downloader.js';
 import { loadLyric, findCurrentIndex } from './src/lyric.js';
+import { initTooltip } from './src/tooltip.js';
 import {
     SearchView,
     QueueView,
@@ -1925,6 +1926,7 @@ bindQueueVisibility();
 bindPlayingSync();
 bindAccountButton();
 bindMobileMoreMenu();
+initTooltip();
 ctx.openAccountModal = openAccountModal;
 
 initRouter(ctx);

@@ -8399,3 +8399,40 @@ body.mv-native-fullscreen {
 body.mv-native-fullscreen #mv-web-fullscreen-btn {
     display: none;
 }
+
+.app-tooltip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 9999;
+    padding: 6px 10px;
+    max-width: 260px;
+    font-family: 'LXGW WenKai Light', system-ui, sans-serif;
+    font-size: .72rem;
+    line-height: 1.3;
+    color: var(--text-primary, #1f2937);
+    background: var(--fill-light, rgba(232, 232, 232, .98));
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .16), 0 0 0 1px var(--border-faint, rgba(0, 0, 0, .06));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    clip-path: inset(0 0 100% 0);
+    transform-origin: top left;
+    transition: clip-path .16s var(--ease), transform .22s var(--ease), background .2s ease, color .2s ease, box-shadow .2s ease;
+    zoom: calc(1 / var(--page-zoom, 1));
+}
+
+.app-tooltip[data-placement="bottom"] {
+    clip-path: inset(100% 0 0 0);
+}
+
+.app-tooltip.is-visible {
+    clip-path: inset(0 0 0 0);
+}
+
+@media (max-width: 900px) {
+    .app-tooltip {
+        display: none !important;
+    }
+}
