@@ -284,6 +284,8 @@ export class MVPlayer {
         v.classList.remove('is-ready');
         void v.offsetWidth;
         v.style.transition = '';
+        const panel = v.closest('.playback-panel--mv');
+        if (panel) panel.classList.remove('is-paused');
         this._switchingSrc = false;
     }
 

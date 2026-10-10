@@ -220,7 +220,25 @@ export function initPlaybackView(ctx) {
         )
     );
 
-    const mvPanel = el('div', { class: 'playback-panel playback-panel--mv' }, mvLoading, mvVideo);
+    const mvPlayIndicator = el('div', { class: 'mv-play-indicator' }, icon('play', true));
+
+    const mvPanel = el('div', { class: 'playback-panel playback-panel--mv' }, mvLoading, mvVideo, mvPlayIndicator);
+
+    mvVideo.addEventListener('click', () => {
+        if (store.get().playbackMode !== 'mv') return;
+        if (!ctx.mvPlayer) return;
+        ctx.mvPlayer.toggle();
+    });
+
+    mvVideo.addEventListener('play', () => {
+        mvPanel.classList.remove('is-paused');
+    });
+
+    mvVideo.addEventListener('pause', () => {
+        if (ctx.mvPlayer && ctx.mvPlayer._switchingSrc) return;
+        if (store.get().playbackMode !== 'mv') return;
+        mvPanel.classList.add('is-paused');
+    });
 
     const slider = el('div', { class: 'playback-slider' }, songPanel, mvPanel);
 

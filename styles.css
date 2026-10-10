@@ -8229,6 +8229,44 @@ body.mv-web-fullscreen .mv-video {
     height: 100%;
 }
 
+.mv-video:not(.is-ready) {
+    pointer-events: none;
+}
+
+body.playback-mode-mv .mv-video {
+    cursor: pointer;
+}
+
+.mv-play-indicator {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0;
+    transition: opacity .2s var(--ease), top .42s var(--ease);
+}
+
+body.mv-web-fullscreen .mv-play-indicator {
+    top: 0;
+}
+
+.playback-panel--mv.is-paused .mv-play-indicator {
+    opacity: 1;
+}
+
+.mv-play-indicator svg {
+    width: 72px;
+    height: 72px;
+    color: rgba(255, 255, 255, .9);
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, .5));
+}
+
 .playback-overlay.is-web-fullscreen {
     position: fixed;
     inset: 0;
