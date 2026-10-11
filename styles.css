@@ -24,7 +24,7 @@
 
     --sidebar-width: 260px;
     --top-bar-height: 64px;
-    --player-bar-height: 72px;
+    --player-bar-height: 64px;
     --mobile-nav-height: 46px;
     --content-pad-x: 28px;
     --fill-light: #e8e8e8;
@@ -385,7 +385,7 @@ body.queue-empty:not(.has-selection) .layout {
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
     align-items: center;
     gap: 20px;
-    padding: 12px 20px 8px;
+    padding: 8px 48px;
     background: var(--bg-player);
     overflow: visible;
     min-width: 0;
@@ -473,19 +473,19 @@ body.playback-open .player-cover {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 2px;
 }
 
 .player-controls .ena-btn--icon,
 .player-right .ena-btn--icon {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
 }
 
 .player-controls .ena-btn--icon svg,
 .player-right .ena-btn--icon svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
 }
 
 .player-controls .player-play {
@@ -550,7 +550,7 @@ body.playback-open .player-cover {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 0;
     min-width: 0;
 }
 
