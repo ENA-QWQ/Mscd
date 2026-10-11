@@ -272,7 +272,7 @@ body.queue-empty:not(.has-selection) .layout {
 .top-bar-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     flex-shrink: 0;
     justify-self: end;
 }
@@ -550,7 +550,7 @@ body.playback-open .player-cover {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0;
+    gap: 4px;
     min-width: 0;
 }
 
