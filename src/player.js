@@ -9,13 +9,33 @@ import {
     clearMetadata,
     setupActionHandlers,
 } from './media-session.js';
+import { canUseCors } from './audio-effects.js';
+import { Toast } from './components.js';
 
 const PLAY_TIMEOUT = 12000;
 
-function proxiedAudio(url) {
+const corsWarnedOrigins = new Set();
+
+async function resolvePlaySrc(url, needCors) {
     if (!url) return '';
-    if (!store.get().settings.playProxy) return url;
     if (url.startsWith(config.proxy)) return url;
+
+    const settings = store.get().settings;
+    if (settings.playProxy) {
+        return config.proxy + encodeURIComponent(url);
+    }
+    if (!needCors) return url;
+
+    const ok = await canUseCors(url);
+    if (ok) return url;
+
+    let origin = '';
+    try { origin = new URL(url).origin; } catch {}
+    if (origin && !corsWarnedOrigins.has(origin)) {
+        corsWarnedOrigins.add(origin);
+        Toast('音频源不支持跨域，已自动改用代理', 'info', 2600);
+    }
+
     return config.proxy + encodeURIComponent(url);
 }
 
@@ -207,10 +227,24 @@ export class Player {
             const url = await this.api.resolveAudio(song, store.get().settings.quality);
             if (token.cancelled) return;
 
+            const fx = store.get().settings.audioEffects;
+            const fxActive = !!(this.audioEffects && (this.audioEffects.built || (fx && fx.enabled)));
+            const playSrc = await resolvePlaySrc(url, fxActive);
+            if (token.cancelled) return;
+
+            if (fxActive && this.audio.crossOrigin !== 'anonymous') {
+                this.audio.crossOrigin = 'anonymous';
+            }
+
             this.audio.pause();
-            this.audio.src = proxiedAudio(url);
+            this.audio.src = playSrc;
             this.audio.load();
             this.currentAudioSongId = String(song.id || '');
+
+            if (fxActive && this.audioEffects) {
+                this.audioEffects.ensureChain();
+                this.audioEffects.updateFromSettings();
+            }
 
             this.emit('trackchange', song);
 

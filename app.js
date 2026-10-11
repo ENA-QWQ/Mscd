@@ -26,12 +26,17 @@ import { initPlaybackView } from './src/playback-view.js';
 import { initSidebarTrees } from './src/sidebar-tree.js';
 import { initGlobalListGestures } from './src/list-gestures.js';
 import { MVPlayer } from './src/mv-player.js';
+import { AudioEffects, openAudioEffectsModal } from './src/audio-effects.js';
 
 const api = new Meting(config);
 const player = new Player(api, config);
 const downloader = new Downloader(api, config);
 const mvPlayer = new MVPlayer(api, player, store);
 player.mvPlayer = mvPlayer;
+
+const audioEffects = new AudioEffects();
+audioEffects.attach(player.audio);
+player.audioEffects = audioEffects;
 
 store.applyTheme();
 
@@ -815,6 +820,13 @@ function bindPlayerBar() {
         store.update({ view: 'queue' });
     });
 
+    const audioFxBtn = document.getElementById('audio-fx-btn');
+    if (audioFxBtn) {
+        audioFxBtn.addEventListener('click', () => {
+            openAudioEffectsModal(ctx);
+        });
+    }
+
     if (volumeBtn && volumePopup) {
         volumeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1597,6 +1609,12 @@ function bindMobileMoreMenu() {
 
         if (item.dataset.action === 'parse') {
             ctx.openParseModal();
+            close();
+            return;
+        }
+
+        if (item.dataset.action === 'audio-effects') {
+            openAudioEffectsModal(ctx);
             close();
             return;
         }

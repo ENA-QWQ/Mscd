@@ -265,6 +265,18 @@
                             </svg>
                             <span>下载歌词</span>
                         </button>
+                        <button class="player-more-item" data-action="audio-effects">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                 stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="4" y1="6" x2="20" y2="6" />
+                                <line x1="4" y1="18" x2="20" y2="18" />
+                                <line x1="8" y1="6" x2="8" y2="18" />
+                                <line x1="16" y1="6" x2="16" y2="18" />
+                                <circle cx="8" cy="10" r="1.5" fill="currentColor" />
+                                <circle cx="16" cy="14" r="1.5" fill="currentColor" />
+                            </svg>
+                            <span>音效</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -313,6 +325,20 @@
                     </svg>
                 </button>
             </div>
+            <button class="ena-btn ena-btn--icon" id="audio-fx-btn" title="音效">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 21v-7" />
+                    <path d="M4 10V3" />
+                    <path d="M12 21v-9" />
+                    <path d="M12 8V3" />
+                    <path d="M20 21v-5" />
+                    <path d="M20 12V3" />
+                    <path d="M1 14h6" />
+                    <path d="M9 8h6" />
+                    <path d="M17 16h6" />
+                </svg>
+            </button>
             <button class="ena-btn ena-btn--icon" id="queue-btn" title="播放队列">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
@@ -426,6 +452,20 @@
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
         <span>内容 ID 解析</span>
+    </button>
+    <button class="mobile-more-item" data-action="audio-effects">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 21v-7" />
+            <path d="M4 10V3" />
+            <path d="M12 21v-9" />
+            <path d="M12 8V3" />
+            <path d="M20 21v-5" />
+            <path d="M20 12V3" />
+            <path d="M1 14h6" />
+            <path d="M9 8h6" />
+            <path d="M17 16h6" />
+        </svg>
+        <span>音效</span>
     </button>
 </div>
 <div class="ena-modal" id="modal-root"></div>

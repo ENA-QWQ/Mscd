@@ -128,6 +128,18 @@ function createInitialState() {
             lyricSaveMode: 'same',
             songView: 'tile',
             mvQuality: 1080,
+            audioEffects: {
+                enabled: false,
+                preamp: 0,
+                bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                bassBoost: 0,
+                subBass: 0,
+                compThreshold: 0,
+                compRatio: 1,
+                width: 1,
+                surroundDecay: 1.5,
+                surroundWet: 0,
+            },
         },
     };
 }
