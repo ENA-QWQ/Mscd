@@ -7994,6 +7994,22 @@ body.list-gesture-active .song-list {
     white-space: nowrap;
 }
 
+.list-drag-ghost__hint {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    padding: 5px 10px;
+    background: var(--bg-float);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    font-size: .68rem;
+    letter-spacing: .3px;
+    color: var(--text-tertiary);
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
 .side-nav a.is-drop-target {
     color: #fff;
 }

@@ -203,6 +203,14 @@ function buildDragOutGhost(songs) {
         ghost.appendChild(buildGhostRow(songs[0]));
     }
 
+    ghost.style.overflow = 'visible';
+    ghost.style.paddingBottom = '0';
+
+    const hint = document.createElement('div');
+    hint.className = 'list-drag-ghost__hint';
+    hint.textContent = '拖到左侧栏添加';
+    ghost.appendChild(hint);
+
     return ghost;
 }
 
