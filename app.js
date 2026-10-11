@@ -876,10 +876,36 @@ function bindPlayerBar() {
         });
     }
 
-    progressEl.addEventListener('click', (e) => {
+    let progressDragging = false;
+
+    function seekFromPointer(e) {
         const rect = progressEl.getBoundingClientRect();
+        if (rect.width <= 0) return;
         const percent = (e.clientX - rect.left) / rect.width;
-        player.seek(percent);
+        player.seek(Math.max(0, Math.min(1, percent)));
+    }
+
+    progressEl.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        progressDragging = true;
+        try { progressEl.setPointerCapture(e.pointerId); } catch {}
+        seekFromPointer(e);
+        e.preventDefault();
+    });
+
+    progressEl.addEventListener('pointermove', (e) => {
+        if (!progressDragging) return;
+        seekFromPointer(e);
+    });
+
+    progressEl.addEventListener('pointerup', (e) => {
+        if (!progressDragging) return;
+        progressDragging = false;
+        try { progressEl.releasePointerCapture(e.pointerId); } catch {}
+    });
+
+    progressEl.addEventListener('pointercancel', () => {
+        progressDragging = false;
     });
 
     volumeSlider.addEventListener('input', (e) => {

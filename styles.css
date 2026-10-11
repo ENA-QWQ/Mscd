@@ -538,6 +538,9 @@ body.playback-open .player-cover {
     cursor: pointer;
     position: relative;
     overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .player-progress:hover {
