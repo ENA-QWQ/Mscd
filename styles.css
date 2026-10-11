@@ -519,6 +519,11 @@ body.playback-open .player-cover {
     align-items: stretch;
     gap: 0;
     z-index: 2;
+    transition: height .22s var(--ease);
+}
+
+.player-progress-row:hover {
+    height: 8px;
 }
 
 .player-time {
