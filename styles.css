@@ -7918,6 +7918,9 @@ body.list-gesture-active .song-list {
 
 .list-drag-placeholder {
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     background: transparent;
     pointer-events: none;
     border-radius: 0 !important;

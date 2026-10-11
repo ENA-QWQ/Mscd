@@ -597,9 +597,11 @@ function enterDrag(e) {
     const zoom = getZoom();
     const sourceRect = sourceRow.getBoundingClientRect();
 
+    const PLACEHOLDER_GAP = 4;
     let totalHeight = 0;
-    for (const r of groupRows) {
-        totalHeight += r.getBoundingClientRect().height / zoom;
+    for (let i = 0; i < groupRows.length; i++) {
+        totalHeight += groupRows[i].getBoundingClientRect().height / zoom;
+        if (i > 0) totalHeight += PLACEHOLDER_GAP;
     }
     if (totalHeight <= 0) totalHeight = sourceRect.height / zoom;
 
