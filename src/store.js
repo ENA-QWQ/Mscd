@@ -128,6 +128,7 @@ function createInitialState() {
             lyricSaveMode: 'same',
             songView: 'tile',
             mvQuality: 1080,
+            sidebarWidth: 260,
             audioEffects: {
                 enabled: false,
                 preamp: 0,

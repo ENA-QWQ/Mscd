@@ -2000,4 +2000,105 @@ initWikiProgressUI(store);
     }
 })();
 
+function initSidebarResizer() {
+    const resizer = document.getElementById('sidebar-resizer');
+    if (!resizer) return;
+
+    const MIN = 180;
+    const MAX = 500;
+    const DEFAULT = 260;
+
+    function getZoom() {
+        const z = parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue('--page-zoom')
+        );
+        return (isFinite(z) && z > 0) ? z : 1;
+    }
+
+    function setWidth(px) {
+        const w = Math.max(MIN, Math.min(MAX, px));
+        document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+        return w;
+    }
+
+    const saved = store.get().settings.sidebarWidth;
+    if (typeof saved === 'number' && saved >= MIN && saved <= MAX) {
+        setWidth(saved);
+    }
+
+    let dragging = false;
+    let startX = 0;
+    let startWidth = 0;
+    let currentWidth = 0;
+
+    function onPointerDown(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (window.matchMedia('(max-width: 900px)').matches) return;
+        dragging = true;
+        startX = e.clientX;
+        const cur = parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')
+        );
+        startWidth = isFinite(cur) ? cur : DEFAULT;
+        currentWidth = startWidth;
+        resizer.classList.add('is-dragging');
+        document.body.classList.add('sidebar-resizing');
+        try { resizer.setPointerCapture(e.pointerId); } catch {}
+        e.preventDefault();
+    }
+
+    function onPointerMove(e) {
+        if (!dragging) return;
+        const zoom = getZoom();
+        const dx = (e.clientX - startX) / zoom;
+        currentWidth = setWidth(startWidth + dx);
+    }
+
+    function onPointerUp(e) {
+        if (!dragging) return;
+        dragging = false;
+        resizer.classList.remove('is-dragging');
+        document.body.classList.remove('sidebar-resizing');
+        try { resizer.releasePointerCapture(e.pointerId); } catch {}
+        store.update({
+            settings: { ...store.get().settings, sidebarWidth: Math.round(currentWidth) },
+        });
+        store.persist();
+    }
+
+    resizer.addEventListener('pointerdown', onPointerDown);
+    resizer.addEventListener('pointermove', onPointerMove);
+
+    window.addEventListener('pointerup', (e) => {
+        if (!dragging) return;
+        onPointerUp(e);
+    });
+    window.addEventListener('pointercancel', (e) => {
+        if (!dragging) return;
+        onPointerUp(e);
+    });
+    window.addEventListener('blur', () => {
+        if (!dragging) return;
+        dragging = false;
+        resizer.classList.remove('is-dragging');
+        document.body.classList.remove('sidebar-resizing');
+        store.update({
+            settings: { ...store.get().settings, sidebarWidth: Math.round(currentWidth) },
+        });
+        store.persist();
+    });
+
+    resizer.addEventListener('dblclick', () => {
+        setWidth(DEFAULT);
+        store.update({
+            settings: { ...store.get().settings, sidebarWidth: DEFAULT },
+        });
+        store.persist();
+    });
+
+    console.log('[sidebar] resizer 已就绪');
+}
+
+initSidebarResizer();
+
 window.__app = ctx;

@@ -370,6 +370,57 @@ body.queue-empty:not(.has-selection) .layout {
     min-width: 0;
 }
 
+/* ==================== 侧边栏拖拽手柄 ==================== */
+.sidebar-resizer {
+    grid-area: sidebar;
+    justify-self: end;
+    align-self: stretch;
+    width: 14px;
+    margin-right: -7px;
+    z-index: 200;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    background: transparent;
+    position: relative;
+}
+
+.sidebar-resizer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
+    background: transparent;
+    transition: background .18s ease;
+}
+
+.sidebar-resizer:hover::before,
+.sidebar-resizer.is-dragging::before {
+    background: var(--border-line);
+}
+
+body.sidebar-resizing {
+    cursor: col-resize;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+@media (max-width: 900px) {
+    .sidebar-resizer {
+        display: none;
+    }
+}
+
+@media (max-width: 900px) {
+    .sidebar-resizer {
+        display: none;
+    }
+}
+
 .content-area {
     flex: 1;
     overflow-y: auto;
