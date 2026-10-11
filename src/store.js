@@ -21,6 +21,8 @@ function createInitialState() {
             queue: false,
         },
 
+        sidebarCollapsed: false,
+
         favoritesTab: 'liked',
 
         account: {
@@ -209,6 +211,10 @@ function loadPersisted(state) {
                 status: !!saved.sidebarExpanded.status,
                 queue: !!saved.sidebarExpanded.queue,
             };
+        }
+
+        if (typeof saved.sidebarCollapsed === 'boolean') {
+            state.sidebarCollapsed = saved.sidebarCollapsed;
         }
 
         if (typeof saved.favoritesTab === 'string') {
@@ -609,6 +615,7 @@ class Store {
                 downloadTasks: this.state.downloadTasks,
                 filter: this.state.filter,
                 sidebarExpanded: this.state.sidebarExpanded,
+                sidebarCollapsed: this.state.sidebarCollapsed,
                 favoritesTab: this.state.favoritesTab,
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));

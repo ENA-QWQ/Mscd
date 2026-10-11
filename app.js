@@ -2007,6 +2007,9 @@ function initSidebarResizer() {
     const MIN = 180;
     const MAX = 500;
     const DEFAULT = 260;
+    const COLLAPSE = 64;
+
+    let collapsed = !!store.get().sidebarCollapsed;
 
     function getZoom() {
         const z = parseFloat(
@@ -2015,15 +2018,24 @@ function initSidebarResizer() {
         return (isFinite(z) && z > 0) ? z : 1;
     }
 
-    function setWidth(px) {
-        const w = Math.max(MIN, Math.min(MAX, px));
-        document.documentElement.style.setProperty('--sidebar-width', w + 'px');
-        return w;
+    function applyWidth(px) {
+        document.documentElement.style.setProperty('--sidebar-width', px + 'px');
     }
 
-    const saved = store.get().settings.sidebarWidth;
-    if (typeof saved === 'number' && saved >= MIN && saved <= MAX) {
-        setWidth(saved);
+    function toggleCollapsedClass(next) {
+        if (collapsed === next) return;
+        collapsed = next;
+        document.body.classList.toggle('sidebar-collapsed', collapsed);
+    }
+
+    if (collapsed) {
+        document.body.classList.add('sidebar-collapsed');
+        applyWidth(COLLAPSE);
+    } else {
+        const saved = store.get().settings.sidebarWidth;
+        if (typeof saved === 'number' && saved >= MIN && saved <= MAX) {
+            applyWidth(saved);
+        }
     }
 
     let dragging = false;
@@ -2039,7 +2051,7 @@ function initSidebarResizer() {
         const cur = parseFloat(
             getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')
         );
-        startWidth = isFinite(cur) ? cur : DEFAULT;
+        startWidth = isFinite(cur) ? cur : (collapsed ? COLLAPSE : DEFAULT);
         currentWidth = startWidth;
         resizer.classList.add('is-dragging');
         document.body.classList.add('sidebar-resizing');
@@ -2051,19 +2063,44 @@ function initSidebarResizer() {
         if (!dragging) return;
         const zoom = getZoom();
         const dx = (e.clientX - startX) / zoom;
-        currentWidth = setWidth(startWidth + dx);
+        let raw = startWidth + dx;
+        if (raw > MAX) raw = MAX;
+        if (raw < COLLAPSE) raw = COLLAPSE;
+        currentWidth = raw;
+        applyWidth(raw);
+        toggleCollapsedClass(raw < MIN);
     }
 
-    function onPointerUp(e) {
+    function finishDrag() {
         if (!dragging) return;
         dragging = false;
         resizer.classList.remove('is-dragging');
         document.body.classList.remove('sidebar-resizing');
-        try { resizer.releasePointerCapture(e.pointerId); } catch {}
-        store.update({
-            settings: { ...store.get().settings, sidebarWidth: Math.round(currentWidth) },
-        });
+
+        if (collapsed) {
+            requestAnimationFrame(() => applyWidth(COLLAPSE));
+            store.update({
+                sidebarCollapsed: true,
+                sidebarExpanded: {
+                    myfavorites: false,
+                    downloads: false,
+                    status: false,
+                    queue: false,
+                },
+            });
+        } else {
+            store.update({
+                sidebarCollapsed: false,
+                settings: { ...store.get().settings, sidebarWidth: Math.round(currentWidth) },
+            });
+        }
         store.persist();
+    }
+
+    function onPointerUp(e) {
+        if (!dragging) return;
+        try { resizer.releasePointerCapture(e.pointerId); } catch {}
+        finishDrag();
     }
 
     resizer.addEventListener('pointerdown', onPointerDown);
@@ -2079,18 +2116,15 @@ function initSidebarResizer() {
     });
     window.addEventListener('blur', () => {
         if (!dragging) return;
-        dragging = false;
-        resizer.classList.remove('is-dragging');
-        document.body.classList.remove('sidebar-resizing');
-        store.update({
-            settings: { ...store.get().settings, sidebarWidth: Math.round(currentWidth) },
-        });
-        store.persist();
+        finishDrag();
     });
 
     resizer.addEventListener('dblclick', () => {
-        setWidth(DEFAULT);
+        toggleCollapsedClass(false);
+        currentWidth = DEFAULT;
+        applyWidth(DEFAULT);
         store.update({
+            sidebarCollapsed: false,
             settings: { ...store.get().settings, sidebarWidth: DEFAULT },
         });
         store.persist();

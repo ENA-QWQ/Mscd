@@ -400,7 +400,7 @@ body.queue-empty:not(.has-selection) .layout {
 
 .sidebar-resizer:hover::before,
 .sidebar-resizer.is-dragging::before {
-    background: var(--border-line);
+    background: #d4d4d4;
 }
 
 body.sidebar-resizing {
@@ -8681,5 +8681,80 @@ body.mv-native-fullscreen #mv-web-fullscreen-btn {
 @media (max-width: 900px) {
     .app-tooltip {
         display: none !important;
+    }
+}
+
+@media (min-width: 901px) {
+    .layout {
+        transition: grid-template-columns 0.32s var(--ease);
+    }
+
+    body.sidebar-resizing .layout {
+        transition: none;
+    }
+
+    .sidebar {
+        transition: background-color 0.32s ease;
+    }
+
+    .side-nav {
+        transition: padding .32s var(--ease);
+    }
+
+    .side-nav a {
+        transition: color .3s ease, padding .32s var(--ease), font-size .32s var(--ease);
+    }
+
+    body.sidebar-collapsed .sidebar {
+        background: var(--bg-page);
+    }
+
+    body.sidebar-collapsed .side-tree {
+        display: none;
+    }
+
+    body.sidebar-collapsed .side-nav {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 100%;
+    }
+
+    body.sidebar-collapsed .side-nav a {
+        flex: 0 0 auto;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 3px;
+        padding: 10px 4px;
+        font-size: .58rem;
+        line-height: 1.15;
+        text-align: center;
+    }
+
+    body.sidebar-collapsed .side-nav a svg,
+    body.sidebar-collapsed .side-nav a[data-tree] > .side-nav-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    body.sidebar-collapsed .side-nav a > span {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        font-size: .58rem;
+        line-height: 1.15;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    body.sidebar-collapsed .side-nav a > .side-tree-toggle {
+        display: none;
+    }
+
+    body.sidebar-collapsed .side-nav a .side-nav-badge {
+        display: none;
     }
 }
