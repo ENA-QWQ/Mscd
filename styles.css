@@ -8793,3 +8793,11 @@ body.mv-native-fullscreen #mv-web-fullscreen-btn {
         padding-top: 16px;
     }
 }
+
+.song-detail-header {
+    position: sticky;
+    top: var(--search-tabs-height, 0px);
+    z-index: 4;
+    background-color: var(--bg-page);
+    background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay));
+}

@@ -2135,4 +2135,30 @@ function initSidebarResizer() {
 
 initSidebarResizer();
 
+(function syncSearchTabsHeight() {
+    const root = document.documentElement;
+    let raf = null;
+
+    function measure() {
+        raf = null;
+        const tabs = document.querySelector('.search-tabs');
+        const h = tabs ? tabs.getBoundingClientRect().height : 0;
+        root.style.setProperty('--search-tabs-height', (h > 0 ? h : 0) + 'px');
+    }
+
+    function schedule() {
+        if (raf) return;
+        raf = requestAnimationFrame(measure);
+    }
+
+    const contentArea = document.getElementById('content-area');
+    if (contentArea && typeof MutationObserver !== 'undefined') {
+        const mo = new MutationObserver(schedule);
+        mo.observe(contentArea, { childList: true, subtree: true });
+    }
+
+    window.addEventListener('resize', schedule);
+    schedule();
+})();
+
 window.__app = ctx;
