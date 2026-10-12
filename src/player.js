@@ -289,6 +289,52 @@ export class Player {
         }
     }
 
+    async applyAudioEffects() {
+        if (!this.audioEffects) return;
+        const fx = store.get().settings.audioEffects || {};
+
+        if (!fx.enabled || this.audioEffects.built) {
+            if (this.audioEffects.built) {
+                this.audioEffects.updateFromSettings();
+            }
+            return;
+        }
+
+        const song = this.current;
+        const audio = this.audio;
+
+        if (song && audio.src && audio.crossOrigin !== 'anonymous') {
+            const wasPlaying = !audio.paused;
+            const curTime = audio.currentTime || 0;
+            const duration = audio.duration || 0;
+
+            this.resumeState = {
+                songId: String(song.id),
+                time: curTime,
+                ratio: duration > 0 ? curTime / duration : 0,
+            };
+
+            audio.pause();
+            audio.crossOrigin = 'anonymous';
+            audio.load();
+
+            this.audioEffects.ensureChain();
+            this.audioEffects.updateFromSettings();
+
+            if (wasPlaying) {
+                const onMeta = () => {
+                    audio.removeEventListener('loadedmetadata', onMeta);
+                    audio.play().catch(() => {});
+                };
+                audio.addEventListener('loadedmetadata', onMeta);
+            }
+            return;
+        }
+
+        this.audioEffects.ensureChain();
+        this.audioEffects.updateFromSettings();
+    }
+
     toggle() {
         if (store.get().playbackMode === 'mv' && this.mvPlayer) {
             return this.mvPlayer.toggle();

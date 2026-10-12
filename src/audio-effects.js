@@ -233,6 +233,19 @@ export class AudioEffects {
     updateFromSettings() {
         if (!this.built) return;
         const fx = store.get().settings.audioEffects || {};
+        const enabled = !!fx.enabled;
+
+        if (!enabled) {
+            this._applyPreamp(0);
+            this._applyEq([]);
+            this._applySubBass(0);
+            this._applyBassBoost(0);
+            this._applyCompressor(0, 1);
+            this._applyWidth(1);
+            this._applySurround(1.5, 0);
+            return;
+        }
+
         this._applyPreamp(fx.preamp);
         this._applyEq(fx.bands);
         this._applySubBass(fx.subBass);
@@ -362,7 +375,9 @@ export function openAudioEffectsModal(ctx) {
         const fx = { ...(s.audioEffects || {}), ...patch };
         store.update({ settings: { ...s, audioEffects: fx } });
         store.persist();
-        if (ctx.player.audioEffects) {
+        if (ctx.player && typeof ctx.player.applyAudioEffects === 'function') {
+            ctx.player.applyAudioEffects();
+        } else if (ctx.player && ctx.player.audioEffects) {
             ctx.player.audioEffects.updateFromSettings();
         }
     }
@@ -373,12 +388,7 @@ export function openAudioEffectsModal(ctx) {
     const enableCb = el('input', { type: 'checkbox' });
     enableCb.checked = !!getFx().enabled;
     enableCb.addEventListener('change', () => {
-        const enabled = enableCb.checked;
-        updateFx({ enabled });
-        if (enabled && ctx.player.audioEffects) {
-            ctx.player.audioEffects.ensureChain();
-            ctx.player.audioEffects.updateFromSettings();
-        }
+        updateFx({ enabled: enableCb.checked });
     });
 
     enableRow.appendChild(el('label', { class: 'ena-checkbox' },
