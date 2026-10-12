@@ -5436,21 +5436,22 @@ body.playback-open {
     z-index: 1;
     pointer-events: none;
     overflow: hidden;
-    filter: blur(80px);
-    opacity: .75;
+    filter: blur(60px);
+    opacity: .85;
 }
 
 .playback-overlay__glow-blob {
     position: absolute;
-    width: 60vw;
-    height: 60vw;
-    max-width: 720px;
-    max-height: 720px;
+    width: 55vw;
+    height: 55vw;
+    max-width: 640px;
+    max-height: 640px;
     transform: translate(-50%, -50%);
     border-radius: 50%;
     opacity: 0;
     transition: opacity .8s var(--ease), background .8s var(--ease);
-    animation: glow-drift 22s ease-in-out infinite;
+    animation: glow-drift 7s ease-in-out infinite;
+    will-change: transform;
 }
 
 .playback-overlay__glow-blob:nth-child(1) {
@@ -5458,24 +5459,27 @@ body.playback-open {
 }
 
 .playback-overlay__glow-blob:nth-child(2) {
-    animation-delay: -7s;
-    animation-duration: 26s;
+    animation-delay: -2.4s;
+    animation-duration: 8.5s;
 }
 
 .playback-overlay__glow-blob:nth-child(3) {
-    animation-delay: -14s;
-    animation-duration: 30s;
+    animation-delay: -4.8s;
+    animation-duration: 10s;
 }
 
 @keyframes glow-drift {
     0% {
         transform: translate(-50%, -50%) scale(1);
     }
-    33% {
-        transform: translate(-42%, -58%) scale(1.12);
+    25% {
+        transform: translate(-22%, -72%) scale(1.35);
     }
-    66% {
-        transform: translate(-58%, -42%) scale(0.94);
+    50% {
+        transform: translate(-78%, -28%) scale(0.78);
+    }
+    75% {
+        transform: translate(-32%, -60%) scale(1.18);
     }
     100% {
         transform: translate(-50%, -50%) scale(1);
@@ -5485,7 +5489,12 @@ body.playback-open {
 .playback-overlay__scrim {
     position: absolute;
     inset: 0;
-    background: var(--bg-overlay);
+    background: linear-gradient(
+        to bottom,
+        var(--bg-overlay) 0%,
+        color-mix(in srgb, var(--bg-overlay) 55%, transparent) 45%,
+        var(--bg-overlay) 100%
+    );
     z-index: 2;
     pointer-events: none;
 }
