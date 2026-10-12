@@ -475,9 +475,9 @@ export function initPlaybackView(ctx) {
         }
 
         const positions = [
-            { x: '20%', y: '25%' },
-            { x: '78%', y: '35%' },
-            { x: '50%', y: '80%' },
+            { x: '18%', y: '20%' },
+            { x: '82%', y: '32%' },
+            { x: '50%', y: '88%' },
         ];
 
         palette.forEach((c, i) => {

@@ -5447,10 +5447,10 @@ body.playback-open .sidebar {
 
 .playback-overlay__glow-blob {
     position: absolute;
-    width: 55vw;
-    height: 55vw;
-    max-width: 640px;
-    max-height: 640px;
+    width: 36vw;
+    height: 36vw;
+    max-width: 460px;
+    max-height: 460px;
     transform: translate(-50%, -50%);
     border-radius: 50%;
     opacity: 0;
@@ -5497,7 +5497,8 @@ body.playback-open .sidebar {
     background: linear-gradient(
         to bottom,
         var(--bg-overlay) 0%,
-        color-mix(in srgb, var(--bg-overlay) 55%, transparent) 45%,
+        color-mix(in srgb, var(--bg-overlay) 80%, transparent) 40%,
+        color-mix(in srgb, var(--bg-overlay) 80%, transparent) 60%,
         var(--bg-overlay) 100%
     );
     z-index: 2;
