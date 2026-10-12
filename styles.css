@@ -424,7 +424,7 @@ body.sidebar-resizing {
 .content-area {
     flex: 1;
     overflow-y: auto;
-    padding: 24px var(--content-pad-x);
+    padding: 0 var(--content-pad-x) 24px;
     position: relative;
 }
 
@@ -8705,10 +8705,6 @@ body.mv-native-fullscreen #mv-web-fullscreen-btn {
         transition: color .3s ease, padding .32s var(--ease), font-size .32s var(--ease);
     }
 
-    body.sidebar-collapsed .sidebar {
-        background: var(--bg-page);
-    }
-
     body.sidebar-collapsed .side-tree {
         display: none;
     }
@@ -8756,5 +8752,33 @@ body.mv-native-fullscreen #mv-web-fullscreen-btn {
 
     body.sidebar-collapsed .side-nav a .side-nav-badge {
         display: none;
+    }
+}
+
+.content-area > .search-view,
+.content-area > .queue-view,
+.content-area > .downloads-view,
+.content-area > .status-view,
+.content-area > .settings-view,
+.content-area > .myfavorites-view {
+    padding-top: 24px;
+}
+
+.search-view > .search-tabs,
+.myfavorites-view > .search-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background-color: var(--bg-page);
+    background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay));
+}
+
+@media (max-width: 900px) {
+    .content-area {
+        padding-top: 0;
+    }
+    .search-view,
+    .myfavorites-view {
+        padding-top: 16px;
     }
 }
