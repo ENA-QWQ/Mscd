@@ -8314,7 +8314,8 @@ body.mv-web-fullscreen.mv-bars-hidden .player-bar {
     pointer-events: none;
 }
 
-body.playback-mode-mv #queue-btn {
+body.playback-mode-mv #queue-btn,
+body.playback-mode-mv #audio-fx-btn {
     display: none;
 }
 
