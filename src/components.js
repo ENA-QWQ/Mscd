@@ -126,6 +126,7 @@ const ICON_PATHS = {
     'arrow-up': '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
     'external-link': '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+    bug: '<path d="M7 8 H17 Q19 8 19 10 V17 Q19 21 15 21 H9 Q5 21 5 17 V10 Q5 8 7 8 Z"/><path d="M8 8 A4 4 0 0 1 16 8"/><path d="M9.5 5 6.5 2.5"/><path d="M14.5 5 17.5 2.5"/><path d="M5 9.5 2.5 7.5"/><path d="M19 9.5 21.5 7.5"/><path d="M5 14.5 H2"/><path d="M19 14.5 h3"/><path d="M5.5 19 2.5 21"/><path d="M18.5 19 21.5 21"/><path d="M12 14 V20.5"/>',
     moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
     monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
     video: '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>',
@@ -777,6 +778,17 @@ export function AccountButton({ account, onConnect, onDisconnect, onOpenAbout })
         onDisconnect();
     });
     sharedAccountMenu.appendChild(disconnectBtn);
+
+    const bugBtn = el('button', { class: 'account-menu__item' },
+        icon('bug'),
+        el('span', { text: '汇报 Bug' })
+    );
+    bugBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sharedAccountMenu.classList.remove('is-open');
+        window.open('https://github.com/ENA-QWQ/Mscd/issues', '_blank', 'noopener,noreferrer');
+    });
+    sharedAccountMenu.appendChild(bugBtn);
 
     const aboutBtn = el('button', { class: 'account-menu__item' },
         icon('info'),
