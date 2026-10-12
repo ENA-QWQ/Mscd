@@ -1012,6 +1012,7 @@ body.playback-open .player-cover {
     background-color: transparent;
     background-image: linear-gradient(var(--fill), var(--fill));
     background-repeat: no-repeat;
+    background-origin: border-box;
     background-position: left bottom;
     background-size: 100% 0%;
     border: none;
@@ -4974,10 +4975,7 @@ body.has-selection .multi-select-bar {
 }
 
 .setting-format-input {
-    border: none;
     border-bottom: 2px solid var(--border-line);
-    background-origin: border-box;
-    background-clip: padding-box;
 }
 
 .ena-dropdown {
@@ -5001,6 +4999,7 @@ body.has-selection .multi-select-bar {
             url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"),
             linear-gradient(var(--fill), var(--fill));
     background-repeat: no-repeat, no-repeat;
+    background-origin: border-box;
     background-position: right 10px center, left bottom;
     background-size: 12px, 100% 0%;
     border: none;
@@ -8756,11 +8755,11 @@ body.mv-native-fullscreen #mv-web-fullscreen-btn {
 }
 
 .content-area > .search-view,
+.content-area > .myfavorites-view,
 .content-area > .queue-view,
 .content-area > .downloads-view,
 .content-area > .status-view,
-.content-area > .settings-view,
-.content-area > .myfavorites-view {
+.content-area > .settings-view {
     padding-top: 24px;
 }
 
@@ -8773,12 +8772,23 @@ body.mv-native-fullscreen #mv-web-fullscreen-btn {
     background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay));
 }
 
+.content-area > .queue-view > .view-toolbar,
+.content-area > .downloads-view > .view-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding-top: 8px;
+    background-color: var(--bg-page);
+    background-image: linear-gradient(var(--bg-overlay), var(--bg-overlay));
+}
+
 @media (max-width: 900px) {
-    .content-area {
-        padding-top: 0;
-    }
-    .search-view,
-    .myfavorites-view {
+    .content-area > .search-view,
+    .content-area > .myfavorites-view,
+    .content-area > .queue-view,
+    .content-area > .downloads-view,
+    .content-area > .status-view,
+    .content-area > .settings-view {
         padding-top: 16px;
     }
 }
