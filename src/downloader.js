@@ -983,8 +983,50 @@ export class Downloader {
             if (typeof raw === 'string') {
                 return raw.trim() ? raw : null;
             }
-            const text = raw.lrc || raw.yrc || '';
-            return text.trim() ? text : null;
+            const baseText = raw.lrc || raw.yrc || '';
+            if (!baseText.trim()) return null;
+
+            const tlyricText = typeof raw.tlyric === 'string' ? raw.tlyric : '';
+            if (!tlyricText.trim()) return baseText;
+
+            const re = /^\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\](.*)$/;
+            const transMap = new Map();
+            for (const line of tlyricText.split(/\r?\n/)) {
+                const s = line.trim();
+                if (!s) continue;
+                const m = s.match(re);
+                if (!m) continue;
+                const min = parseInt(m[1], 10) || 0;
+                const sec = parseInt(m[2], 10) || 0;
+                const frac = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) / 1000 : 0;
+                const text = m[4].trim();
+                if (!text) continue;
+                transMap.set(Math.round((min * 60 + sec + frac) * 100), text);
+            }
+
+            if (!transMap.size) return baseText;
+
+            const out = [];
+            for (const line of baseText.split(/\r?\n/)) {
+                const s = line.trim();
+                if (s.startsWith('{') && s.includes('"t"') && s.includes('"c"')) continue;
+                const m = s.match(re);
+                if (m) {
+                    const min = parseInt(m[1], 10) || 0;
+                    const sec = parseInt(m[2], 10) || 0;
+                    const frac = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) / 1000 : 0;
+                    const key = Math.round((min * 60 + sec + frac) * 100);
+                    const trans = transMap.get(key);
+                    const content = m[4].trim();
+                    if (trans && content) {
+                        const tsPrefix = '[' + m[1] + ':' + m[2] + (m[3] !== undefined ? '.' + m[3] : '') + ']';
+                        out.push(tsPrefix + content + '(' + trans + ')');
+                        continue;
+                    }
+                }
+                out.push(line);
+            }
+            return out.join('\n');
         } catch {}
         return null;
     }
@@ -1954,6 +1996,7 @@ export class Downloader {
 
         const updateTrack = (trackId, patch) => store.updateTaskTrack(taskId, trackId, patch);
 
+        const artifactByTrackId = new Map();
         const tagSem = new Semaphore(tagConcurrency);
         const tagPromises = [];
 
@@ -1986,6 +2029,7 @@ export class Downloader {
                     if (!lrc) throw new Error('暂无歌词');
                     const filename = buildBaseName(song) + '.lrc';
                     const size = new Blob([lrc]).size;
+                    artifactByTrackId.set(trackId, { kind: 'lyric', lyric: lrc, filename });
                     updateTrack(trackId, {
                         status: 'done',
                         bytes: size,
@@ -2052,6 +2096,7 @@ export class Downloader {
                         if (song._withLyric) {
                             lyric = await this.fetchLyricText(song);
                         }
+                        artifactByTrackId.set(trackId, { kind: 'audio', blob: finalBlob, lyric, filename: meta.filename });
                         updateTrack(trackId, {
                             status: 'done',
                             bytes,
@@ -2202,12 +2247,9 @@ export class Downloader {
 
             for (const track of (finalTask?.tracks || [])) {
                 if (track.status === 'done' || track.status === 'tagging') {
-                    const filename = buildBaseName({
-                        title: track.title,
-                        artist: track.artist,
-                        album: track.album,
-                    }) + getExtension(track._quality);
-                    successful.push({ track, filename });
+                    const artifact = artifactByTrackId.get(track.id);
+                    if (!artifact) continue;
+                    successful.push({ track, ...artifact });
                 } else if (track.status === 'error') {
                     errors.push({
                         song: { id: track.songId, title: track.title, artist: track.artist },
@@ -2235,38 +2277,27 @@ export class Downloader {
 
             const zip = new window.JSZip();
             const categoryMode = store.get().settings.batchCategory || 'none';
-            for (const { track, filename } of successful) {
-                let blob = null;
-                try {
-                    const raw = await this.api.resolveAudio(
-                        { id: track.songId },
-                        track._quality
-                    );
-                    if (raw) {
-                        const res = await fetch(proxied(raw));
-                        if (res.ok) {
-                            blob = await res.blob();
-                            const meta = {
-                                ext: getExtension(track._quality),
-                                title: track.title,
-                                artist: track.artist,
-                                album: track.album,
-                                cover: track.pic,
-                            };
-                            blob = await this.writeTags(blob, meta);
-                        }
-                    }
-                } catch {}
+            const lyricMode = store.get().settings.lyricSaveMode || 'same';
+            for (const { track, kind, blob, lyric, filename } of successful) {
+                let folder = '';
+                if (categoryMode === 'artist') {
+                    const a = getMainArtist(track.artist);
+                    if (a) folder = sanitizeFilename(a) + '/';
+                } else if (categoryMode === 'album') {
+                    const al = track.album;
+                    if (al) folder = sanitizeFilename(al) + '/';
+                }
+                if (kind === 'lyric') {
+                    zip.file(folder + filename, lyric);
+                    continue;
+                }
                 if (blob) {
-                    let folder = '';
-                    if (categoryMode === 'artist') {
-                        const a = getMainArtist(track.artist);
-                        if (a) folder = sanitizeFilename(a) + '/';
-                    } else if (categoryMode === 'album') {
-                        const al = track.album;
-                        if (al) folder = sanitizeFilename(al) + '/';
-                    }
                     zip.file(folder + filename, blob);
+                }
+                if (lyric) {
+                    const lrcName = filename.replace(/\.(mp3|flac)$/i, '.lrc');
+                    const lrcFolder = lyricMode === 'separate' ? '歌词/' : folder;
+                    zip.file(lrcFolder + lrcName, lyric);
                 }
             }
 
