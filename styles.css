@@ -5418,6 +5418,11 @@ body.playback-open {
     overflow: hidden;
 }
 
+body.playback-open .sidebar-resizer,
+body.playback-open .sidebar {
+    pointer-events: none;
+}
+
 .playback-overlay__bg {
     position: absolute;
     inset: -40px;
