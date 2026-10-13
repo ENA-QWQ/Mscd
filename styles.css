@@ -285,6 +285,8 @@ body.queue-empty:not(.has-selection) .layout {
     overflow-x: hidden;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    position: relative;
+    z-index: 1;
 }
 
 .sidebar::-webkit-scrollbar {
