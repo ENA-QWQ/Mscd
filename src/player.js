@@ -553,14 +553,14 @@ export class Player {
     }
 
     setMode(mode) {
-        const allowed = ['order', 'shuffle', 'repeat-one', 'repeat-all'];
+        const allowed = ['shuffle', 'repeat-one', 'repeat-all'];
         if (!allowed.includes(mode)) return;
         store.update({ queue: { ...store.get().queue, playMode: mode } });
         store.persist();
     }
 
     cycleMode() {
-        const order = ['order', 'shuffle', 'repeat-one', 'repeat-all'];
+        const order = ['shuffle', 'repeat-one', 'repeat-all'];
         const cur = store.get().queue.playMode;
         const idx = order.indexOf(cur);
         const next = order[(idx + 1) % order.length];

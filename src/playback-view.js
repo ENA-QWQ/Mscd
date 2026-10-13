@@ -82,14 +82,12 @@ export function initPlaybackView(ctx) {
     }
 
     const MOBILE_MODE_ICONS = {
-        order: '<path d="M1 3h8.5v1.2H1zM1 7.4h8.5v1.2H1zM1 11.8h8.5v1.2H1z"/><path d="M11 3.5L15 8l-4 4.5z"/>',
         shuffle: '<path fill-rule="evenodd" d="M0 3.5A.5.5 0 0 1 .5 3H1c2.202 0 3.827 1.24 4.874 2.418.49.552.865 1.102 1.126 1.532.26-.43.636-.98 1.126-1.532C9.173 4.24 10.798 3 13 3v1c-1.798 0-3.173 1.01-4.126 2.082A9.6 9.6 0 0 0 7.556 8a9.6 9.6 0 0 0 1.317 1.918C9.828 10.99 11.204 12 13 12v1c-2.202 0-3.827-1.24-4.874-2.418A10.6 10.6 0 0 1 7 9.05c-.26.43-.636.98-1.126 1.532C4.827 11.76 3.202 13 1 13H.5a.5.5 0 0 1 0-1H1c1.798 0 3.173-1.01 4.126-2.082A9.6 9.6 0 0 0 6.444 8a9.6 9.6 0 0 0-1.317-1.918C4.172 5.01 2.796 4 1 4H.5a.5.5 0 0 1-.5-.5"/><path d="M13 5.466V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m0 9v-3.932a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192"/>',
         'repeat-one': '<path d="M11 4v1.466a.25.25 0 0 0 .41.192l2.36-1.966a.25.25 0 0 0 0-.384l-2.36-1.966a.25.25 0 0 0-.41.192V3H5a5 5 0 0 0-4.48 7.223.5.5 0 0 0 .896-.446A4 4 0 0 1 5 4zm4.48 1.777a.5.5 0 0 0-.896.446A4 4 0 0 1 11 12H5.001v-1.466a.25.25 0 0 0-.41-.192l-2.36 1.966a.25.25 0 0 0 0 .384l2.36 1.966a.25.25 0 0 0 .41-.192V13h6a5 5 0 0 0 4.48-7.223Z"/><path d="M9 5.5a.5.5 0 0 0-.854-.354l-1.75 1.75a.5.5 0 1 0 .708.708L8 6.707V10.5a.5.5 0 0 0 1 0z"/>',
         'repeat-all': '<path d="M11 5.466V4H5a4 4 0 0 0-3.584 5.777.5.5 0 1 1-.896.446A5 5 0 0 1 5 3h6V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m3.81.086a.5.5 0 0 1 .67.225A5 5 0 0 1 11 13H5v1.466a.25.25 0 0 1-.41.192l-2.36-1.966a.25.25 0 0 1 0-.384l2.36-1.966a.25.25 0 0 1 .41.192V12h6a4 4 0 0 0 3.585-5.777.5.5 0 0 1 .225-.67Z"/>',
     };
 
     const MOBILE_MODE_LABELS = {
-        order: '顺序播放',
         shuffle: '随机播放',
         'repeat-one': '单曲循环',
         'repeat-all': '列表循环',
@@ -888,10 +886,10 @@ export function initPlaybackView(ctx) {
     store.subscribe((state) => {
         const q = state.queue;
 
-        const mode = q.playMode || 'order';
-        const label = MOBILE_MODE_LABELS[mode] || '顺序播放';
+        const mode = q.playMode || 'repeat-all';
+        const label = MOBILE_MODE_LABELS[mode] || '列表循环';
         if (mobileModeBtn.title !== label) mobileModeBtn.title = label;
-        const iconHtml = MOBILE_MODE_ICONS[mode] || MOBILE_MODE_ICONS.order;
+        const iconHtml = MOBILE_MODE_ICONS[mode] || MOBILE_MODE_ICONS['repeat-all'];
         if (mobileModeSvg.innerHTML !== iconHtml) mobileModeSvg.innerHTML = iconHtml;
 
         const total = q.duration || 0;

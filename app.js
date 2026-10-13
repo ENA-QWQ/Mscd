@@ -19,7 +19,7 @@ import {
     handleDownloadLyric,
     runWikiForTracks,
 } from './src/views.js';
-import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal, openAboutModal, shouldShowAbout } from './src/components.js';
+import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal, openAboutModal, shouldShowAbout, SongRow } from './src/components.js';
 import { initRouter } from './src/router.js';
 import { initWikiProgressUI, getAllWiki, collectWikiOptions } from './src/wiki.js';
 import { initPlaybackView } from './src/playback-view.js';
@@ -41,7 +41,6 @@ player.audioEffects = audioEffects;
 store.applyTheme();
 
 const MODE_ICONS = {
-    order: '<path d="M1 3h8.5v1.2H1zM1 7.4h8.5v1.2H1zM1 11.8h8.5v1.2H1z"/><path d="M11 3.5L15 8l-4 4.5z"/>',
     shuffle: '<path fill-rule="evenodd" d="M0 3.5A.5.5 0 0 1 .5 3H1c2.202 0 3.827 1.24 4.874 2.418.49.552.865 1.102 1.126 1.532.26-.43.636-.98 1.126-1.532C9.173 4.24 10.798 3 13 3v1c-1.798 0-3.173 1.01-4.126 2.082A9.6 9.6 0 0 0 7.556 8a9.6 9.6 0 0 0 1.317 1.918C9.828 10.99 11.204 12 13 12v1c-2.202 0-3.827-1.24-4.874-2.418A10.6 10.6 0 0 1 7 9.05c-.26.43-.636.98-1.126 1.532C4.827 11.76 3.202 13 1 13H.5a.5.5 0 0 1 0-1H1c1.798 0 3.173-1.01 4.126-2.082A9.6 9.6 0 0 0 6.444 8a9.6 9.6 0 0 0-1.317-1.918C4.172 5.01 2.796 4 1 4H.5a.5.5 0 0 1-.5-.5"/><path d="M13 5.466V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m0 9v-3.932a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192"/>',
     'repeat-one': '<path d="M11 4v1.466a.25.25 0 0 0 .41.192l2.36-1.966a.25.25 0 0 0 0-.384l-2.36-1.966a.25.25 0 0 0-.41.192V3H5a5 5 0 0 0-4.48 7.223.5.5 0 0 0 .896-.446A4 4 0 0 1 5 4zm4.48 1.777a.5.5 0 0 0-.896.446A4 4 0 0 1 11 12H5.001v-1.466a.25.25 0 0 0-.41-.192l-2.36 1.966a.25.25 0 0 0 0 .384l2.36 1.966a.25.25 0 0 0 .41-.192V13h6a5 5 0 0 0 4.48-7.223Z"/><path d="M9 5.5a.5.5 0 0 0-.854-.354l-1.75 1.75a.5.5 0 1 0 .708.708L8 6.707V10.5a.5.5 0 0 0 1 0z"/>',
     'repeat-all': '<path d="M11 5.466V4H5a4 4 0 0 0-3.584 5.777.5.5 0 1 1-.896.446A5 5 0 0 1 5 3h6V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m3.81.086a.5.5 0 0 1 .67.225A5 5 0 0 1 11 13H5v1.466a.25.25 0 0 1-.41.192l-2.36-1.966a.25.25 0 0 1 0-.384l2.36-1.966a.25.25 0 0 1 .41.192V12h6a4 4 0 0 0 3.585-5.777.5.5 0 0 1 .225-.67Z"/>',
@@ -665,7 +664,6 @@ function bindPlayerBar() {
     }
 
     const modeLabels = {
-        order: '顺序播放',
         shuffle: '随机播放',
         'repeat-one': '单曲循环',
         'repeat-all': '列表循环',
@@ -817,7 +815,7 @@ function bindPlayerBar() {
     });
 
     queueBtn.addEventListener('click', () => {
-        store.update({ view: 'queue' });
+        store.toggleQueuePanel();
     });
 
     const audioFxBtn = document.getElementById('audio-fx-btn');
@@ -1226,10 +1224,10 @@ function bindPlayerBar() {
             playBtn.title = '播放';
         }
 
-        const mode = q.playMode || 'order';
-        modeBtn.title = modeLabels[mode] || '顺序播放';
+        const mode = q.playMode || 'repeat-all';
+        modeBtn.title = modeLabels[mode] || '列表循环';
         if (modeIconEl) {
-            modeIconEl.innerHTML = MODE_ICONS[mode] || MODE_ICONS.order;
+            modeIconEl.innerHTML = MODE_ICONS[mode] || MODE_ICONS['repeat-all'];
         }
 
         if (document.activeElement !== volumeSlider) {
@@ -1873,6 +1871,318 @@ function bindSelectionSync() {
     });
 }
 
+function initQueuePanel(ctx) {
+    const panel = document.getElementById('queue-panel');
+    if (!panel) return;
+
+    const scrim = document.getElementById('queue-panel-scrim');
+    const closeBtn = document.getElementById('queue-panel-close');
+    const clearBtn = document.getElementById('queue-panel-clear');
+    const body = document.getElementById('queue-panel-body');
+    const modeBtn = document.getElementById('queue-panel-mode');
+    const openViewBtn = document.getElementById('queue-panel-open-view');
+    if (!scrim || !closeBtn || !clearBtn || !body) return;
+
+    const PANEL_MODE_ICONS = {
+        shuffle: '<path fill-rule="evenodd" d="M0 3.5A.5.5 0 0 1 .5 3H1c2.202 0 3.827 1.24 4.874 2.418.49.552.865 1.102 1.126 1.532.26-.43.636-.98 1.126-1.532C9.173 4.24 10.798 3 13 3v1c-1.798 0-3.173 1.01-4.126 2.082A9.6 9.6 0 0 0 7.556 8a9.6 9.6 0 0 0 1.317 1.918C9.828 10.99 11.204 12 13 12v1c-2.202 0-3.827-1.24-4.874-2.418A10.6 10.6 0 0 1 7 9.05c-.26.43-.636.98-1.126 1.532C4.827 11.76 3.202 13 1 13H.5a.5.5 0 0 1 0-1H1c1.798 0 3.173-1.01 4.126-2.082A9.6 9.6 0 0 0 6.444 8a9.6 9.6 0 0 0-1.317-1.918C4.172 5.01 2.796 4 1 4H.5a.5.5 0 0 1-.5-.5"/><path d="M13 5.466V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m0 9v-3.932a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192"/>',
+        'repeat-one': '<path d="M11 4v1.466a.25.25 0 0 0 .41.192l2.36-1.966a.25.25 0 0 0 0-.384l-2.36-1.966a.25.25 0 0 0-.41.192V3H5a5 5 0 0 0-4.48 7.223.5.5 0 0 0 .896-.446A4 4 0 0 1 5 4zm4.48 1.777a.5.5 0 0 0-.896.446A4 4 0 0 1 11 12H5.001v-1.466a.25.25 0 0 0-.41-.192l-2.36 1.966a.25.25 0 0 0 0 .384l2.36 1.966a.25.25 0 0 0 .41-.192V13h6a5 5 0 0 0 4.48-7.223Z"/><path d="M9 5.5a.5.5 0 0 0-.854-.354l-1.75 1.75a.5.5 0 1 0 .708.708L8 6.707V10.5a.5.5 0 0 0 1 0z"/>',
+        'repeat-all': '<path d="M11 5.466V4H5a4 4 0 0 0-3.584 5.777.5.5 0 1 1-.896.446A5 5 0 0 1 5 3h6V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m3.81.086a.5.5 0 0 1 .67.225A5 5 0 0 1 11 13H5v1.466a.25.25 0 0 1-.41.192l-2.36-1.966a.25.25 0 0 1 0-.384l2.36-1.966a.25.25 0 0 1 .41.192V12h6a4 4 0 0 0 3.585-5.777.5.5 0 0 1 .225-.67Z"/>',
+    };
+    const PANEL_MODE_LABELS = {
+        shuffle: '随机播放',
+        'repeat-one': '单曲循环',
+        'repeat-all': '列表循环',
+    };
+
+    function syncModeButton() {
+        if (!modeBtn) return;
+        const mode = store.get().queue.playMode || 'repeat-all';
+        const svg = modeBtn.querySelector('svg');
+        const label = PANEL_MODE_LABELS[mode] || '列表循环';
+        modeBtn.title = label;
+        if (svg) {
+            const html = PANEL_MODE_ICONS[mode] || PANEL_MODE_ICONS['repeat-all'];
+            if (svg.innerHTML !== html) svg.innerHTML = html;
+        }
+    }
+
+    if (modeBtn) {
+        modeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const mode = player.cycleMode();
+            Toast('已切换到' + (PANEL_MODE_LABELS[mode] || mode), 'info', 1400);
+            syncModeButton();
+        });
+    }
+
+    if (openViewBtn) {
+        openViewBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            store.setQueuePanelOpen(false);
+            store.update({ view: 'queue' });
+        });
+    }
+
+    body.innerHTML = '';
+
+    const list = document.createElement('div');
+    list.className = 'song-list queue-panel__list';
+    body.appendChild(list);
+
+    const emptyEl = document.createElement('div');
+    emptyEl.className = 'queue-panel__empty';
+    emptyEl.textContent = '播放队列为空';
+
+    function indexOfSong(song) {
+        const tracks = store.get().queue.tracks;
+        if (!song) return -1;
+        if (song.id != null) {
+            for (let i = 0; i < tracks.length; i++) {
+                if (tracks[i] && String(tracks[i].id) === String(song.id)) return i;
+            }
+        }
+        return tracks.indexOf(song);
+    }
+
+    function removeBySong(song) {
+        const q = store.get().queue;
+        const index = indexOfSong(song);
+        if (index < 0) return;
+
+        const tracks = q.tracks.slice();
+        const wasCurrent = index === q.currentIndex;
+        tracks.splice(index, 1);
+
+        if (!tracks.length) {
+            player.audio.pause();
+            player.audio.removeAttribute('src');
+            store.update({
+                queue: { ...q, tracks: [], currentIndex: -1, isPlaying: false, currentTime: 0, duration: 0 },
+            });
+            store.persist();
+            store.setQueuePanelOpen(false);
+            return;
+        }
+
+        if (wasCurrent) {
+            const next = Math.min(index, tracks.length - 1);
+            store.update({ queue: { ...q, tracks } });
+            player.playAt(next);
+            return;
+        }
+
+        const currentIndex = index < q.currentIndex ? q.currentIndex - 1 : q.currentIndex;
+        store.update({ queue: { ...q, tracks, currentIndex } });
+        store.persist();
+    }
+
+    function buildRow(song, index) {
+        const row = document.createElement('div');
+        row.className = 'song-row queue-panel__row';
+        row.dataset.id = song && song.id != null ? String(song.id) : '';
+        row.dataset.index = String(index);
+        row.__song = song;
+
+        const select = document.createElement('label');
+        select.className = 'song-select ena-checkbox';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        const box = document.createElement('span');
+        box.className = 'box';
+        select.appendChild(input);
+        select.appendChild(box);
+        select.addEventListener('click', (e) => e.stopPropagation());
+        input.addEventListener('change', () => store.toggleSelection(song));
+        row.appendChild(select);
+
+        const info = document.createElement('div');
+        info.className = 'song-info';
+
+        const title = document.createElement('span');
+        title.className = 'song-title';
+        title.textContent = (song && song.title) || '未知歌曲';
+        info.appendChild(title);
+
+        const artist = document.createElement('span');
+        artist.className = 'song-artist';
+        artist.textContent = (song && song.artist) || '';
+        info.appendChild(artist);
+
+        row.appendChild(info);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'song-action song-action--remove';
+        removeBtn.title = '移除';
+        removeBtn.type = 'button';
+        removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeBySong(song);
+        });
+        row.appendChild(removeBtn);
+
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('.song-select')) return;
+            if (e.target.closest('.song-action')) return;
+            if (document.body.classList.contains('has-selection')) {
+                store.toggleSelection(song);
+                return;
+            }
+            const idx = indexOfSong(song);
+            if (idx >= 0) player.playAt(idx);
+        });
+
+        return row;
+    }
+
+    function applyRowStates() {
+        const q = store.get().queue;
+        const rows = list.children;
+        const curId = q.currentIndex >= 0 && q.tracks[q.currentIndex] && q.tracks[q.currentIndex].id != null
+            ? String(q.tracks[q.currentIndex].id)
+            : '';
+        const sel = Array.isArray(store.get().selection) ? store.get().selection : [];
+        const selIds = new Set();
+        for (const s of sel) if (s && s.id != null) selIds.add(String(s.id));
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const id = row.dataset.id;
+            const isCurrent = curId !== '' && id === curId;
+            row.classList.toggle('is-current', isCurrent);
+            row.classList.toggle('is-playing', isCurrent && q.isPlaying);
+            const isSelected = id !== '' && selIds.has(id);
+            row.classList.toggle('is-selected', isSelected);
+            const input = row.querySelector('.song-select input');
+            if (input && input.checked !== isSelected) input.checked = isSelected;
+        }
+    }
+
+    let buildToken = 0;
+    syncModeButton();
+
+    let lastOpen = null;
+    let lastTracksRef = null;
+    let lastIndex = -2;
+    let lastPlaying = null;
+    let lastSelectionRef = null;
+
+    function rebuild(tracks) {
+        const token = ++buildToken;
+        list.innerHTML = '';
+
+        if (!tracks.length) {
+            if (!body.contains(emptyEl)) body.appendChild(emptyEl);
+            return;
+        }
+        if (emptyEl.parentNode === body) body.removeChild(emptyEl);
+
+        let i = 0;
+        const CHUNK_MS = 8;
+
+        function nextChunk(deadline) {
+            if (token !== buildToken) return;
+            const frag = document.createDocumentFragment();
+            const start = performance.now();
+            const timeLimit = deadline && typeof deadline.timeRemaining === 'function'
+                ? Math.max(CHUNK_MS, deadline.timeRemaining())
+                : CHUNK_MS;
+
+            while (i < tracks.length) {
+                frag.appendChild(buildRow(tracks[i], i));
+                i++;
+                if (performance.now() - start >= timeLimit) break;
+            }
+
+            list.appendChild(frag);
+
+            if (i < tracks.length) {
+                if (typeof window.requestIdleCallback === 'function') {
+                    window.requestIdleCallback(nextChunk, { timeout: 40 });
+                } else {
+                    setTimeout(() => nextChunk(null), 0);
+                }
+            } else {
+                applyRowStates();
+            }
+        }
+
+        nextChunk(null);
+    }
+
+    closeBtn.addEventListener('click', () => store.setQueuePanelOpen(false));
+    scrim.addEventListener('click', () => store.setQueuePanelOpen(false));
+
+    clearBtn.addEventListener('click', async () => {
+        const ok = await confirmDialog('确定清空播放队列吗？');
+        if (!ok) return;
+        const q = store.get().queue;
+        player.audio.pause();
+        player.audio.removeAttribute('src');
+        store.update({
+            queue: { ...q, tracks: [], currentIndex: -1, isPlaying: false, currentTime: 0, duration: 0 },
+        });
+        store.persist();
+        store.setQueuePanelOpen(false);
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (!store.get().queuePanelOpen) return;
+        store.setQueuePanelOpen(false);
+    });
+
+    store.subscribe((state) => {
+        const isOpen = !!state.queuePanelOpen;
+
+        if (isOpen !== lastOpen) {
+            lastOpen = isOpen;
+            panel.classList.toggle('is-open', isOpen);
+            document.body.classList.toggle('queue-panel-open', isOpen);
+
+            if (isOpen) {
+                lastTracksRef = null;
+                lastIndex = -2;
+                lastPlaying = null;
+                lastSelectionRef = null;
+                const q = store.get().queue;
+                lastTracksRef = q.tracks;
+                lastIndex = q.currentIndex;
+                lastPlaying = q.isPlaying;
+                lastSelectionRef = state.selection;
+                rebuild(q.tracks);
+            }
+            return;
+        }
+
+        if (!isOpen) return;
+
+        syncModeButton();
+
+        const q = state.queue;
+        const tracksChanged = q.tracks !== lastTracksRef;
+        const indexChanged = q.currentIndex !== lastIndex;
+        const playingChanged = q.isPlaying !== lastPlaying;
+        const selectionChanged = state.selection !== lastSelectionRef;
+
+        if (!tracksChanged && !indexChanged && !playingChanged && !selectionChanged) return;
+
+        if (tracksChanged) {
+            lastTracksRef = q.tracks;
+            lastIndex = q.currentIndex;
+            lastPlaying = q.isPlaying;
+            lastSelectionRef = state.selection;
+            rebuild(q.tracks);
+            return;
+        }
+
+        lastIndex = q.currentIndex;
+        lastPlaying = q.isPlaying;
+        lastSelectionRef = state.selection;
+        applyRowStates();
+    });
+}
+
 function bindQueueVisibility() {
     store.subscribe((state) => {
         document.body.classList.toggle('queue-empty', state.queue.tracks.length === 0);
@@ -1979,6 +2289,7 @@ bindRouter();
 initSidebarTrees(ctx);
 initGlobalListGestures(ctx);
 initWikiProgressUI(store);
+initQueuePanel(ctx);
 
 (function scheduleAboutAutoShow() {
     if (!shouldShowAbout(config)) return;

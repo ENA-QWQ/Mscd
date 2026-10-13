@@ -51,7 +51,7 @@ function createInitialState() {
         queue: {
             tracks: [],
             currentIndex: -1,
-            playMode: 'order',
+            playMode: 'repeat-all',
             isPlaying: false,
             currentTime: 0,
             duration: 0,
@@ -76,6 +76,7 @@ function createInitialState() {
 
         playbackOpen: false,
         playbackMode: 'song',
+        queuePanelOpen: false,
 
         mvState: {
             mvid: '',
@@ -226,7 +227,7 @@ function loadPersisted(state) {
                 ...state.queue,
                 tracks: Array.isArray(saved.queue.tracks) ? saved.queue.tracks : [],
                 currentIndex: Number.isInteger(saved.queue.currentIndex) ? saved.queue.currentIndex : -1,
-                playMode: saved.queue.playMode || 'order',
+                playMode: (saved.queue.playMode && saved.queue.playMode !== 'order') ? saved.queue.playMode : 'repeat-all',
                 volume: typeof saved.queue.volume === 'number' ? saved.queue.volume : 0.7,
                 currentTime: typeof saved.queue.currentTime === 'number' ? saved.queue.currentTime : 0,
                 duration: typeof saved.queue.duration === 'number' ? saved.queue.duration : 0,
@@ -652,6 +653,17 @@ class Store {
         this.persist();
         this.applyTheme();
         this.notify();
+    }
+
+    setQueuePanelOpen(open) {
+        const next = !!open;
+        if (this.state.queuePanelOpen === next) return;
+        this.state.queuePanelOpen = next;
+        this.notify();
+    }
+
+    toggleQueuePanel() {
+        this.setQueuePanelOpen(!this.state.queuePanelOpen);
     }
 }
 

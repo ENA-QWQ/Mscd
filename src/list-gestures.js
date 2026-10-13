@@ -241,7 +241,11 @@ function onGlobalPointerDown(e) {
     let canReorder = () => false;
     let canDragOut = false;
 
-    if (listEl.closest('.queue-view')) {
+    if (listEl.closest('.queue-panel__body')) {
+        kind = 'queue';
+        canReorder = () => true;
+        canDragOut = false;
+    } else if (listEl.closest('.queue-view')) {
         kind = 'queue';
         canReorder = () => {
             const state = store.get();
@@ -597,7 +601,8 @@ function enterDrag(e) {
     const zoom = getZoom();
     const sourceRect = sourceRow.getBoundingClientRect();
 
-    const PLACEHOLDER_GAP = 4;
+    const isPanelList = listEl.classList.contains('queue-panel__list');
+    const PLACEHOLDER_GAP = isPanelList ? 0 : 4;
     let totalHeight = 0;
     for (let i = 0; i < groupRows.length; i++) {
         totalHeight += groupRows[i].getBoundingClientRect().height / zoom;
@@ -609,6 +614,7 @@ function enterDrag(e) {
     placeholder.className = 'list-drag-placeholder';
     placeholder.dataset.id = PLACEHOLDER_ID;
     placeholder.style.height = totalHeight + 'px';
+    if (isPanelList) placeholder.style.gap = '0';
 
     for (const r of groupRows) {
         placeholder.appendChild(cloneRowForPreview(r));
@@ -787,8 +793,14 @@ function finishDrag() {
 
     const parentEl = listEl.parentElement;
 
-    if (kind === 'queue') store.moveTracksInQueue(dragIndices, dragToIndex);
-    else if (kind === 'downloads') store.moveTracksInDownloads(dragIndices, dragToIndex);
+    if (kind === 'queue') {
+        store.moveTracksInQueue(dragIndices, dragToIndex);
+        if (dragIndices.length > 1 || (store.get().selection || []).length > 1) {
+            store.clearSelection();
+        }
+    } else if (kind === 'downloads') {
+        store.moveTracksInDownloads(dragIndices, dragToIndex);
+    }
 
     requestAnimationFrame(() => {
         if (!parentEl) return;
