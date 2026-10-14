@@ -9310,3 +9310,44 @@ body.queue-panel-open {
 .song-list--album-tracks .song-row.is-playing .song-title {
     color: var(--fill);
 }
+
+
+.queue-panel__body .queue-panel__row .song-playing-bars.__queue_panel_bars__ {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    width: 14px;
+    height: 14px;
+    opacity: 0;
+    transition: opacity .25s ease;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.queue-panel__body .queue-panel__row.is-playing .song-playing-bars.__queue_panel_bars__ {
+    opacity: 1;
+}
+
+.queue-panel__body .queue-panel__row .song-playing-bars.__queue_panel_bars__ span {
+    display: block;
+    width: 2px;
+    height: 100%;
+    background: var(--waveform);
+    transform-origin: bottom;
+    animation: bars-wave 1s ease-in-out infinite;
+}
+
+.queue-panel__body .queue-panel__row .song-playing-bars.__queue_panel_bars__ span:nth-child(1) { animation-delay: -0.45s; }
+.queue-panel__body .queue-panel__row .song-playing-bars.__queue_panel_bars__ span:nth-child(2) { animation-delay: -0.3s; }
+.queue-panel__body .queue-panel__row .song-playing-bars.__queue_panel_bars__ span:nth-child(3) { animation-delay: -0.15s; }
+.queue-panel__body .queue-panel__row .song-playing-bars.__queue_panel_bars__ span:nth-child(4) { animation-delay: 0s; }
+
+.queue-panel__body .queue-panel__row.is-playing .song-select {
+    opacity: 0;
+    pointer-events: none;
+}

@@ -1929,11 +1929,37 @@ function initQueuePanel(ctx) {
         });
     }
 
+    const locateBtn = document.getElementById('queue-panel-locate');
+    if (locateBtn) {
+        locateBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            locateCurrentInPanel();
+        });
+    }
+
     body.innerHTML = '';
 
     const list = document.createElement('div');
     list.className = 'song-list queue-panel__list';
     body.appendChild(list);
+    function locateCurrentInPanel() {
+        const q = store.get().queue;
+        const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+        if (!song) return;
+        const id = String(song.id);
+        let attempts = 0;
+        const find = () => {
+            const rows = list.children;
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i].dataset && rows[i].dataset.id === id) {
+                    rows[i].scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+                    return;
+                }
+            }
+            if (attempts++ < 20) setTimeout(find, 50);
+        };
+        find();
+    }
 
     const emptyEl = document.createElement('div');
     emptyEl.className = 'queue-panel__empty';
@@ -1998,6 +2024,10 @@ function initQueuePanel(ctx) {
         select.appendChild(input);
         select.appendChild(box);
         select.addEventListener('click', (e) => e.stopPropagation());
+        const bars = document.createElement('div');
+        bars.className = 'song-playing-bars __queue_panel_bars__';
+        for (let k = 0; k < 4; k++) bars.appendChild(document.createElement('span'));
+        row.appendChild(bars);
         input.addEventListener('change', () => store.toggleSelection(song));
         row.appendChild(select);
 

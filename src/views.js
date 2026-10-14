@@ -1911,6 +1911,41 @@ export function QueueView(ctx) {
     const root = el('div', { class: 'queue-view' });
 
     const toolbar = el('div', { class: 'view-toolbar' });
+    function locateQueueCurrent() {
+        const cur = store.get().queue;
+        const song = cur.currentIndex >= 0 ? cur.tracks[cur.currentIndex] : null;
+        if (!song) return;
+        const id = String(song.id);
+
+        const find = () => {
+            const rows = songListEl.querySelectorAll('.song-row');
+            for (const row of rows) {
+                if (row.dataset.id === id) {
+                    row.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        if (find()) return;
+
+        const perPage = store.get().settings.perPage;
+        const filtered = store.get().filteredTracks || [];
+        let pos = -1;
+        for (let i = 0; i < filtered.length; i++) {
+            if (String(filtered[i].id) === id) { pos = i; break; }
+        }
+        if (pos < 0) return;
+        const targetPage = Math.floor(pos / perPage) + 1;
+        store.update({ queuePage: targetPage });
+        let attempts = 0;
+        const retry = () => {
+            if (find()) return;
+            if (attempts++ < 20) setTimeout(retry, 50);
+        };
+        setTimeout(retry, 60);
+    }
 
     const searchWrap = el('div', { class: 'view-search' });
     const searchInputWrap = el('div', { class: 'ena-input-wrap' });
@@ -1929,6 +1964,10 @@ export function QueueView(ctx) {
     searchInputWrap.appendChild(searchInput);
     searchWrap.appendChild(searchInputWrap);
     toolbar.appendChild(searchWrap);
+
+    const locateBtn = el('button', { class: 'ena-btn ena-btn--sm' }, icon('locate'), el('span', { text: '定位' }));
+    locateBtn.addEventListener('click', () => locateQueueCurrent());
+    toolbar.appendChild(locateBtn);
 
     const filterBtn = el('button', { class: 'ena-btn ena-btn--sm' }, icon('filter'), el('span', { text: '筛选' }));
     filterBtn.addEventListener('click', () => {
