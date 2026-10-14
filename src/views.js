@@ -4214,18 +4214,6 @@ export function SettingsView(ctx) {
         lyricGroup.appendChild(lyricOptions);
         root.appendChild(lyricGroup);
 
-        const repoGroup = el('div', { class: 'setting-group setting-group--last' });
-        repoGroup.appendChild(el('div', { class: 'setting-label', text: '项目地址' }));
-        const repoLink = el('a', {
-            class: 'setting-repo-link',
-            href: 'https://github.com/ENA-QWQ/cloudmusic_downloader',
-            target: '_blank',
-            rel: 'noopener noreferrer',
-            text: 'https://github.com/ENA-QWQ/cloudmusic_downloader',
-        });
-        repoGroup.appendChild(repoLink);
-        root.appendChild(repoGroup);
-
         sync();
     }
 
