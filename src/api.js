@@ -1,4 +1,19 @@
 import { config } from '../config.js';
+import { store } from './store.js';
+
+function applyApiProxy(url) {
+    if (!url) return url;
+    if (url.startsWith(config.proxy)) return url;
+    let settings;
+    try {
+        settings = store.get().settings;
+    } catch {
+        return url;
+    }
+    if (!settings || !settings.apiProxy) return url;
+    if (!config.proxy) return url;
+    return config.proxy + encodeURIComponent(url);
+}
 
 function withTimeout(promise, ms) {
     return Promise.race([
@@ -12,7 +27,7 @@ function withTimeout(promise, ms) {
 async function fetchWithRetry(url, options = {}, retryConfig = config.retry) {
     const { maxRetries, baseDelay } = retryConfig;
     let lastError;
-    url = upgradeToHttps(url);
+    url = applyApiProxy(upgradeToHttps(url));
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -157,7 +172,7 @@ class MetingAdapter {
     }
 
     async songUrl(id, br) {
-        const url = upgradeToHttps(this.buildUrl({ server: 'netease', type: 'url', id, br }));
+        const url = applyApiProxy(upgradeToHttps(this.buildUrl({ server: 'netease', type: 'url', id, br })));
         const response = await fetch(url, {
             method: 'GET',
             redirect: 'follow',
@@ -424,12 +439,12 @@ class NeteaseAdapter {
 
     async lyricNew(id) {
         try {
-            const url = this.buildUrl('/lyric/new', { id });
+            const url = applyApiProxy(upgradeToHttps(this.buildUrl('/lyric/new', { id })));
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), 30000);
             let response;
             try {
-                response = await fetch(upgradeToHttps(url), {
+                response = await fetch(url, {
                     signal: controller.signal,
                     redirect: 'follow',
                 });

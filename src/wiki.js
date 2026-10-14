@@ -1,3 +1,20 @@
+import { config } from '../config.js';
+import { store } from './store.js';
+
+function applyApiProxy(url) {
+    if (!url) return url;
+    if (url.startsWith(config.proxy)) return url;
+    let settings;
+    try {
+        settings = store.get().settings;
+    } catch {
+        return url;
+    }
+    if (!settings || !settings.apiProxy) return url;
+    if (!config.proxy) return url;
+    return config.proxy + encodeURIComponent(url);
+}
+
 const DB_NAME = 'mscd-wiki';
 const DB_VERSION = 2;
 const STORE_NAME = 'songWiki';
@@ -157,7 +174,8 @@ async function fetchPublishDates(ids, apiBase) {
     const result = new Map();
     for (let i = 0; i < ids.length; i += BATCH_SIZE) {
         const batch = ids.slice(i, i + BATCH_SIZE);
-        const url = `${apiBase}?ids=${batch.join(',')}`;
+        const baseUrl = `${apiBase}?ids=${batch.join(',')}`;
+        const url = applyApiProxy(baseUrl);
         try {
             const res = await fetch(url, { headers: { Accept: 'application/json' } });
             if (!res.ok) continue;
@@ -212,7 +230,11 @@ export class WikiFetcher {
                 resolve(e.data.results || []);
             };
             worker.addEventListener('message', handler);
-            worker.postMessage({ type: 'batch', ids, token, apiBase: this.apiBase });
+            let proxyPrefix = '';
+            try {
+                if (store.get().settings.apiProxy) proxyPrefix = config.proxy || '';
+            } catch {}
+            worker.postMessage({ type: 'batch', ids, token, apiBase: this.apiBase, proxyPrefix });
         });
     }
 

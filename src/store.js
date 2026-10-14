@@ -121,6 +121,7 @@ function createInitialState() {
             withLyric: false,
             playProxy: false,
             downloadProxy: false,
+            apiProxy: false,
             downloadMode: 'blob',
             downloadDirName: '',
             downloadThreads: 8,

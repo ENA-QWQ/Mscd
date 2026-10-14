@@ -76,8 +76,9 @@ function parseWiki(json) {
     return out;
 }
 
-async function fetchOne(id, apiBase) {
-    const url = `${apiBase}?id=${encodeURIComponent(id)}`;
+async function fetchOne(id, apiBase, proxyPrefix) {
+    let url = `${apiBase}?id=${encodeURIComponent(id)}`;
+    if (proxyPrefix) url = proxyPrefix + encodeURIComponent(url);
     try {
         const res = await fetch(url, { headers: { Accept: 'application/json' } });
         if (!res.ok) return { id, error: `HTTP ${res.status}` };
@@ -105,12 +106,12 @@ async function runWithConcurrency(tasks, concurrency) {
 self.addEventListener('message', async (e) => {
     const msg = e.data || {};
     if (msg.type !== 'batch') return;
-    const { ids, token, apiBase } = msg;
+    const { ids, token, apiBase, proxyPrefix } = msg;
     if (!Array.isArray(ids) || !ids.length) {
         self.postMessage({ type: 'batch-done', token, results: [] });
         return;
     }
-    const tasks = ids.map((id) => () => fetchOne(id, apiBase));
+    const tasks = ids.map((id) => () => fetchOne(id, apiBase, proxyPrefix));
     const results = await runWithConcurrency(tasks, CONCURRENCY);
     self.postMessage({ type: 'batch-done', token, results });
 });

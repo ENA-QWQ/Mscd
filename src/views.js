@@ -2646,11 +2646,27 @@ export function DownloadsView(ctx) {
         const quality = song._quality ?? store.get().settings.downloadQuality;
         const mode = store.get().settings.downloadMode;
 
+        let expanded;
         try {
-            if (mode === 'stream') {
-                await downloader.downloadToDisk(song, quality);
+            expanded = downloader.expandDownloadEntries([song]);
+        } catch {
+            expanded = [song];
+        }
+
+        try {
+            if (expanded.length >= 2) {
+                if (mode === 'stream') {
+                    await downloader.downloadBatchToDisk([song], quality);
+                } else {
+                    await downloader.downloadAsZip([song], quality);
+                }
             } else {
-                await downloader.downloadOne(song, quality);
+                const single = expanded[0] || song;
+                if (mode === 'stream') {
+                    await downloader.downloadToDisk(single, quality);
+                } else {
+                    await downloader.downloadOne(single, quality);
+                }
             }
             Toast(`已下载：${song.title}`, 'success', 1800);
         } catch (err) {
@@ -3759,6 +3775,7 @@ export function SettingsView(ctx) {
     let perPageRange = null;
     let playProxyInput = null;
     let downloadProxyInput = null;
+    let apiProxyInput = null;
     let downloadDirNameEl = null;
     let downloadThreadsLabel = null;
     let downloadThreadsRange = null;
@@ -3928,6 +3945,15 @@ export function SettingsView(ctx) {
         const proxyGroup = el('div', { class: 'setting-group' });
         proxyGroup.appendChild(el('div', { class: 'setting-label', text: '代理设置' }));
 
+        const apiProxyCb = buildCheckbox({
+            label: '接口请求使用代理',
+            onChange: (v) => {
+                store.update({ settings: { ...store.get().settings, apiProxy: v } });
+                store.persist();
+            },
+        });
+        apiProxyInput = apiProxyCb.input;
+
         const playProxyCb = buildCheckbox({
             label: '播放使用代理',
             onChange: (v) => {
@@ -3947,6 +3973,7 @@ export function SettingsView(ctx) {
         downloadProxyInput = downloadProxyCb.input;
 
         proxyGroup.appendChild(el('div', { class: 'setting-checkboxes' },
+            apiProxyCb.node,
             playProxyCb.node,
             downloadProxyCb.node
         ));
@@ -4223,6 +4250,10 @@ export function SettingsView(ctx) {
             if (input.checked !== want) input.checked = want;
         }
 
+        if (apiProxyInput) {
+            const want = !!settings.apiProxy;
+            if (apiProxyInput.checked !== want) apiProxyInput.checked = want;
+        }
         if (playProxyInput) {
             const want = !!settings.playProxy;
             if (playProxyInput.checked !== want) playProxyInput.checked = want;

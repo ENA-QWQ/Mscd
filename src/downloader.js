@@ -1,6 +1,20 @@
 import { config } from '../config.js';
 import { store } from './store.js';
 
+function applyApiProxy(url) {
+    if (!url) return url;
+    if (url.startsWith(config.proxy)) return url;
+    let settings;
+    try {
+        settings = store.get().settings;
+    } catch {
+        return url;
+    }
+    if (!settings || !settings.apiProxy) return url;
+    if (!config.proxy) return url;
+    return config.proxy + encodeURIComponent(url);
+}
+
 const FS_DB_NAME = 'mscd-fs';
 const FS_STORE_NAME = 'handles';
 const FS_DIR_KEY = 'download-dir';
@@ -150,7 +164,8 @@ async function fetchWikiFields(id) {
     const promise = (async () => {
         const out = { genre: '', bpm: 0, publishDate: '', language: '' };
         try {
-            const url = 'https://zm.wwoyun.cn/song/wiki/summary?id=' + encodeURIComponent(key);
+            const baseUrl = 'https://zm.wwoyun.cn/song/wiki/summary?id=' + encodeURIComponent(key);
+            const url = applyApiProxy(baseUrl);
             const res = await fetch(url, { headers: { Accept: 'application/json' } });
             if (res.ok) {
                 const json = await res.json();
