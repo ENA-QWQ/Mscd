@@ -40,6 +40,22 @@ function pickTextColor(hex) {
     return lum > 0.6 ? '#1f2937' : '#ffffff';
 }
 
+function songContentBadges(song) {
+    if (!song) return [];
+    const badges = [];
+    const skipAudio = !!song._skipAudio;
+    const lyricOnly = !!song._lyricOnly;
+    const wantLyric = !!song._withLyric || lyricOnly;
+    const dlMv = !!song._mvDownload;
+    const mvStr = song.mv == null ? '' : String(song.mv);
+    const hasMv = mvStr !== '' && mvStr !== '0';
+
+    if (!skipAudio && !lyricOnly) badges.push('music');
+    if (dlMv && hasMv) badges.push('video');
+    if (wantLyric) badges.push('lyric');
+    return badges;
+}
+
 function matchSearch(song, keyword) {
     if (!keyword) return true;
     const q = keyword.toLowerCase();
@@ -103,6 +119,9 @@ function openDownloadSettingsModal(ctx, options) {
         initialWithLyric,
         initialLyricOnly = false,
         showLyricOnly = false,
+        showMvOptions = false,
+        initialWithMv = false,
+        initialOnlyMv = false,
         confirmText = '确认',
         onConfirm,
     } = options;
@@ -110,6 +129,8 @@ function openDownloadSettingsModal(ctx, options) {
     let selectedQuality = initialQuality ?? config.quality.download;
     let withLyric = !!initialWithLyric;
     let lyricOnly = !!initialLyricOnly;
+    let withMv = !!initialWithMv;
+    let onlyMv = !!initialOnlyMv;
 
     const radioName = `quality-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const optionsEl = el('div', { class: 'ena-radio-group' });
@@ -153,13 +174,48 @@ function openDownloadSettingsModal(ctx, options) {
         el('span', { text: '仅下载歌词' })
     );
 
+    let mvWithInput = null;
+    let mvWithLabel = null;
+    let mvOnlyInput = null;
+    let mvOnlyLabel = null;
+
+    if (showMvOptions) {
+        mvWithInput = el('input', { type: 'checkbox' });
+        if (withMv) mvWithInput.checked = true;
+        mvWithInput.addEventListener('change', () => { withMv = mvWithInput.checked; });
+        mvWithLabel = el('label', { class: 'ena-checkbox' },
+            mvWithInput,
+            el('span', { class: 'box' }),
+            el('span', { text: '同时下载 MV' })
+        );
+
+        mvOnlyInput = el('input', { type: 'checkbox' });
+        if (onlyMv) mvOnlyInput.checked = true;
+        mvOnlyInput.addEventListener('change', () => {
+            onlyMv = mvOnlyInput.checked;
+            syncDisabled();
+        });
+        mvOnlyLabel = el('label', { class: 'ena-checkbox' },
+            mvOnlyInput,
+            el('span', { class: 'box' }),
+            el('span', { text: '仅下载 MV' })
+        );
+    }
+
     function syncDisabled() {
+        const audioDisabled = lyricOnly || onlyMv;
         for (const input of optionsEl.querySelectorAll('input')) {
-            input.disabled = lyricOnly;
+            input.disabled = audioDisabled;
         }
-        checkboxInput.disabled = lyricOnly;
-        optionsEl.classList.toggle('is-disabled', lyricOnly);
-        checkboxLabel.classList.toggle('is-disabled', lyricOnly);
+        checkboxInput.disabled = audioDisabled;
+        optionsEl.classList.toggle('is-disabled', audioDisabled);
+        checkboxLabel.classList.toggle('is-disabled', audioDisabled);
+        if (mvWithInput) {
+            mvWithInput.disabled = lyricOnly;
+            mvWithLabel.classList.toggle('is-disabled', lyricOnly);
+            mvOnlyInput.disabled = lyricOnly;
+            mvOnlyLabel.classList.toggle('is-disabled', lyricOnly);
+        }
     }
 
     lyricOnlyInput.addEventListener('change', () => {
@@ -179,6 +235,11 @@ function openDownloadSettingsModal(ctx, options) {
     body.appendChild(optionsEl);
     body.appendChild(el('div', { class: 'download-options__checkbox' }, checkboxLabel));
 
+    if (showMvOptions && mvWithLabel && mvOnlyLabel) {
+        body.appendChild(el('div', { class: 'download-options__checkbox' }, mvWithLabel));
+        body.appendChild(el('div', { class: 'download-options__checkbox' }, mvOnlyLabel));
+    }
+
     syncDisabled();
 
     openModal({
@@ -186,7 +247,309 @@ function openDownloadSettingsModal(ctx, options) {
         body,
         confirmText,
         onConfirm: () => {
-            onConfirm({ quality: selectedQuality, withLyric, lyricOnly });
+            onConfirm({ quality: selectedQuality, withLyric, lyricOnly, withMv, onlyMv });
+        },
+    });
+}
+
+function openThreeTabDownloadModal(ctx, options) {
+    const { config } = ctx;
+    const {
+        title,
+        confirmText = '确认',
+        cancelText = '取消',
+        initial = {},
+        hideMvTab = false,
+        onConfirm,
+    } = options;
+
+    let activeTab = 'audio';
+    let downloadAudio = initial.downloadAudio !== false;
+    let audioQuality = initial.audioQuality ?? config.quality.download;
+    let metaTitle = initial.metaTitle !== false;
+    let metaArtist = initial.metaArtist !== false;
+    let metaAlbum = initial.metaAlbum !== false;
+    let metaYear = initial.metaYear === true;
+    let metaBpm = initial.metaBpm === true;
+    let metaGenre = initial.metaGenre === true;
+    let metaCover = initial.metaCover !== false;
+    let downloadLyric = !!initial.downloadLyric;
+    let lyricWithTranslation = !!initial.lyricWithTranslation;
+    let lyricDelay = Number(initial.lyricDelay) || 0;
+    let downloadMv = hideMvTab ? false : !!initial.downloadMv;
+    let mvQuality = initial.mvQuality ?? (config.mv && config.mv.default) ?? 1080;
+    let mvFallback = initial.mvFallback || 'max';
+
+    const TABS = [
+        { key: 'audio', label: '歌曲', get: () => downloadAudio, set: (v) => { downloadAudio = v; } },
+        { key: 'lyric', label: '歌词', get: () => downloadLyric, set: (v) => { downloadLyric = v; } },
+    ];
+    if (!hideMvTab) {
+        TABS.push({ key: 'mv', label: 'MV', get: () => downloadMv, set: (v) => { downloadMv = v; } });
+    }
+
+    const tabsEl = el('div', { class: 'search-tabs' });
+    const tabsNav = el('div', { class: 'search-tabs__nav' });
+    const panelEl = el('div', { class: 'download-tabs-panel', style: { minHeight: '210px' } });
+    const body = el('div', { class: 'download-tabs' }, tabsEl, panelEl);
+
+    const tabButtons = {};
+
+    for (const t of TABS) {
+        const btn = el('button', { class: 'search-tab download-tab', type: 'button' });
+        btn.dataset.key = t.key;
+
+        const cbWrap = el('span', { class: 'ena-checkbox download-tab-check' });
+        const cb = el('input', { type: 'checkbox' });
+        cb.checked = t.get();
+        cb.addEventListener('click', (e) => e.stopPropagation());
+        cb.addEventListener('change', (e) => {
+            e.stopPropagation();
+            t.set(cb.checked);
+            syncDisabled();
+        });
+        const box = el('span', { class: 'box' });
+        box.addEventListener('click', (e) => {
+            e.stopPropagation();
+            cb.checked = !cb.checked;
+            t.set(cb.checked);
+            syncDisabled();
+        });
+        cbWrap.appendChild(cb);
+        cbWrap.appendChild(box);
+
+        btn.appendChild(cbWrap);
+        btn.appendChild(el('span', { class: 'download-tab-label', text: t.label }));
+
+        btn.addEventListener('click', () => {
+            if (activeTab === t.key) return;
+            activeTab = t.key;
+            render();
+        });
+
+        tabButtons[t.key] = { btn, cb };
+        tabsNav.appendChild(btn);
+    }
+    tabsEl.appendChild(tabsNav);
+
+    let audioQualityInputs = [];
+    let audioMetaInputs = [];
+    let lyricTransInput = null;
+    let lyricDelayInput = null;
+    let mvQualityInputs = [];
+    let mvFallbackInputs = [];
+
+    function renderAudioPanel() {
+        const panel = el('div', { class: 'download-tab-panel' });
+
+        panel.appendChild(el('div', { class: 'setting-sublabel', text: '音质' }));
+
+        audioQualityInputs = [];
+        const qualityGroup = el('div', { class: 'ena-radio-group' });
+        for (const level of config.quality.levels) {
+            const input = el('input', { type: 'radio', name: 'batch-audio-quality' });
+            input.checked = audioQuality === level.id;
+            input.addEventListener('change', () => {
+                if (input.checked) audioQuality = level.id;
+            });
+            audioQualityInputs.push(input);
+            qualityGroup.appendChild(el('label', { class: 'ena-radio' },
+                input,
+                el('span', { class: 'dot' }),
+                el('span', { text: level.label })
+            ));
+        }
+        panel.appendChild(qualityGroup);
+
+        panel.appendChild(el('div', { class: 'setting-sublabel', text: '写入的元数据' }));
+
+        audioMetaInputs = [];
+        const metaDefs = [
+            { label: '标题', get: () => metaTitle, set: (v) => { metaTitle = v; } },
+            { label: '歌手', get: () => metaArtist, set: (v) => { metaArtist = v; } },
+            { label: '专辑', get: () => metaAlbum, set: (v) => { metaAlbum = v; } },
+            { label: '年份', get: () => metaYear, set: (v) => { metaYear = v; } },
+            { label: 'BPM', get: () => metaBpm, set: (v) => { metaBpm = v; } },
+            { label: '流派', get: () => metaGenre, set: (v) => { metaGenre = v; } },
+            { label: '封面', get: () => metaCover, set: (v) => { metaCover = v; } },
+        ];
+        const metaGroup = el('div', { class: 'setting-options' });
+        for (const def of metaDefs) {
+            const input = el('input', { type: 'checkbox' });
+            input.checked = def.get();
+            input.addEventListener('change', () => def.set(input.checked));
+            audioMetaInputs.push(input);
+            metaGroup.appendChild(el('label', { class: 'ena-checkbox' },
+                input,
+                el('span', { class: 'box' }),
+                el('span', { text: def.label })
+            ));
+        }
+        panel.appendChild(metaGroup);
+
+        return panel;
+    }
+
+    function renderLyricPanel() {
+        const panel = el('div', { class: 'download-tab-panel' });
+
+        panel.appendChild(el('div', { class: 'setting-sublabel', text: '歌词内容' }));
+
+        lyricTransInput = el('input', { type: 'checkbox' });
+        lyricTransInput.checked = lyricWithTranslation;
+        lyricTransInput.addEventListener('change', () => {
+            lyricWithTranslation = lyricTransInput.checked;
+        });
+        panel.appendChild(el('label', { class: 'ena-checkbox' },
+            lyricTransInput,
+            el('span', { class: 'box' }),
+            el('span', { text: '包含翻译（将译文拼接在原句后）' })
+        ));
+
+        panel.appendChild(el('div', { class: 'setting-sublabel', text: '时间延迟' }));
+
+        lyricDelayInput = el('input', {
+            type: 'number',
+            class: 'ena-input download-delay-input',
+            min: '-30',
+            max: '30',
+            step: '0.1',
+            value: String(lyricDelay),
+        });
+        lyricDelayInput.addEventListener('input', () => {
+            const v = Number(lyricDelayInput.value);
+            lyricDelay = Number.isFinite(v) ? v : 0;
+        });
+
+        const delayRow = el('div', { class: 'download-delay-row' },
+            lyricDelayInput,
+            el('span', { class: 'download-delay-unit', text: '秒' })
+        );
+        panel.appendChild(delayRow);
+
+        panel.appendChild(el('div', {
+            class: 'setting-hint',
+            text: '正数延后，负数提前。例：-0.5 会让全部歌词提前半秒显示。'
+        }));
+
+        return panel;
+    }
+
+    function renderMvPanel() {
+        const panel = el('div', { class: 'download-tab-panel' });
+
+        panel.appendChild(el('div', { class: 'setting-sublabel', text: '优先分辨率' }));
+
+        const mvLevels = [
+            { br: 240, label: '240P' },
+            { br: 480, label: '480P' },
+            { br: 720, label: '720P' },
+            { br: 1080, label: '1080P' },
+        ];
+        mvQualityInputs = [];
+        const qualityGroup = el('div', { class: 'ena-radio-group' });
+        for (const level of mvLevels) {
+            const input = el('input', { type: 'radio', name: 'batch-mv-quality' });
+            input.checked = mvQuality === level.br;
+            input.addEventListener('change', () => {
+                if (input.checked) mvQuality = level.br;
+            });
+            mvQualityInputs.push(input);
+            qualityGroup.appendChild(el('label', { class: 'ena-radio' },
+                input,
+                el('span', { class: 'dot' }),
+                el('span', { text: level.label })
+            ));
+        }
+        panel.appendChild(qualityGroup);
+
+        panel.appendChild(el('div', { class: 'setting-sublabel', text: '若该分辨率不可用' }));
+
+        const fallbackDefs = [
+            { id: 'max', label: '使用支持的最大分辨率' },
+            { id: 'min', label: '使用支持的最小分辨率' },
+            { id: 'nearest', label: '使用最接近的分辨率' },
+        ];
+        mvFallbackInputs = [];
+        const fallbackGroup = el('div', { class: 'ena-radio-group' });
+        for (const def of fallbackDefs) {
+            const input = el('input', { type: 'radio', name: 'batch-mv-fallback' });
+            input.checked = mvFallback === def.id;
+            input.addEventListener('change', () => {
+                if (input.checked) mvFallback = def.id;
+            });
+            mvFallbackInputs.push(input);
+            fallbackGroup.appendChild(el('label', { class: 'ena-radio' },
+                input,
+                el('span', { class: 'dot' }),
+                el('span', { text: def.label })
+            ));
+        }
+        panel.appendChild(fallbackGroup);
+
+        return panel;
+    }
+
+    function syncDisabled() {
+        for (const t of TABS) {
+            const entry = tabButtons[t.key];
+            if (!entry) continue;
+            const on = t.get();
+            if (entry.cb && entry.cb.checked !== on) entry.cb.checked = on;
+            if (entry.btn) entry.btn.classList.toggle('is-disabled', !on);
+        }
+        const activeOn = activeTab === 'audio' ? downloadAudio
+            : activeTab === 'lyric' ? downloadLyric
+            : downloadMv;
+        panelEl.classList.toggle('is-disabled', !activeOn);
+        for (const input of audioQualityInputs) input.disabled = !downloadAudio;
+        for (const input of audioMetaInputs) input.disabled = !downloadAudio;
+        if (lyricTransInput) lyricTransInput.disabled = !downloadLyric;
+        if (lyricDelayInput) lyricDelayInput.disabled = !downloadLyric;
+        for (const input of mvQualityInputs) input.disabled = !downloadMv;
+        for (const input of mvFallbackInputs) input.disabled = !downloadMv;
+    }
+
+    function render() {
+        for (const key of Object.keys(tabButtons)) {
+            tabButtons[key].btn.classList.toggle('is-active', key === activeTab);
+        }
+        panelEl.innerHTML = '';
+        if (activeTab === 'audio') panelEl.appendChild(renderAudioPanel());
+        else if (activeTab === 'lyric') panelEl.appendChild(renderLyricPanel());
+        else panelEl.appendChild(renderMvPanel());
+        syncDisabled();
+    }
+
+    render();
+
+    openModal({
+        title,
+        body,
+        confirmText,
+        cancelText,
+        onConfirm: () => {
+            if (!downloadAudio && !downloadLyric && !downloadMv) {
+                Toast('请至少选择一项下载内容', 'warning', 1600);
+                return false;
+            }
+            onConfirm({
+                downloadAudio,
+                audioQuality,
+                metaTitle,
+                metaArtist,
+                metaAlbum,
+                metaYear,
+                metaBpm,
+                metaGenre,
+                metaCover,
+                downloadLyric,
+                lyricWithTranslation,
+                lyricDelay,
+                downloadMv,
+                mvQuality,
+                mvFallback,
+            });
         },
     });
 }
@@ -195,26 +558,165 @@ export function openDownloadOptionsModal(song, ctx, mode = 'now') {
     const { store } = ctx;
     const isAddMode = mode === 'addToList';
     const settings = store.get().settings;
+    const mvStr = song && song.mv != null ? String(song.mv) : '';
+    const hasMv = mvStr !== '' && mvStr !== '0';
 
-    openDownloadSettingsModal(ctx, {
+    openThreeTabDownloadModal(ctx, {
         title: isAddMode ? '添加到下载列表' : '下载设置',
-        initialQuality: settings.downloadQuality,
-        initialWithLyric: settings.withLyric,
-        initialLyricOnly: song._lyricOnly || false,
-        showLyricOnly: isAddMode,
         confirmText: isAddMode ? '添加' : '开始下载',
-        onConfirm: ({ quality, withLyric, lyricOnly }) => {
+        hideMvTab: !hasMv,
+        initial: {
+            downloadAudio: true,
+            audioQuality: settings.downloadQuality,
+            metaTitle: settings.batchMetaTitle,
+            metaArtist: settings.batchMetaArtist,
+            metaAlbum: settings.batchMetaAlbum,
+            metaYear: settings.batchMetaYear,
+            metaBpm: settings.batchMetaBpm,
+            metaGenre: settings.batchMetaGenre,
+            metaCover: settings.batchMetaCover,
+            downloadLyric: settings.withLyric,
+            lyricWithTranslation: settings.batchLyricWithTranslation,
+            lyricDelay: settings.batchLyricDelay,
+            downloadMv: hasMv && song._mvDownload === true,
+            mvQuality: settings.mvQuality,
+            mvFallback: settings.mvFallback,
+        },
+        onConfirm: (r) => {
             store.update({
-                settings: { ...store.get().settings, downloadQuality: quality, withLyric },
+                settings: {
+                    ...store.get().settings,
+                    downloadQuality: r.audioQuality,
+                    withLyric: r.downloadLyric,
+                },
             });
             store.persist();
 
-            const prepared = { ...song, _quality: quality, _withLyric: withLyric, _lyricOnly: lyricOnly };
+            const prepared = {
+                ...song,
+                _quality: r.audioQuality,
+                _metaTitle: r.metaTitle,
+                _metaArtist: r.metaArtist,
+                _metaAlbum: r.metaAlbum,
+                _metaYear: r.metaYear,
+                _metaBpm: r.metaBpm,
+                _metaGenre: r.metaGenre,
+                _metaCover: r.metaCover,
+                _withLyric: r.downloadLyric,
+                _lyricWithTranslation: r.lyricWithTranslation,
+                _lyricDelay: r.lyricDelay,
+                _lyricOnly: !r.downloadAudio && r.downloadLyric,
+                _skipAudio: !r.downloadAudio,
+                _mvDownload: r.downloadMv && hasMv,
+                _mvQuality: r.mvQuality,
+                _mvFallback: r.mvFallback,
+            };
 
             if (isAddMode) {
                 addToDownloadList(prepared, store);
             } else {
-                startSingleDownload(prepared, quality, ctx);
+                startSingleDownload(prepared, r.audioQuality, ctx);
+            }
+        },
+    });
+}
+
+export async function openMvDownloadOptionsModal(song, ctx, mode = 'now') {
+    const { config, api, store } = ctx;
+    const mvid = song && song.mv != null ? String(song.mv) : '';
+    if (!mvid || mvid === '0') {
+        Toast('当前歌曲没有 MV', 'warning', 1600);
+        return;
+    }
+
+    let detail;
+    try {
+        detail = await api.mvDetail(mvid);
+    } catch (err) {
+        Toast('MV 信息获取失败：' + (err.message || '未知错误'), 'danger', 2400);
+        return;
+    }
+
+    function fmtMvSize(bytes) {
+        if (!bytes || bytes <= 0) return '';
+        if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
+        if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+        if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB';
+        return bytes + ' B';
+    }
+
+    const brsRaw = Array.isArray(detail.brs) ? detail.brs : [];
+    const levels = [];
+    const seenBr = new Set();
+    for (const item of brsRaw) {
+        if (!item) continue;
+        let q = Number(item.br);
+        if (!Number.isFinite(q) || q <= 0) q = Number(item.vd);
+        if (!Number.isFinite(q) || q <= 0) continue;
+        if (seenBr.has(q)) continue;
+        seenBr.add(q);
+        const size = Number(item.size) || 0;
+        const label = q + 'P' + (size > 0 ? ' · ' + fmtMvSize(size) : '');
+        levels.push({ br: q, size, label });
+    }
+    levels.sort((a, b) => b.br - a.br);
+
+    if (!levels.length) {
+        const cfgLevels = (config.mv && config.mv.levels) || [];
+        for (const l of cfgLevels) levels.push({ br: l.br, size: 0, label: l.label });
+    }
+
+    let selectedBr = store.get().settings.mvQuality
+        ?? (config.mv && config.mv.default)
+        ?? (levels[0] && levels[0].br)
+        ?? 1080;
+    if (!levels.some((l) => l.br === selectedBr)) {
+        selectedBr = levels[0] ? levels[0].br : selectedBr;
+    }
+
+    const radioName = 'mv-quality-' + Date.now();
+    const optionsEl = el('div', { class: 'ena-radio-group' });
+    for (const level of levels) {
+        const input = el('input', { type: 'radio', name: radioName });
+        if (level.br === selectedBr) input.checked = true;
+        input.addEventListener('change', () => {
+            if (input.checked) selectedBr = level.br;
+        });
+        optionsEl.appendChild(el('label', { class: 'ena-radio' },
+            input,
+            el('span', { class: 'dot' }),
+            el('span', { text: level.label })
+        ));
+    }
+
+    const body = el('div', { class: 'download-options' });
+    body.appendChild(el('div', { class: 'setting-label', text: '选择清晰度' }));
+    body.appendChild(optionsEl);
+
+    openModal({
+        title: '下载 MV',
+        body,
+        confirmText: '开始下载',
+        onConfirm: () => {
+            store.update({ settings: { ...store.get().settings, mvQuality: selectedBr } });
+            store.persist();
+            const mvSong = {
+                id: mvid,
+                mv: mvid,
+                _kind: 'mv',
+                _quality: selectedBr,
+                _withLyric: false,
+                _lyricOnly: false,
+                title: detail.name || song.title || '',
+                artist: detail.artistName || song.artist || '',
+                album: '',
+                pic: detail.cover || song.pic || '',
+                duration: (detail.duration || 0) / 1000,
+            };
+            if (mode === 'addToList') {
+                addToDownloadList(mvSong, store);
+            } else {
+                startSingleDownload(mvSong, selectedBr, ctx);
             }
         },
     });
@@ -224,25 +726,73 @@ export function openBatchAddModal(songs, ctx, mode) {
     const { store } = ctx;
     const settings = store.get().settings;
 
-    openDownloadSettingsModal(ctx, {
+    openThreeTabDownloadModal(ctx, {
         title: mode === 'replace' ? '替换下载列表' : '添加到下载列表',
-        initialQuality: settings.downloadQuality,
-        initialWithLyric: settings.withLyric,
-        initialLyricOnly: false,
-        showLyricOnly: true,
         confirmText: mode === 'replace' ? '替换' : '添加',
-        onConfirm: ({ quality, withLyric, lyricOnly }) => {
+        initial: {
+            downloadAudio: settings.batchDownloadAudio,
+            audioQuality: settings.downloadQuality,
+            metaTitle: settings.batchMetaTitle,
+            metaArtist: settings.batchMetaArtist,
+            metaAlbum: settings.batchMetaAlbum,
+            metaYear: settings.batchMetaYear,
+            metaBpm: settings.batchMetaBpm,
+            metaGenre: settings.batchMetaGenre,
+            metaCover: settings.batchMetaCover,
+            downloadLyric: settings.batchDownloadLyric,
+            lyricWithTranslation: settings.batchLyricWithTranslation,
+            lyricDelay: settings.batchLyricDelay,
+            downloadMv: settings.batchDownloadMv,
+            mvQuality: settings.mvQuality,
+            mvFallback: settings.mvFallback,
+        },
+        onConfirm: (r) => {
+            store.update({
+                settings: {
+                    ...store.get().settings,
+                    batchDownloadAudio: r.downloadAudio,
+                    downloadQuality: r.audioQuality,
+                    batchMetaTitle: r.metaTitle,
+                    batchMetaArtist: r.metaArtist,
+                    batchMetaAlbum: r.metaAlbum,
+                    batchMetaYear: r.metaYear,
+                    batchMetaBpm: r.metaBpm,
+                    batchMetaGenre: r.metaGenre,
+                    batchMetaCover: r.metaCover,
+                    batchDownloadLyric: r.downloadLyric,
+                    batchLyricWithTranslation: r.lyricWithTranslation,
+                    batchLyricDelay: r.lyricDelay,
+                    batchDownloadMv: r.downloadMv,
+                    mvQuality: r.mvQuality,
+                    mvFallback: r.mvFallback,
+                },
+            });
+            store.persist();
+
             const prepared = songs.map((s) => ({
                 ...s,
-                _quality: quality,
-                _withLyric: withLyric,
-                _lyricOnly: lyricOnly,
+                _quality: r.audioQuality,
+                _metaTitle: r.metaTitle,
+                _metaArtist: r.metaArtist,
+                _metaAlbum: r.metaAlbum,
+                _metaYear: r.metaYear,
+                _metaBpm: r.metaBpm,
+                _metaGenre: r.metaGenre,
+                _metaCover: r.metaCover,
+                _withLyric: r.downloadLyric,
+                _lyricWithTranslation: r.lyricWithTranslation,
+                _lyricDelay: r.lyricDelay,
+                _lyricOnly: !r.downloadAudio && r.downloadLyric,
+                _skipAudio: !r.downloadAudio,
+                _mvDownload: r.downloadMv,
+                _mvQuality: r.mvQuality,
+                _mvFallback: r.mvFallback,
             }));
 
             if (mode === 'replace') {
                 store.update({ downloads: prepared });
                 store.persist();
-                Toast(`已替换下载列表（${prepared.length} 首）`, 'success', 1600);
+                Toast('已替换下载列表（' + prepared.length + ' 首）', 'success', 1600);
             } else {
                 const downloads = [...store.get().downloads];
                 const seen = new Set(downloads.map((d) => d.id).filter(Boolean));
@@ -259,7 +809,7 @@ export function openBatchAddModal(songs, ctx, mode) {
                 }
                 store.update({ downloads });
                 store.persist();
-                Toast(`已添加 ${added} 首到下载列表`, 'success', 1600);
+                Toast('已添加 ' + added + ' 首到下载列表', 'success', 1600);
             }
             store.clearSelection();
         },
@@ -284,13 +834,28 @@ function addToDownloadList(song, store) {
 async function startSingleDownload(song, quality, ctx) {
     const { downloader, store } = ctx;
     const mode = store.get().settings.downloadMode;
+    let expanded;
     try {
-        if (mode === 'stream') {
-            await downloader.downloadToDisk(song, quality);
+        expanded = downloader.expandDownloadEntries([song]);
+    } catch {
+        expanded = [song];
+    }
+    try {
+        if (expanded.length >= 2) {
+            if (mode === 'stream') {
+                await downloader.downloadBatchToDisk([song], quality);
+            } else {
+                await downloader.downloadAsZip([song], quality);
+            }
         } else {
-            await downloader.downloadOne(song, quality);
+            const single = expanded[0] || song;
+            if (mode === 'stream') {
+                await downloader.downloadToDisk(single, quality);
+            } else {
+                await downloader.downloadOne(single, quality);
+            }
         }
-        Toast(`已下载：${song.title}`, 'success', 1800);
+        Toast(`已开始下载：${song.title}`, 'success', 1800);
     } catch (err) {
         if (err?.name === 'AbortError' || String(err?.message || '').includes('取消')) return;
         Toast(`下载失败：${err.message}`, 'danger', 2600);
@@ -327,6 +892,8 @@ function songRowHandlers(song, ctx, extra = {}) {
     const { store, player } = ctx;
     const state = store.get();
     const selected = state.selection.some((s) => s.id === song.id);
+    const mvStr = song && song.mv != null ? String(song.mv) : '';
+    const hasMv = mvStr !== '' && mvStr !== '0';
 
     return {
         selectable: true,
@@ -340,6 +907,7 @@ function songRowHandlers(song, ctx, extra = {}) {
         onDownloadNow: (s) => openDownloadOptionsModal(s, ctx, 'now'),
         onDownloadLyric: (s) => handleDownloadLyric(s, ctx),
         onAddDownloadList: (s) => openDownloadOptionsModal(s, ctx, 'addToList'),
+        onDownloadMv: hasMv ? (s) => openMvDownloadOptionsModal(s, ctx, 'now') : null,
         ...extra,
     };
 }
@@ -2091,17 +2659,57 @@ export function DownloadsView(ctx) {
         }
     }
 
+    function applyResultToSong(d, r) {
+        return {
+            ...d,
+            _quality: r.audioQuality,
+            _metaTitle: r.metaTitle,
+            _metaArtist: r.metaArtist,
+            _metaAlbum: r.metaAlbum,
+            _metaYear: r.metaYear,
+            _metaBpm: r.metaBpm,
+            _metaGenre: r.metaGenre,
+            _metaCover: r.metaCover,
+            _withLyric: r.downloadLyric,
+            _lyricWithTranslation: r.lyricWithTranslation,
+            _lyricDelay: r.lyricDelay,
+            _lyricOnly: !r.downloadAudio && r.downloadLyric,
+            _skipAudio: !r.downloadAudio,
+            _mvDownload: r.downloadMv,
+            _mvQuality: r.mvQuality,
+            _mvFallback: r.mvFallback,
+        };
+    }
+
+    function initialFromSong(song, settings) {
+        return {
+            downloadAudio: song._skipAudio !== true,
+            audioQuality: song._quality ?? settings.downloadQuality,
+            metaTitle: song._metaTitle,
+            metaArtist: song._metaArtist,
+            metaAlbum: song._metaAlbum,
+            metaYear: song._metaYear,
+            metaBpm: song._metaBpm,
+            metaGenre: song._metaGenre,
+            metaCover: song._metaCover,
+            downloadLyric: song._withLyric || song._lyricOnly,
+            lyricWithTranslation: song._lyricWithTranslation,
+            lyricDelay: song._lyricDelay,
+            downloadMv: song._mvDownload === true,
+            mvQuality: song._mvQuality ?? settings.mvQuality,
+            mvFallback: song._mvFallback ?? settings.mvFallback,
+        };
+    }
+
     function openEditModal(song) {
-        openDownloadSettingsModal(ctx, {
+        const settings = store.get().settings;
+        openThreeTabDownloadModal(ctx, {
             title: '编辑下载设置',
-            initialQuality: song._quality ?? store.get().settings.downloadQuality,
-            initialWithLyric: song._withLyric ?? store.get().settings.withLyric,
-            initialLyricOnly: song._lyricOnly || false,
-            showLyricOnly: true,
             confirmText: '保存',
-            onConfirm: ({ quality, withLyric, lyricOnly }) => {
+            initial: initialFromSong(song, settings),
+            onConfirm: (r) => {
                 const downloads = store.get().downloads.map((d) =>
-                    d.id === song.id ? { ...d, _quality: quality, _withLyric: withLyric, _lyricOnly: lyricOnly } : d
+                    d.id === song.id ? applyResultToSong(d, r) : d
                 );
                 store.update({ downloads });
                 store.persist();
@@ -2116,21 +2724,18 @@ export function DownloadsView(ctx) {
         if (!selected.length) return;
         const first = selected[0];
 
-        openDownloadSettingsModal(ctx, {
-            title: `编辑 ${selected.length} 首歌曲的下载设置`,
-            initialQuality: first._quality ?? state.settings.downloadQuality,
-            initialWithLyric: first._withLyric ?? state.settings.withLyric,
-            initialLyricOnly: first._lyricOnly || false,
-            showLyricOnly: true,
+        openThreeTabDownloadModal(ctx, {
+            title: '编辑 ' + selected.length + ' 首歌曲的下载设置',
             confirmText: '应用到选中',
-            onConfirm: ({ quality, withLyric, lyricOnly }) => {
+            initial: initialFromSong(first, state.settings),
+            onConfirm: (r) => {
                 const ids = new Set(selected.map((s) => s.id));
                 const downloads = store.get().downloads.map((d) =>
-                    ids.has(d.id) ? { ...d, _quality: quality, _withLyric: withLyric, _lyricOnly: lyricOnly } : d
+                    ids.has(d.id) ? applyResultToSong(d, r) : d
                 );
                 store.update({ downloads });
                 store.persist();
-                Toast(`已更新 ${ids.size} 首歌曲的下载设置`, 'success', 1600);
+                Toast('已更新 ' + ids.size + ' 首歌曲的下载设置', 'success', 1600);
             },
         });
     }
@@ -2225,6 +2830,7 @@ export function DownloadsView(ctx) {
                 onEdit: () => openEditModal(song),
                 onDownloadNow: () => startDownloadOne(song),
                 onDownloadLyric: (s) => handleDownloadLyric(s, ctx),
+                contentBadges: songContentBadges(song),
                 onRemove: () => {
                     const downloads = [...store.get().downloads];
                     const i = downloads.indexOf(song);
@@ -2333,6 +2939,26 @@ function matchFilter(track, filter) {
 
 function isSingleTask(task) {
     return task.type === 'single' && Array.isArray(task.tracks) && task.tracks.length === 1;
+}
+
+function trackIconName(track) {
+    if (!track) return 'music';
+    if (track._kind === 'mv') return 'video';
+    if (track._lyricOnly || track._kind === 'lyric') return 'lyric';
+    return 'music';
+}
+
+function taskCardIconName(task) {
+    if (!task) return null;
+    if (task.type !== 'single') return null;
+    if (task.kind === 'single-mv') return 'video';
+    if (task.kind === 'single-lyric') return 'lyric';
+    const t = Array.isArray(task.tracks) ? task.tracks[0] : null;
+    if (t) {
+        if (t._kind === 'mv') return 'video';
+        if (t._lyricOnly || t._kind === 'lyric') return 'lyric';
+    }
+    return 'music';
 }
 
 function getTaskProgress(task) {
@@ -2501,8 +3127,10 @@ export function StatusView(ctx) {
 
         const head = el('div', { class: 'status-task__head' });
         const labelEl = el('div', { class: 'status-task__label' });
+        const taskIconEl = el('span', { class: 'status-task__icon hidden' });
         const labelTitleEl = el('span', { class: 'status-task__label-title' });
         const labelArtistEl = el('span', { class: 'status-task__label-artist' });
+        labelEl.appendChild(taskIconEl);
         labelEl.appendChild(labelTitleEl);
         labelEl.appendChild(labelArtistEl);
         const actionsEl = el('div', { class: 'status-task__actions' });
@@ -2525,6 +3153,8 @@ export function StatusView(ctx) {
 
         return {
             node,
+            taskIconEl,
+            taskIconName: null,
             labelEl,
             labelTitleEl,
             labelArtistEl,
@@ -2577,21 +3207,34 @@ export function StatusView(ctx) {
 
     function rebuildActions(cache, task) {
         const isActive = task.status === 'active';
+        const isWaiting = task.status === 'waiting';
         const isZip = task.mode === 'batch-zip';
         const canPackage = isActive && isZip && task.phase !== 'packaging' && task.phase !== 'done';
-        const canToggleExpand = true;
+        const canToggleExpand = task.type === 'batch';
         const tracksArr = task.tracks || [];
         const anyPaused = tracksArr.some((t) => t.paused);
         const hasUnfinished = tracksArr.some((t) =>
             t.status === 'downloading' || t.status === 'queued' || t.status === 'resolving' || t.status === 'tagging'
         );
 
-        const key = `${isActive}|${canPackage}|${anyPaused}|${hasUnfinished}`;
+        const key = `${isActive}|${isWaiting}|${canPackage}|${anyPaused}|${hasUnfinished}|${canToggleExpand}`;
 
         if (cache.actionsKey !== key) {
             cache.actionsKey = key;
             cache.actionsEl.innerHTML = '';
             cache.actionButtons = {};
+
+            if (isWaiting) {
+                const startBtn = makeTaskIconBtn('play', '立即开始', () => {
+                    downloader._startWaitingTask(task.id).catch(() => {});
+                });
+                cache.actionsEl.appendChild(startBtn);
+
+                const removeWaitBtn = makeTaskIconBtn('close', '移除任务', () => {
+                    downloader.removeTask(task.id);
+                });
+                cache.actionsEl.appendChild(removeWaitBtn);
+            }
 
             if (isActive && hasUnfinished) {
                 const pauseBtn = makeTaskIconBtn(
@@ -2681,9 +3324,14 @@ export function StatusView(ctx) {
         const row = el('div', { class: `task-track task-track--${track.status}` });
 
         const info = el('div', { class: 'task-track__info' });
+        const titleRow = el('div', { class: 'task-track__title-row' });
+        const trackIconEl = el('span', { class: 'task-track__icon' });
+        trackIconEl.appendChild(icon(trackIconName(track)));
         const titleEl = el('span', { class: 'task-track__title' });
         const artistEl = el('span', { class: 'task-track__artist' });
-        info.appendChild(titleEl);
+        titleRow.appendChild(trackIconEl);
+        titleRow.appendChild(titleEl);
+        info.appendChild(titleRow);
         info.appendChild(artistEl);
 
         const statusEl = el('span', { class: 'task-track__status' });
@@ -2922,6 +3570,20 @@ export function StatusView(ctx) {
             taskCache.set(task.id, cache);
         }
 
+        cache.node.classList.toggle('status-task--waiting', task.status === 'waiting');
+
+        const cardIconName = taskCardIconName(task);
+        if (cache.taskIconName !== cardIconName) {
+            cache.taskIconName = cardIconName;
+            cache.taskIconEl.innerHTML = '';
+            if (cardIconName) {
+                cache.taskIconEl.appendChild(icon(cardIconName));
+                cache.taskIconEl.classList.remove('hidden');
+            } else {
+                cache.taskIconEl.classList.add('hidden');
+            }
+        }
+
         if (isSingleTask(task)) {
             const track = task.tracks[0];
             const title = track.title || '未知歌曲';
@@ -3011,19 +3673,23 @@ export function StatusView(ctx) {
 
         if (emptyEl) { emptyEl.remove(); emptyEl = null; }
 
-        const activeTasks = tasks.filter((t) => t.status === 'active');
-        const finishedTasks = tasks.filter((t) => t.status !== 'active');
+        const activeTasks = tasks.filter((t) => t.status === 'active' || t.status === 'waiting');
+        const finishedTasks = tasks.filter((t) => t.status !== 'active' && t.status !== 'waiting');
 
         clearFinishedBtn.disabled = !finishedTasks.length;
 
         if (activeTasks.length) {
             if (!activeTitleEl) {
                 activeTitleEl = el('div', { class: 'status-section-title' }, '进行中');
-                root.appendChild(activeTitleEl);
             }
             if (!activeListEl) {
                 activeListEl = el('div', { class: 'status-list' });
-                root.appendChild(activeListEl);
+            }
+            if (toolbarEl.nextSibling !== activeTitleEl) {
+                root.insertBefore(activeTitleEl, toolbarEl.nextSibling);
+            }
+            if (activeTitleEl.nextSibling !== activeListEl) {
+                root.insertBefore(activeListEl, activeTitleEl.nextSibling);
             }
         } else {
             if (activeTitleEl) { activeTitleEl.remove(); activeTitleEl = null; }
@@ -3033,11 +3699,16 @@ export function StatusView(ctx) {
         if (finishedTasks.length) {
             if (!finishedTitleEl) {
                 finishedTitleEl = el('div', { class: 'status-section-title' }, '历史记录');
-                root.appendChild(finishedTitleEl);
             }
             if (!finishedListEl) {
                 finishedListEl = el('div', { class: 'status-list' });
-                root.appendChild(finishedListEl);
+            }
+            const afterNode = activeListEl || activeTitleEl || toolbarEl;
+            if (afterNode.nextSibling !== finishedTitleEl) {
+                root.insertBefore(finishedTitleEl, afterNode.nextSibling);
+            }
+            if (finishedTitleEl.nextSibling !== finishedListEl) {
+                root.insertBefore(finishedListEl, finishedTitleEl.nextSibling);
             }
         } else {
             if (finishedTitleEl) { finishedTitleEl.remove(); finishedTitleEl = null; }
@@ -3082,6 +3753,7 @@ export function SettingsView(ctx) {
     const downloadModeInputs = new Map();
     const batchCategoryInputs = new Map();
     const lyricSaveModeInputs = new Map();
+    const mvDirModeInputs = new Map();
 
     let perPageLabel = null;
     let perPageRange = null;
@@ -3365,6 +4037,32 @@ export function SettingsView(ctx) {
         ));
         root.appendChild(dirGroup);
 
+        const mvDirGroup = el('div', { class: 'setting-group' });
+        mvDirGroup.appendChild(el('div', { class: 'setting-label', text: '视频保存位置' }));
+
+        const mvDirDefs = [
+            { id: 'same', label: '与音频同路径' },
+            { id: 'separate', label: '单独保存在 MV 子目录' },
+        ];
+        const mvDirOptions = el('div', { class: 'ena-radio-group' });
+        for (const def of mvDirDefs) {
+            const input = el('input', { type: 'radio', name: 'mv-dir-mode' });
+            input.addEventListener('change', () => {
+                if (input.checked) {
+                    store.update({ settings: { ...store.get().settings, mvDirMode: def.id } });
+                    store.persist();
+                }
+            });
+            mvDirModeInputs.set(def.id, input);
+            mvDirOptions.appendChild(el('label', { class: 'ena-radio' },
+                input,
+                el('span', { class: 'dot' }),
+                el('span', { text: def.label })
+            ));
+        }
+        mvDirGroup.appendChild(mvDirOptions);
+        root.appendChild(mvDirGroup);
+
         const threadsGroup = el('div', { class: 'setting-group' });
         downloadThreadsLabel = el('div', {
             class: 'setting-label',
@@ -3598,6 +4296,11 @@ export function SettingsView(ctx) {
 
         for (const [id, input] of lyricSaveModeInputs) {
             const want = id === (settings.lyricSaveMode || 'same');
+            if (input.checked !== want) input.checked = want;
+        }
+
+        for (const [id, input] of mvDirModeInputs) {
+            const want = id === (settings.mvDirMode || 'same');
             if (input.checked !== want) input.checked = want;
         }
     }

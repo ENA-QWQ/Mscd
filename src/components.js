@@ -369,6 +369,8 @@ export function SongRow(song, handlers = {}) {
         onPlay, onPlayNext, onAddDownloadList, onDownloadNow, onDownloadLyric, onRemove, onEdit,
         selectable, selected, onToggleSelect,
         hidePlayNextMenu,
+        onDownloadMv,
+        contentBadges,
     } = handlers;
 
     const coverEl = el('div', { class: 'song-cover' });
@@ -395,9 +397,6 @@ export function SongRow(song, handlers = {}) {
     if (onDownloadNow) {
         actionsEl.appendChild(makeActionButton('download', '直接下载', false, () => onDownloadNow(song)));
     }
-    if (onDownloadLyric) {
-        actionsEl.appendChild(makeActionButton('lyric', '下载歌词', false, () => onDownloadLyric(song)));
-    }
     if (onRemove) {
         actionsEl.appendChild(makeActionButton('trash', '移除', true, () => onRemove(song)));
     }
@@ -408,6 +407,12 @@ export function SongRow(song, handlers = {}) {
     }
     if (onAddDownloadList) {
         menuItems.push({ icon: 'plus', text: '添加下载队列', handler: onAddDownloadList });
+    }
+    if (onDownloadLyric) {
+        menuItems.push({ icon: 'lyric', text: '下载歌词', handler: onDownloadLyric });
+    }
+    if (onDownloadMv && song.mv && String(song.mv) !== '0') {
+        menuItems.push({ icon: 'video', text: '下载 MV', handler: onDownloadMv });
     }
     if (song.id) {
         menuItems.push({
@@ -459,6 +464,8 @@ export function SongRow(song, handlers = {}) {
     const songView = resolveSongRowView();
     const isDetail = songView === 'detail';
     const isGrid = songView === 'grid';
+
+    const badgesList = Array.isArray(contentBadges) ? contentBadges.filter(Boolean) : [];
 
     const row = el('div', {
         class: 'song-row' + (isDetail ? ' song-row--detail' : '') + (isGrid ? ' song-row--grid' : ''),
@@ -530,6 +537,19 @@ export function SongRow(song, handlers = {}) {
         row.appendChild(actionsEl);
         row.appendChild(menuWrap);
     } else {
+        const artistChildren = [
+            el('span', { class: 'song-artist', text: song.artist || '未知歌手' }),
+        ];
+        if (badgesList.length) {
+            const badgesEl = el('span', { class: 'song-badges' });
+            for (const name of badgesList) {
+                const badge = el('span', { class: 'song-badge' });
+                badge.appendChild(icon(name));
+                badgesEl.appendChild(badge);
+            }
+            artistChildren.push(badgesEl);
+        }
+
         row.appendChild(bars);
         row.appendChild(coverEl);
         row.appendChild(
@@ -540,7 +560,7 @@ export function SongRow(song, handlers = {}) {
                         ? el('span', { class: 'song-album', text: `- ${song.album}` })
                         : null
                 ),
-                el('div', { class: 'song-artist', text: song.artist || '未知歌手' })
+                el('div', { class: 'song-artist-row' }, ...artistChildren)
             )
         );
         row.appendChild(actionsEl);
@@ -969,6 +989,7 @@ export function openModal({ title, body, confirmText = '确认', cancelText = '�
 
     root.innerHTML = '';
     root.appendChild(modal);
+    void modal.offsetHeight;
     requestAnimationFrame(() => modal.classList.add('is-open'));
 
     function close(fired) {

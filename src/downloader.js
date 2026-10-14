@@ -138,11 +138,90 @@ async function pickUniqueFilename(dirHandle, name, usedSet) {
     }
 }
 
+const _wikiFieldMem = new Map();
+const _wikiFieldPending = new Map();
+
+async function fetchWikiFields(id) {
+    const key = String(id);
+    if (!key) return { genre: '', bpm: 0, publishDate: '', language: '' };
+    if (_wikiFieldMem.has(key)) return _wikiFieldMem.get(key);
+    if (_wikiFieldPending.has(key)) return _wikiFieldPending.get(key);
+
+    const promise = (async () => {
+        const out = { genre: '', bpm: 0, publishDate: '', language: '' };
+        try {
+            const url = 'https://zm.wwoyun.cn/song/wiki/summary?id=' + encodeURIComponent(key);
+            const res = await fetch(url, { headers: { Accept: 'application/json' } });
+            if (res.ok) {
+                const json = await res.json();
+                const seen = new Set();
+                const visit = (node) => {
+                    if (!node || typeof node !== 'object') return;
+                    if (seen.has(node)) return;
+                    seen.add(node);
+                    if (Array.isArray(node)) {
+                        for (const x of node) visit(x);
+                        return;
+                    }
+                    if (node.creativeType) {
+                        const t = String(node.creativeType);
+                        const arr = Array.isArray(node.resources) ? node.resources : [];
+                        for (const r of arr) {
+                            const title = r && r.uiElement && r.uiElement.mainTitle && r.uiElement.mainTitle.title;
+                            if (!title) continue;
+                            const s = String(title);
+                            if ((t === 'songTag' || t === 'genre') && !out.genre) out.genre = s;
+                            else if (t === 'language' && !out.language) out.language = s;
+                            else if (t === 'bpm' && !out.bpm) {
+                                const n = Number(s.replace(/[^0-9.]/g, ''));
+                                if (Number.isFinite(n) && n > 0) out.bpm = n;
+                            }
+                        }
+                    }
+                    const basic = node.basic;
+                    if (basic && !out.publishDate) {
+                        const pt = basic.publishTime || basic.publishDate || basic.publishDateStr;
+                        if (pt) {
+                            const d = new Date(typeof pt === 'number' ? pt : String(pt));
+                            if (!isNaN(d.getTime())) {
+                                out.publishDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                            }
+                        }
+                    }
+                    for (const k in node) visit(node[k]);
+                };
+                visit(json);
+            }
+        } catch {}
+        _wikiFieldMem.set(key, out);
+        _wikiFieldPending.delete(key);
+        return out;
+    })();
+
+    _wikiFieldPending.set(key, promise);
+    return promise;
+}
+
 function proxied(url) {
     if (!url) return '';
     if (!store.get().settings.downloadProxy) return url;
     if (url.startsWith(config.proxy)) return url;
     return config.proxy + encodeURIComponent(url);
+}
+
+function shiftLrc(text, seconds) {
+    if (!text || !seconds) return text;
+    const re = /\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
+    return text.replace(re, (m, mm, ss, ff) => {
+        let t = parseInt(mm, 10) * 60 + parseInt(ss, 10);
+        if (ff) t += parseInt(String(ff).padEnd(3, '0'), 10) / 1000;
+        t += seconds;
+        if (t < 0) t = 0;
+        const m2 = Math.floor(t / 60);
+        const s2 = Math.floor(t % 60);
+        const ms2 = Math.round((t - m2 * 60 - s2) * 1000);
+        return '[' + String(m2).padStart(2, '0') + ':' + String(s2).padStart(2, '0') + '.' + String(ms2).padStart(3, '0') + ']';
+    });
 }
 
 function sanitizeFilename(name) {
@@ -155,6 +234,24 @@ function sanitizeFilename(name) {
 
 function getExtension(quality) {
     return quality === 2000 ? '.flac' : '.mp3';
+}
+
+function pickMvBr(brs, targetBr, fallback) {
+    const available = (brs || [])
+        .map((b) => Number(b && b.br))
+        .filter((n) => Number.isFinite(n) && n > 0);
+    const uniq = Array.from(new Set(available)).sort((a, b) => a - b);
+    if (!uniq.length) return targetBr;
+    if (uniq.includes(targetBr)) return targetBr;
+    if (fallback === 'max') return uniq[uniq.length - 1];
+    if (fallback === 'min') return uniq[0];
+    let best = uniq[0];
+    let bestDist = Math.abs(uniq[0] - targetBr);
+    for (const q of uniq) {
+        const d = Math.abs(q - targetBr);
+        if (d < bestDist) { best = q; bestDist = d; }
+    }
+    return best;
 }
 
 async function fetchWithRetry(url, retries, delay, signal, extraHeaders) {
@@ -398,29 +495,51 @@ async function fetchCoverAsBytes(coverUrl) {
     return promise;
 }
 
-async function addMp3Tags(blob, { title, artist, album, coverUrl }) {
+async function addMp3Tags(blob, { title, artist, album, year, bpm, genre, coverUrl, writeTitle, writeArtist, writeAlbum, writeYear, writeBpm, writeGenre, writeCover }) {
     if (typeof window.ID3Writer === 'undefined') return blob;
     try {
         const arrayBuffer = await blob.arrayBuffer();
         const writer = new window.ID3Writer(arrayBuffer);
 
-        if (title) {
+        if (writeTitle !== false && title) {
             try { writer.setFrame('TIT2', title); } catch (e) {
                 console.warn('[downloader] TIT2 failed:', e);
             }
         }
-        if (artist) {
+        if (writeArtist !== false && artist) {
             try { writer.setFrame('TPE1', [artist]); } catch (e) {
                 console.warn('[downloader] TPE1 failed:', e);
             }
         }
-        if (album) {
+        if (writeAlbum !== false && album) {
             try { writer.setFrame('TALB', album); } catch (e) {
                 console.warn('[downloader] TALB failed:', e);
             }
         }
+        console.log('[MP3 tag]', { writeYear, writeBpm, writeGenre, year, bpm, genre });
+        if (writeYear !== false && year) {
+            try {
+                const y = parseInt(String(year).slice(0, 4), 10);
+                if (Number.isFinite(y) && y > 0) writer.setFrame('TYER', y);
+            } catch (e) {
+                console.warn('[downloader] TYER failed:', e);
+            }
+        }
+        if (writeBpm !== false && bpm) {
+            try {
+                const b = parseInt(String(bpm), 10);
+                if (Number.isFinite(b) && b > 0) writer.setFrame('TBPM', b);
+            } catch (e) {
+                console.warn('[downloader] TBPM failed:', e);
+            }
+        }
+        if (writeGenre !== false && genre) {
+            try { writer.setFrame('TCON', [String(genre)]); } catch (e) {
+                console.warn('[downloader] TCON failed:', e);
+            }
+        }
 
-        if (coverUrl) {
+        if (writeCover !== false && coverUrl) {
             const cover = await fetchCoverAsBytes(coverUrl);
             if (cover) {
                 try {
@@ -444,7 +563,7 @@ async function addMp3Tags(blob, { title, artist, album, coverUrl }) {
     }
 }
 
-async function addFlacTags(blob, { title, artist, album, coverUrl }) {
+async function addFlacTags(blob, { title, artist, album, year, bpm, genre, coverUrl, writeTitle, writeArtist, writeAlbum, writeYear, writeBpm, writeGenre, writeCover }) {
     try {
         const arrayBuffer = await blob.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
@@ -477,14 +596,18 @@ async function addFlacTags(blob, { title, artist, album, coverUrl }) {
 
         if (!blocks.length) return blob;
 
-        const commentData = buildVorbisComment('MSCD', {
-            TITLE: title,
-            ARTIST: artist,
-            ALBUM: album,
-        });
+        const tagKv = {};
+        if (writeTitle !== false && title) tagKv.TITLE = title;
+        if (writeArtist !== false && artist) tagKv.ARTIST = artist;
+        if (writeAlbum !== false && album) tagKv.ALBUM = album;
+        if (writeYear !== false && year) tagKv.DATE = String(year);
+        if (writeBpm !== false && bpm) tagKv.BPM = String(bpm);
+        if (writeGenre !== false && genre) tagKv.GENRE = String(genre);
+
+        const commentData = buildVorbisComment('MSCD', tagKv);
 
         let pictureData = null;
-        if (coverUrl) {
+        if (writeCover !== false && coverUrl) {
             const cover = await fetchCoverAsBytes(coverUrl);
             if (cover) {
                 pictureData = buildPictureBlock(cover.data, cover.mime);
@@ -598,6 +721,12 @@ async function getOrCreateSubdir(parentHandle, name, cache) {
 }
 
 async function resolveCategoryDir(rootHandle, song, cache) {
+    if (song && song._kind === 'mv') {
+        const mvMode = store.get().settings.mvDirMode || 'same';
+        if (mvMode === 'separate') {
+            return getOrCreateSubdir(rootHandle, 'MV', cache);
+        }
+    }
     const mode = store.get().settings.batchCategory || 'none';
     if (mode === 'artist') {
         const artist = getMainArtist(song.artist);
@@ -935,7 +1064,129 @@ export class Downloader {
         store.persist();
     }
 
+    _maybeStartNextWaiting(taskId) {
+        const waiting = store.get().downloadTasks.find(
+            (t) => t.waitingForTaskId === taskId && t.status === 'waiting'
+        );
+        if (waiting) {
+            this._startWaitingTask(waiting.id).catch(() => {});
+        }
+    }
+
+    async _startWaitingTask(taskId) {
+        const task = store.get().downloadTasks.find((t) => t.id === taskId);
+        if (!task || task.status !== 'waiting') return;
+
+        const songs = task.tracks
+            .filter((t) => t.status !== 'done' && t.status !== 'removed')
+            .map((t) => ({
+                id: t.songId,
+                title: t.title,
+                artist: t.artist,
+                album: t.album || '',
+                pic: t.pic || '',
+                _quality: t._quality,
+                _withLyric: false,
+                _lyricOnly: true,
+                _lyricWithTranslation: !!t._lyricWithTranslation,
+                _lyricDelay: Number(t._lyricDelay) || 0,
+            }));
+
+        if (!songs.length) {
+            store.upsertDownloadTask(taskId, {
+                status: 'done',
+                phase: 'done',
+                finishedAt: Date.now(),
+            });
+            return;
+        }
+
+        store.update({
+            downloadTasks: store.get().downloadTasks.map((t) =>
+                t.id === taskId ? { ...t, status: 'active', phase: 'downloading', waitingForTaskId: null } : t
+            ),
+        });
+
+        const mode = store.get().settings.downloadMode;
+        try {
+            if (mode === 'stream') {
+                await this.downloadBatchToDisk(songs, songs[0]._quality, { resumeTaskId: taskId });
+            } else {
+                await this.downloadAsZip(songs, songs[0]._quality, { resumeTaskId: taskId });
+            }
+        } catch {}
+    }
+
+    async prepareMv(song, quality) {
+        const mvid = String(song.mv || song.id || '');
+        if (!mvid || mvid === '0') throw new Error('当前歌曲没有 MV');
+        const cfgMv = this.config.mv || {};
+        const targetBr = song._mvQuality ?? song._quality ?? quality ?? cfgMv.download ?? 1080;
+        const fallback = song._mvFallback || store.get().settings.mvFallback || 'max';
+        const detail = await this.api.mvDetail(mvid);
+        if (!detail) throw new Error('无法获取 MV 信息');
+        const actualBr = pickMvBr(detail.brs, targetBr, fallback);
+        const urlData = await this.api.mvUrl(mvid, actualBr);
+        if (!urlData || !urlData.url) throw new Error('无法解析 MV 地址');
+        const filename = sanitizeFilename(detail.name || song.title || 'MV') + '.mp4';
+        return {
+            url: urlData.url,
+            filename,
+            ext: '.mp4',
+            title: detail.name || song.title || '',
+            artist: detail.artistName || song.artist || '',
+            album: '',
+            cover: detail.cover || song.pic || '',
+            kind: 'mv',
+            br: actualBr,
+        };
+    }
+
+    expandDownloadEntries(songs) {
+        const out = [];
+        for (const song of songs) {
+            if (!song) continue;
+            const skipAudio = !!song._skipAudio;
+            const lyricOnly = !!song._lyricOnly;
+            const wantLyric = !!song._withLyric || lyricOnly;
+            const dlMv = !!song._mvDownload;
+            const mvStr = song.mv == null ? '' : String(song.mv);
+            const hasMv = mvStr !== '' && mvStr !== '0';
+
+            if (!skipAudio && !lyricOnly) {
+                out.push({
+                    ...song,
+                    _kind: 'audio',
+                    _lyricOnly: false,
+                    _withLyric: false,
+                });
+            }
+
+            if (dlMv && hasMv) {
+                out.push({
+                    ...song,
+                    _kind: 'mv',
+                    _withLyric: false,
+                    _lyricOnly: false,
+                    _mvQuality: song._mvQuality,
+                    _mvFallback: song._mvFallback,
+                });
+            }
+
+            if (wantLyric) {
+                out.push({
+                    ...song,
+                    _kind: 'lyric',
+                    _withLyric: false,
+                    _lyricOnly: true,
+                });
+            }
+        }
+        return out;
+    }
+
     async prepare(song, quality) {
+        if (song && song._kind === 'mv') return this.prepareMv(song, quality);
         const fallback = store.get().settings.downloadQuality
             ?? store.get().settings.quality
             ?? this.config.quality.default;
@@ -944,6 +1195,34 @@ export class Downloader {
         if (!audioUrl) throw new Error('无法解析音频地址');
         const ext = getExtension(actualQuality);
         const baseName = buildBaseName(song);
+        const needWiki = song._metaYear === true || song._metaBpm === true || song._metaGenre === true;
+        let year = '';
+        let bpm = '';
+        let genre = '';
+
+        if (needWiki && song.id) {
+            const wikiMap = store.get().wikiMap;
+            const cached = (wikiMap instanceof Map) ? wikiMap.get(String(song.id)) : null;
+            if (cached) {
+                if (cached.publishDate) year = String(cached.publishDate).slice(0, 4);
+                if (cached.bpm) bpm = String(cached.bpm);
+                if (cached.genre) genre = String(cached.genre);
+            }
+            const needYear = song._metaYear === true;
+            const needBpm = song._metaBpm === true;
+            const needGenre = song._metaGenre === true;
+            const missingYear = needYear && !year;
+            const missingBpm = needBpm && !bpm;
+            const missingGenre = needGenre && !genre;
+            if (missingYear || missingBpm || missingGenre) {
+                try {
+                    const fetched = await fetchWikiFields(song.id);
+                    if (missingYear && fetched.publishDate) year = String(fetched.publishDate).slice(0, 4);
+                    if (missingBpm && fetched.bpm) bpm = String(fetched.bpm);
+                    if (missingGenre && fetched.genre) genre = String(fetched.genre);
+                } catch {}
+            }
+        }
         return {
             url: audioUrl,
             filename: baseName + ext,
@@ -951,16 +1230,38 @@ export class Downloader {
             title: song.title || '',
             artist: song.artist || '',
             album: song.album || '',
+            year,
+            bpm,
+            genre,
             cover: song.pic || '',
+            kind: 'audio',
+            writeTitle: song._metaTitle !== false,
+            writeArtist: song._metaArtist !== false,
+            writeAlbum: song._metaAlbum !== false,
+            writeYear: song._metaYear !== false,
+            writeBpm: song._metaBpm !== false,
+            writeGenre: song._metaGenre !== false,
+            writeCover: song._metaCover !== false,
         };
     }
 
     async writeTags(blob, meta) {
+        if (meta.kind === 'mv') return blob;
         const payload = {
             title: meta.title,
             artist: meta.artist,
             album: meta.album,
+            year: meta.year,
+            bpm: meta.bpm,
+            genre: meta.genre,
             coverUrl: meta.cover,
+            writeTitle: meta.writeTitle !== false,
+            writeArtist: meta.writeArtist !== false,
+            writeAlbum: meta.writeAlbum !== false,
+            writeYear: meta.writeYear !== false,
+            writeBpm: meta.writeBpm !== false,
+            writeGenre: meta.writeGenre !== false,
+            writeCover: meta.writeCover !== false,
         };
         if (meta.ext === '.flac') {
             return await addFlacTags(blob, payload);
@@ -977,17 +1278,24 @@ export class Downloader {
     }
 
     async fetchLyricText(song) {
+        const delay = Number(song && song._lyricDelay) || 0;
+        const finalize = (text) => {
+            if (!text) return null;
+            if (!delay) return text;
+            return shiftLrc(text, delay);
+        };
         try {
             const raw = await this.api.resolveLyric(song);
             if (!raw) return null;
             if (typeof raw === 'string') {
-                return raw.trim() ? raw : null;
+                const t = raw.trim();
+                return t ? finalize(t) : null;
             }
             const baseText = raw.lrc || raw.yrc || '';
             if (!baseText.trim()) return null;
 
             const tlyricText = typeof raw.tlyric === 'string' ? raw.tlyric : '';
-            if (!tlyricText.trim()) return baseText;
+            if (!song._lyricWithTranslation || !tlyricText.trim()) return finalize(baseText);
 
             const re = /^\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\](.*)$/;
             const transMap = new Map();
@@ -1004,7 +1312,7 @@ export class Downloader {
                 transMap.set(Math.round((min * 60 + sec + frac) * 100), text);
             }
 
-            if (!transMap.size) return baseText;
+            if (!transMap.size) return finalize(baseText);
 
             const out = [];
             for (const line of baseText.split(/\r?\n/)) {
@@ -1026,7 +1334,7 @@ export class Downloader {
                 }
                 out.push(line);
             }
-            return out.join('\n');
+            return finalize(out.join('\n'));
         } catch {}
         return null;
     }
@@ -1073,6 +1381,11 @@ export class Downloader {
         store.upsertDownloadTask(taskId, {
             type: 'single',
             mode: 'single',
+            kind: song._kind === 'mv'
+                ? 'single-mv'
+                : (song._lyricOnly || song._kind === 'lyric')
+                    ? 'single-lyric'
+                    : 'single',
             label: `下载：${song.title || '未知歌曲'}`,
             status: 'active',
             phase: 'resolving',
@@ -1124,6 +1437,10 @@ export class Downloader {
 
             if (controller.signal.aborted || state.abortController.signal.aborted) {
                 throw new Error('已取消');
+            }
+
+            if (meta.kind === 'mv') {
+                updateTrack({ title: meta.title, artist: meta.artist, pic: meta.cover });
             }
 
             updateTrack({ status: 'downloading' });
@@ -1266,6 +1583,11 @@ export class Downloader {
         store.upsertDownloadTask(taskId, {
             type: 'single',
             mode: 'single',
+            kind: song._kind === 'mv'
+                ? 'single-mv'
+                : (song._lyricOnly || song._kind === 'lyric')
+                    ? 'single-lyric'
+                    : 'single',
             label: `下载：${song.title || '未知歌曲'}`,
             status: 'active',
             phase: 'resolving',
@@ -1319,6 +1641,10 @@ export class Downloader {
 
             if (controller.signal.aborted || state.abortController.signal.aborted) {
                 throw new Error('已取消');
+            }
+
+            if (meta.kind === 'mv') {
+                updateTrack({ title: meta.title, artist: meta.artist, pic: meta.cover });
             }
 
             updateTrack({ status: 'downloading' });
@@ -1437,6 +1763,26 @@ export class Downloader {
         const concurrency = store.get().settings.concurrency ?? this.config.download.concurrency;
         const tagConcurrency = Math.max(2, Math.min(4, concurrency));
 
+        if (!options.resumeTaskId && Array.isArray(songs)) {
+            songs = this.expandDownloadEntries(songs);
+        }
+
+        let lyricSongs = null;
+        if (!options.resumeTaskId && Array.isArray(songs)) {
+            const lyrics = songs.filter((s) => s && s._kind === 'lyric');
+            if (lyrics.length) {
+                lyricSongs = lyrics;
+                songs = songs.filter((s) => s._kind !== 'lyric');
+            }
+        }
+
+        let onlyLyricMode = false;
+        if (!options.resumeTaskId && !songs.length && lyricSongs && lyricSongs.length) {
+            songs = lyricSongs;
+            lyricSongs = null;
+            onlyLyricMode = true;
+        }
+
         let taskId;
         let tracks;
 
@@ -1476,8 +1822,22 @@ export class Downloader {
                 album: t.album || '',
                 pic: t.pic || '',
                 _quality: t._quality,
+                _kind: t._kind || (t._lyricOnly ? 'lyric' : 'audio'),
                 _withLyric: t._withLyric,
                 _lyricOnly: t._lyricOnly,
+                _lyricWithTranslation: !!t._lyricWithTranslation,
+                _lyricDelay: Number(t._lyricDelay) || 0,
+                _metaTitle: t._metaTitle,
+                _metaArtist: t._metaArtist,
+                _metaAlbum: t._metaAlbum,
+                _metaYear: t._metaYear,
+                _metaBpm: t._metaBpm,
+                _metaGenre: t._metaGenre,
+                _metaCover: t._metaCover,
+                _mvDownload: t._mvDownload,
+                _mvQuality: t._mvQuality,
+                _mvFallback: t._mvFallback,
+                _skipAudio: t._skipAudio,
             }));
 
             quality = tracks[0]?._quality ?? quality;
@@ -1514,8 +1874,22 @@ export class Downloader {
                 album: song.album || '',
                 pic: song.pic || '',
                 _quality: song._quality ?? quality,
+                _kind: song._kind || 'audio',
                 _withLyric: !!song._withLyric,
                 _lyricOnly: !!song._lyricOnly,
+                _lyricWithTranslation: !!song._lyricWithTranslation,
+                _lyricDelay: Number(song._lyricDelay) || 0,
+                _metaTitle: song._metaTitle,
+                _metaArtist: song._metaArtist,
+                _metaAlbum: song._metaAlbum,
+                _metaYear: song._metaYear,
+                _metaBpm: song._metaBpm,
+                _metaGenre: song._metaGenre,
+                _metaCover: song._metaCover,
+                _mvDownload: !!song._mvDownload,
+                _mvQuality: song._mvQuality,
+                _mvFallback: song._mvFallback,
+                _skipAudio: !!song._skipAudio,
                 status: 'queued',
                 bytes: 0,
                 totalBytes: 0,
@@ -1528,10 +1902,16 @@ export class Downloader {
                 finishedAt: null,
             }));
 
+            const uniqueSongIds = new Set(songs.map((s) => String(s.id || s.songId || '')));
+            const isSingleSongBatch = uniqueSongIds.size === 1 && !onlyLyricMode;
+            const batchLabel = isSingleSongBatch
+                ? `${songs[0].title || '未知歌曲'} - ${songs[0].artist || '未知艺人'}`
+                : `批量下载 ${total} 首`;
             store.upsertDownloadTask(taskId, {
                 type: 'batch',
+                kind: onlyLyricMode ? 'batch-lyric' : 'batch-audio',
                 mode: 'batch-disk',
-                label: `批量下载 ${total} 首`,
+                label: onlyLyricMode ? `下载歌词 ${total} 首` : batchLabel,
                 status: 'active',
                 phase: 'downloading',
                 done: 0,
@@ -1543,6 +1923,57 @@ export class Downloader {
                 startedAt: Date.now(),
                 finishedAt: null,
                 tracks,
+            });
+        }
+
+        if (lyricSongs && lyricSongs.length) {
+            const lyricTaskId = newTaskId();
+            const lyricTracks = lyricSongs.map((song, index) => ({
+                id: `trk-${lyricTaskId}-${index}`,
+                songId: song.id,
+                title: song.title || '未知歌曲',
+                artist: song.artist || '',
+                album: song.album || '',
+                pic: song.pic || '',
+                _quality: song._quality ?? quality,
+                _kind: 'lyric',
+                _withLyric: false,
+                _lyricOnly: true,
+                _lyricWithTranslation: !!song._lyricWithTranslation,
+                _lyricDelay: Number(song._lyricDelay) || 0,
+                status: 'queued',
+                bytes: 0,
+                totalBytes: 0,
+                progress: 0,
+                speed: 0,
+                eta: null,
+                error: null,
+                paused: false,
+                startedAt: null,
+                finishedAt: null,
+            }));
+            const lyricUniqueIds = new Set(lyricSongs.map((s) => String(s.id || s.songId || '')));
+            const lyricSingle = lyricUniqueIds.size === 1;
+            const lyricLabel = lyricSingle
+                ? `歌词：${lyricSongs[0].title || '未知歌曲'} - ${lyricSongs[0].artist || '未知艺人'}`
+                : `下载歌词 ${lyricSongs.length} 首`;
+            store.upsertDownloadTask(lyricTaskId, {
+                type: 'batch',
+                kind: 'batch-lyric',
+                mode: 'batch-disk',
+                label: lyricLabel,
+                status: 'waiting',
+                waitingForTaskId: taskId,
+                phase: 'waiting',
+                done: 0,
+                total: lyricTracks.length,
+                bytes: 0,
+                totalBytes: 0,
+                packagingProgress: null,
+                errors: [],
+                startedAt: null,
+                finishedAt: null,
+                tracks: lyricTracks,
             });
         }
 
@@ -1620,6 +2051,10 @@ export class Downloader {
 
                 if (controller.signal.aborted || state.abortController.signal.aborted) {
                     throw new Error('已取消');
+                }
+
+                if (meta.kind === 'mv') {
+                    updateTrack(trackId, { title: meta.title, artist: meta.artist, pic: meta.cover });
                 }
 
                 updateTrack(trackId, { status: 'downloading' });
@@ -1847,6 +2282,7 @@ export class Downloader {
             });
 
             this.taskStates.delete(taskId);
+            this._maybeStartNextWaiting(taskId);
 
             return {
                 taskId,
@@ -1863,6 +2299,7 @@ export class Downloader {
                 errors: cancelled ? [] : [{ song: null, error: err.message }],
                 finishedAt: Date.now(),
             });
+            this._maybeStartNextWaiting(taskId);
             throw err;
         }
     }
@@ -1871,6 +2308,10 @@ export class Downloader {
         const { retry, retryDelay } = this.config.download;
         const concurrency = store.get().settings.concurrency ?? this.config.download.concurrency;
         const tagConcurrency = Math.max(2, Math.min(4, concurrency));
+
+        if (!options.resumeTaskId && Array.isArray(songs)) {
+            songs = this.expandDownloadEntries(songs);
+        }
 
         let taskId;
         let tracks;
@@ -1911,8 +2352,22 @@ export class Downloader {
                 album: t.album || '',
                 pic: t.pic || '',
                 _quality: t._quality,
+                _kind: t._kind || (t._lyricOnly ? 'lyric' : 'audio'),
                 _withLyric: t._withLyric,
                 _lyricOnly: t._lyricOnly,
+                _lyricWithTranslation: !!t._lyricWithTranslation,
+                _lyricDelay: Number(t._lyricDelay) || 0,
+                _metaTitle: t._metaTitle,
+                _metaArtist: t._metaArtist,
+                _metaAlbum: t._metaAlbum,
+                _metaYear: t._metaYear,
+                _metaBpm: t._metaBpm,
+                _metaGenre: t._metaGenre,
+                _metaCover: t._metaCover,
+                _mvDownload: t._mvDownload,
+                _mvQuality: t._mvQuality,
+                _mvFallback: t._mvFallback,
+                _skipAudio: t._skipAudio,
             }));
 
             quality = tracks[0]?._quality ?? quality;
@@ -1950,8 +2405,22 @@ export class Downloader {
                 album: song.album || '',
                 pic: song.pic || '',
                 _quality: song._quality ?? quality,
+                _kind: song._kind || 'audio',
                 _withLyric: !!song._withLyric,
                 _lyricOnly: !!song._lyricOnly,
+                _lyricWithTranslation: !!song._lyricWithTranslation,
+                _lyricDelay: Number(song._lyricDelay) || 0,
+                _metaTitle: song._metaTitle,
+                _metaArtist: song._metaArtist,
+                _metaAlbum: song._metaAlbum,
+                _metaYear: song._metaYear,
+                _metaBpm: song._metaBpm,
+                _metaGenre: song._metaGenre,
+                _metaCover: song._metaCover,
+                _mvDownload: !!song._mvDownload,
+                _mvQuality: song._mvQuality,
+                _mvFallback: song._mvFallback,
+                _skipAudio: !!song._skipAudio,
                 status: 'queued',
                 bytes: 0,
                 totalBytes: 0,
@@ -1964,10 +2433,15 @@ export class Downloader {
                 finishedAt: null,
             }));
 
+            const uniqueSongIds = new Set(songs.map((s) => String(s.id || s.songId || '')));
+            const isSingleSongBatch = uniqueSongIds.size === 1;
+            const batchLabel = isSingleSongBatch
+                ? `${songs[0].title || '未知歌曲'} - ${songs[0].artist || '未知艺人'}`
+                : `批量下载 ${total} 首`;
             store.upsertDownloadTask(taskId, {
                 type: 'batch',
                 mode: 'batch-zip',
-                label: `批量下载 ${total} 首`,
+                label: batchLabel,
                 status: 'active',
                 phase: 'downloading',
                 done: 0,
@@ -2046,6 +2520,10 @@ export class Downloader {
 
                 if (controller.signal.aborted || state.abortController.signal.aborted) {
                     throw new Error('已取消');
+                }
+
+                if (meta.kind === 'mv') {
+                    updateTrack(trackId, { title: meta.title, artist: meta.artist, pic: meta.cover });
                 }
 
                 updateTrack(trackId, { status: 'downloading' });

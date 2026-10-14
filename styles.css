@@ -9124,3 +9124,171 @@ body.queue-panel-open {
     }
 }
 /* === QUEUE PANEL STYLES END === */
+
+.download-delay-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.download-delay-input {
+    flex: 0 0 90px;
+    width: 90px;
+    height: 26px;
+    padding: 0 8px;
+    font-size: .74rem;
+    border-bottom: 1px solid var(--border-line);
+    background-color: transparent;
+}
+
+.download-delay-unit {
+    font-size: .74rem;
+    color: var(--text-secondary);
+}
+
+.download-tabs .search-tab.download-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.download-tab-check {
+    gap: 0;
+    flex-shrink: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.download-tab-check .box {
+    width: 15px;
+    height: 15px;
+}
+
+.download-tab-label {
+    display: inline-block;
+    line-height: 1;
+}
+
+.search-tab.is-disabled {
+    opacity: .5;
+}
+
+.download-tabs-panel.is-disabled {
+    opacity: .4;
+    pointer-events: none;
+}
+
+.status-task--waiting {
+    opacity: 0.7;
+}
+
+.status-task--waiting .ena-progress__bar {
+    background: var(--text-tertiary);
+}
+
+.task-track__title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.task-track__title-row .task-track__title {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.task-track__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+}
+
+.task-track__icon svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.status-task__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    align-self: center;
+}
+
+.status-task__icon svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.status-task__icon.hidden {
+    display: none;
+}
+
+.song-artist-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.song-artist-row .song-artist {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.song-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: 8px;
+    color: var(--text-tertiary);
+}
+
+.song-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+}
+
+.song-badge svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+@media (min-width: 901px) {
+    .player-more-item--mobile {
+        display: none;
+    }
+}

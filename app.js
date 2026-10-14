@@ -15,6 +15,7 @@ import {
     MyFavoritesView,
     openParseModal,
     openDownloadOptionsModal,
+    openMvDownloadOptionsModal,
     openBatchAddModal,
     handleDownloadLyric,
     runWikiForTracks,
@@ -880,8 +881,12 @@ function bindPlayerBar() {
                 openShareCardModal(currentSong);
             } else if (action === 'download-audio') {
                 openDownloadOptionsModal(currentSong, ctx, 'now');
+            } else if (action === 'download-mv') {
+                openMvDownloadOptionsModal(currentSong, ctx, 'now');
             } else if (action === 'download-lyric') {
                 handleDownloadLyric(currentSong, ctx);
+            } else if (action === 'audio-effects') {
+                openAudioEffectsModal(ctx);
             }
         });
     }
@@ -1145,7 +1150,14 @@ function bindPlayerBar() {
 
         if (playerMoreMenuEl) {
             playerMoreMenuEl.querySelectorAll('.player-more-item').forEach((item) => {
-                item.disabled = !song;
+                if (item.dataset.action === 'download-mv') {
+                    const mvStr = song && song.mv != null ? String(song.mv) : '';
+                    const hasMv = mvStr !== '' && mvStr !== '0';
+                    item.disabled = !song || !hasMv;
+                    item.classList.toggle('hidden', !hasMv);
+                } else {
+                    item.disabled = !song;
+                }
             });
         }
 
@@ -1607,12 +1619,6 @@ function bindMobileMoreMenu() {
 
         if (item.dataset.action === 'parse') {
             ctx.openParseModal();
-            close();
-            return;
-        }
-
-        if (item.dataset.action === 'audio-effects') {
-            openAudioEffectsModal(ctx);
             close();
             return;
         }

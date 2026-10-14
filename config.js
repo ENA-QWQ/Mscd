@@ -38,6 +38,15 @@ export const config = {
         default: 320,
         download: 320,
     },
+    mv: {
+        levels: [
+            { br: 480, label: '480P' },
+            { br: 720, label: '720P' },
+            { br: 1080, label: '1080P' },
+        ],
+        default: 1080,
+        download: 1080,
+    },
     download: {
         concurrency: 3,
         retry: 3,
