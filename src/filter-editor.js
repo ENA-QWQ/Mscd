@@ -1,6 +1,7 @@
 import { el } from './dom.js';
 import { store } from './store.js';
-import { icon, openModal, Dropdown } from './components.js';
+import { icon, openModal, Dropdown, confirmDialog } from './components.js';
+import { getWikiFetcher, collectWikiOptions } from './wiki.js';
 import {
     FIELD_DEFS,
     getOperatorsForField,
@@ -101,7 +102,7 @@ function ensureUid(group) {
     return group.__uid;
 }
 
-export function openFilterEditor({ title = '筛选', fields, initial, onApply }) {
+export function openFilterEditor({ title = '筛选', fields, initial, onApply, tracks = [] }) {
     function applyOptions(wikiOptions) {
         for (const f of fields) {
             if (!f.dynamic) continue;
@@ -112,6 +113,68 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply })
 
     function getField(key) {
         return fields.find((f) => f.key === key) || FIELD_DEFS[key] || FIELD_DEFS.title;
+    }
+
+    function shouldAnalyzeWiki(field) {
+        if (!field || !field.dynamic) return false;
+        if (!Array.isArray(tracks) || !tracks.length) return false;
+        const wikiMap = store.get().wikiMap;
+        if (!(wikiMap instanceof Map) || wikiMap.size === 0) return true;
+        const needPublish = field.key === 'publishDate';
+        for (const t of tracks) {
+            if (!t || !t.id) continue;
+            const entry = wikiMap.get(String(t.id));
+            if (!entry) return true;
+            if (needPublish) {
+                if (!entry.__publishFetched) return true;
+            } else {
+                if (!entry.__summaryFetched) return true;
+            }
+        }
+        return false;
+    }
+
+    async function runWikiAnalysis() {
+        const ids = (tracks || []).map((t) => String(t.id)).filter(Boolean);
+        if (!ids.length) return;
+        if (store.get().wikiProgress.active) return;
+        store.update({
+            wikiProgress: { active: true, done: 0, total: ids.length, silent: false },
+        });
+        try {
+            const fetcher = getWikiFetcher();
+            const result = await fetcher.ensure(ids, {
+                onProgress: ({ done, total }) => {
+                    store.update({ wikiProgress: { active: true, done, total, silent: false } });
+                },
+            });
+            store.update({
+                wikiMap: result,
+                wikiOptions: collectWikiOptions(result),
+                wikiProgress: { active: false, done: result.size, total: ids.length, silent: false },
+            });
+        } catch (e) {
+            store.update({
+                wikiProgress: { active: false, done: 0, total: 0, silent: false, error: (e && e.message) || '拉取失败' },
+            });
+        }
+    }
+
+    async function ensureWikiForField(field) {
+        if (!shouldAnalyzeWiki(field)) {
+            applyOptions(store.get().wikiOptions || collectFromStore());
+            return;
+        }
+        const ok = await confirmDialog(
+            '该筛选项依赖百科数据，当前列表的百科数据不完整。是否先分析？',
+            { title: '分析百科数据', confirmText: '开始分析', cancelText: '取消' }
+        );
+        if (!ok) {
+            applyOptions(store.get().wikiOptions || collectFromStore());
+            return;
+        }
+        await runWikiAnalysis();
+        applyOptions(store.get().wikiOptions || collectFromStore());
     }
 
     applyOptions(collectFromStore());
@@ -219,7 +282,7 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply })
             options: fieldOptions,
             value: cond.field,
             title: '字段',
-            onChange: (v) => {
+            onChange: async (v) => {
                 cond.field = v;
                 const field = getField(v);
                 const ops = getOperatorsForField(field);
@@ -227,6 +290,9 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply })
                     cond.operator = ops[0]?.key || 'contains';
                 }
                 cond.value = defaultForOperator(cond.operator, field);
+                if (field.dynamic) {
+                    await ensureWikiForField(field);
+                }
                 rerender();
             },
         })).node);

@@ -1271,6 +1271,7 @@ export function SearchView(ctx) {
                     title: '筛选歌单',
                     fields: getFieldsForView('playlist'),
                     initial: store.get().filter?.[playlistFilterKey] || null,
+                    tracks: detail.tracks,
                     onApply: (tree) => {
                         const cur = store.get().search;
                         store.update({
@@ -1424,6 +1425,7 @@ export function SearchView(ctx) {
                 title: '筛选搜索结果',
                 fields: getFieldsForView('search'),
                 initial: store.get().filter?.search || null,
+                tracks: store.get().search.results?.['1']?.items || [],
                 onApply: (tree) => {
                     store.update({ filter: { ...store.get().filter, search: tree } });
                     store.persist();
@@ -1760,6 +1762,7 @@ export function LikedView(ctx, options = {}) {
                 title: '筛选收藏的音乐',
                 fields: getFieldsForView('liked'),
                 initial: store.get().filter?.liked || null,
+                tracks,
                 onApply: (tree) => {
                     store.update({
                         filter: { ...store.get().filter, liked: tree },
@@ -1933,6 +1936,7 @@ export function QueueView(ctx) {
             title: '筛选播放队列',
             fields: getFieldsForView('queue'),
             initial: store.get().filter?.queue || null,
+            tracks: store.get().queue.tracks,
             onApply: (tree) => {
                 store.update({
                     filter: { ...store.get().filter, queue: tree },
@@ -2547,6 +2551,7 @@ export function DownloadsView(ctx) {
             title: '筛选下载列表',
             fields: getFieldsForView('downloads'),
             initial: store.get().filter?.downloads || null,
+            tracks: store.get().downloads,
             onApply: (tree) => {
                 store.update({
                     filter: { ...store.get().filter, downloads: tree },
