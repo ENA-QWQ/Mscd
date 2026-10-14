@@ -371,6 +371,7 @@ export function SongRow(song, handlers = {}) {
         hidePlayNextMenu,
         onDownloadMv,
         contentBadges,
+        viewOverride,
     } = handlers;
 
     const coverEl = el('div', { class: 'song-cover' });
@@ -461,7 +462,7 @@ export function SongRow(song, handlers = {}) {
         menuWrap.classList.add('hidden');
     }
 
-    const songView = resolveSongRowView();
+    const songView = viewOverride || resolveSongRowView();
     const isDetail = songView === 'detail';
     const isGrid = songView === 'grid';
 

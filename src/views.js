@@ -1337,10 +1337,13 @@ export function SearchView(ctx) {
         store.setAllTracks(detail.tracks);
         store.setFilteredTracks(sourceTracks);
 
-        const list = el('div', { class: 'song-list' });
-        maybeAddDetailHeader(list);
+        const isAlbum = detail.kind === 'album';
+        const list = el('div', { class: 'song-list' + (isAlbum ? ' song-list--album-tracks' : '') });
+        if (!isAlbum) maybeAddDetailHeader(list);
         for (const song of slice) {
-            list.appendChild(SongRow(song, songRowHandlers(song, ctx)));
+            const rowHandlers = songRowHandlers(song, ctx);
+            if (isAlbum) rowHandlers.viewOverride = 'tile';
+            list.appendChild(SongRow(song, rowHandlers));
         }
         root.appendChild(list);
 

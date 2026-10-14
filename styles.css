@@ -9292,3 +9292,21 @@ body.queue-panel-open {
         display: none;
     }
 }
+
+
+.song-list.song-list--album-tracks {
+    grid-template-columns: 1fr !important;
+    gap: 4px !important;
+}
+
+.song-list--album-tracks .song-row .song-cover {
+    display: none;
+}
+
+.song-list--album-tracks .song-row .song-playing-bars {
+    display: none;
+}
+
+.song-list--album-tracks .song-row.is-playing .song-title {
+    color: var(--fill);
+}
