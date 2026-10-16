@@ -9353,3 +9353,8 @@ body.queue-panel-open {
     opacity: 0;
     pointer-events: none;
 }
+
+.entity-link{cursor:pointer;color:inherit;transition:color .2s ease}
+.entity-link:hover{color:var(--text-primary)}
+.entity-link.is-search{opacity:.9}
+.entity-link.is-search:hover{opacity:1}

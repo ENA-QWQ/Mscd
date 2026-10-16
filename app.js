@@ -20,7 +20,7 @@ import {
     handleDownloadLyric,
     runWikiForTracks,
 } from './src/views.js';
-import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal, openAboutModal, shouldShowAbout, SongRow } from './src/components.js';
+import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal, openAboutModal, shouldShowAbout, SongRow, renderArtistInto } from './src/components.js';
 import { initRouter } from './src/router.js';
 import { initWikiProgressUI, getAllWiki, collectWikiOptions } from './src/wiki.js';
 import { initPlaybackView } from './src/playback-view.js';
@@ -289,7 +289,7 @@ const searchActions = {
     },
 
     async openDetail(kind, meta, options = {}) {
-        cacheDetailMeta(kind, meta);
+        if (meta.title && meta.title !== '加载中…') cacheDetailMeta(kind, meta);
         const s = store.get().search;
         const keepPrevDetail = options.keepPrevDetail === true;
         const prevDetail = keepPrevDetail
@@ -304,7 +304,8 @@ const searchActions = {
                     id: meta.id,
                     title: meta.title,
                     artist: meta.artist,
-                    pic: meta.pic,
+                    artists: meta.artists || [],
+                    pic: meta.pic || '',
                     trackCount: meta.trackCount || 0,
                     description: meta.description || '',
                     tracks: [],
@@ -321,13 +322,47 @@ const searchActions = {
         }
 
         try {
-            const tracks = kind === 'playlist'
-                ? await api.playlist(meta.id)
-                : await api.album(meta.id);
+            const tracks = options.preloadedTracks || (
+                kind === 'playlist'
+                    ? await api.playlist(meta.id)
+                    : await api.album(meta.id)
+            );
             const cur = store.get().search;
             if (!cur.detail || cur.detail.id !== meta.id) return;
+            const updated = { ...cur.detail, tracks, loading: false };
+            if (!updated.title || updated.title === '加载中…') {
+                if (kind === 'album') {
+                    if (tracks.length) {
+                        const first = tracks[0];
+                        updated.title = first.album || '未知专辑';
+                        updated.artist = first.artist || '';
+                        updated.artists = first.artists || [];
+                        updated.pic = first.pic || '';
+                        updated.trackCount = tracks.length;
+                    } else {
+                        updated.title = '未知专辑';
+                    }
+                } else {
+                    updated.title = '歌单';
+                    if (tracks.length) {
+                        updated.pic = updated.pic || tracks[0].pic || '';
+                        updated.trackCount = tracks.length;
+                    }
+                }
+            }
+            if (updated.title && updated.title !== '加载中…') {
+                cacheDetailMeta(kind, {
+                    id: updated.id,
+                    title: updated.title,
+                    artist: updated.artist,
+                    artists: updated.artists || [],
+                    pic: updated.pic,
+                    trackCount: updated.trackCount || tracks.length,
+                    description: updated.description || '',
+                });
+            }
             store.update({
-                search: { ...cur, detail: { ...cur.detail, tracks, loading: false } },
+                search: { ...cur, detail: updated },
             });
         } catch (err) {
             const cur = store.get().search;
@@ -424,43 +459,19 @@ const searchActions = {
     },
 
     async openAlbumById(id) {
-        let meta = getCachedDetailMeta('album', id);
-        try {
-            if (meta) throw null;
-            const info = await api.albumInfo(id);
-            if (info) {
-                meta = {
-                    id,
-                    title: info.title,
-                    artist: info.artist,
-                    pic: info.pic,
-                    trackCount: info._extra?.size || 0,
-                    description: info._extra?.description || '',
-                };
-            }
-        } catch {}
-
-        if (!meta) {
-            try {
-                const tracks = await api.album(id);
-                if (tracks.length) {
-                    meta = {
-                        id,
-                        title: tracks[0].album || '未知专辑',
-                        artist: tracks[0].artist || '',
-                        pic: tracks[0].pic || '',
-                        trackCount: tracks.length,
-                        description: '',
-                    };
-                }
-            } catch {}
+        const cached = getCachedDetailMeta('album', id);
+        if (cached && cached.title && cached.title !== '加载中…') {
+            return searchActions.openDetail('album', cached);
         }
-
-        if (!meta) {
-            meta = { id, title: '未知专辑', artist: '', pic: '', trackCount: 0, description: '' };
-        }
-
-        return searchActions.openDetail('album', meta);
+        return searchActions.openDetail('album', {
+            id,
+            title: '加载中…',
+            artist: '',
+            artists: [],
+            pic: '',
+            trackCount: 0,
+            description: '',
+        });
     },
 
     async openPlaylistById(id) {
@@ -1191,7 +1202,11 @@ function bindPlayerBar() {
 
         if (song) {
             titleEl.textContent = song.title || '未知歌曲';
-            artistEl.textContent = song.artist || '未知歌手';
+            const artistKey = String(song.id || '') + '|' + (song.artist || '') + '|' + ((song.artists || []).map((a) => a.id).join(','));
+            if (artistEl.dataset.artistKey !== artistKey) {
+                artistEl.dataset.artistKey = artistKey;
+                renderArtistInto(artistEl, song, ctx, '未知歌手');
+            }
 
             const currentCoverId = coverEl.dataset.songId;
             const nextCoverId = String(song.id || song.url || song.title || '');
@@ -1213,6 +1228,7 @@ function bindPlayerBar() {
             }
         } else {
             titleEl.textContent = '未播放';
+            artistEl.dataset.artistKey = '';
             artistEl.textContent = '从搜索结果中选择歌曲';
             if (coverEl.dataset.songId) {
                 coverEl.dataset.songId = '';
@@ -2041,7 +2057,7 @@ function initQueuePanel(ctx) {
 
         const artist = document.createElement('span');
         artist.className = 'song-artist';
-        artist.textContent = (song && song.artist) || '';
+        renderArtistInto(artist, song, ctx, '');
         info.appendChild(artist);
 
         row.appendChild(info);

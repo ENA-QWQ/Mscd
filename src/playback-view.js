@@ -1,5 +1,5 @@
 import { el } from './dom.js';
-import { icon, shareSong, openShareCardModal, Toast } from './components.js';
+import { icon, shareSong, openShareCardModal, Toast, renderArtistInto, renderAlbumInto } from './components.js';
 import { loadLyric, findCurrentIndex } from './lyric.js';
 import { openDownloadOptionsModal, handleDownloadLyric } from './views.js';
 import { buildUrl } from './router.js';
@@ -754,8 +754,8 @@ export function initPlaybackView(ctx) {
             renderCover(song);
             renderBg(song);
             setPlaybackTitle(song.title || '未知歌曲');
-            artistEl.textContent = song.artist || '未知歌手';
-            albumEl.textContent = song.album || '';
+            renderArtistInto(artistEl, song, ctx, '未知歌手');
+            renderAlbumInto(albumEl, song, ctx, '');
             loadCurrentLyric(song);
             overlay.classList.remove('is-switching');
         }, 200);

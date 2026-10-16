@@ -184,6 +184,166 @@ export function icon(name, filled = false) {
     return svg;
 }
 
+function splitArtistNames(str) {
+    if (!str) return [];
+    return String(str).split(/\s*[\/、，,]\s*|\s*&\s*/).filter(Boolean);
+}
+
+export function resolveArtists(song) {
+    if (!song) return [];
+    if (Array.isArray(song.artists) && song.artists.length) {
+        return song.artists
+            .map(a => ({ id: String(a && a.id ? a.id : ''), name: a && a.name ? a.name : '' }))
+            .filter(a => a.name);
+    }
+    return splitArtistNames(song.artist).map(name => ({ id: '', name }));
+}
+
+function openEntity(ctx, kind, id, name) {
+    if (!ctx || !ctx.searchActions) return;
+    if (id) {
+        if (kind === 'artist') ctx.searchActions.openArtist(id);
+        else if (kind === 'album') ctx.searchActions.openAlbumById(id);
+        return;
+    }
+    if (!name) return;
+    const type = kind === 'artist' ? '100' : '10';
+    ctx.searchActions.go(name, type, 1);
+}
+
+const entityIdCache = new Map();
+
+async function resolveEntityId(ctx, kind, name, song) {
+    if (!ctx || !ctx.api || !name) return '';
+    const netease = ctx.api.adapters && ctx.api.adapters.netease;
+    if (!netease || typeof netease.request !== 'function') return '';
+
+    const cacheKey = kind + ':' + (song && song.id ? song.id : '') + ':' + name;
+    if (entityIdCache.has(cacheKey)) return entityIdCache.get(cacheKey);
+
+    let found = '';
+
+    if (song && song.id) {
+        try {
+            const data = await netease.request('/song/detail', { ids: String(song.id) });
+            const ds = data && data.songs && data.songs[0];
+            if (ds) {
+                if (kind === 'artist') {
+                    const ar = Array.isArray(ds.ar) ? ds.ar : [];
+                    if (ar.length === 1 && ar[0] && ar[0].id) {
+                        found = String(ar[0].id);
+                    } else {
+                        const exact = ar.find(a => a && a.name === name);
+                        if (exact && exact.id) found = String(exact.id);
+                    }
+                } else if (kind === 'album') {
+                    const al = ds.al || ds.album;
+                    if (al && al.id) found = String(al.id);
+                }
+            }
+        } catch {}
+    }
+
+    if (!found) {
+        try {
+            const type = kind === 'artist' ? 100 : 10;
+            const data = await netease.request('/cloudsearch', { keywords: name, type, limit: 5 });
+            const r = data && data.result;
+            if (r) {
+                if (kind === 'artist') {
+                    const list = r.artists || [];
+                    const exact = list.find(a => a && a.name === name) || list[0];
+                    if (exact && exact.id) found = String(exact.id);
+                } else if (kind === 'album') {
+                    const list = r.albums || [];
+                    const exact = list.find(a => a && a.name === name) || list[0];
+                    if (exact && exact.id) found = String(exact.id);
+                }
+            }
+        } catch {}
+    }
+
+    entityIdCache.set(cacheKey, found);
+    return found;
+}
+
+function buildEntityLink(ctx, kind, id, name, song) {
+    const hasId = !!id;
+    const link = el('span', {
+        class: 'entity-link' + (hasId ? '' : ' is-search'),
+        text: name,
+    });
+    link.setAttribute('role', 'link');
+    link.setAttribute('tabindex', '0');
+
+    let busy = false;
+    async function go(e) {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+        if (!ctx || !ctx.searchActions || busy) return;
+        if (id) {
+            if (kind === 'artist') ctx.searchActions.openArtist(id);
+            else if (kind === 'album') ctx.searchActions.openAlbumById(id);
+            return;
+        }
+        busy = true;
+        try {
+            const resolved = await resolveEntityId(ctx, kind, name, song);
+            if (resolved) {
+                if (kind === 'artist') ctx.searchActions.openArtist(resolved);
+                else ctx.searchActions.openAlbumById(resolved);
+                return;
+            }
+        } catch {}
+        busy = false;
+        if (kind === 'artist') ctx.searchActions.go(name, '100', 1);
+        else ctx.searchActions.go(name, '10', 1);
+    }
+
+    link.addEventListener('click', go);
+    link.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') go(e);
+    });
+    return link;
+}
+
+export function renderArtistInto(container, song, ctx, fallback = '未知歌手') {
+    container.textContent = '';
+    const artists = resolveArtists(song);
+    if (!artists.length) {
+        container.textContent = fallback;
+        return;
+    }
+    artists.forEach((a, i) => {
+        if (i > 0) container.appendChild(document.createTextNode(' / '));
+        container.appendChild(buildEntityLink(ctx, 'artist', a.id, a.name, song));
+    });
+}
+
+export function renderAlbumInto(container, song, ctx, fallback = '') {
+    container.textContent = '';
+    const name = song && song.album ? String(song.album) : '';
+    if (!name) {
+        if (fallback) container.textContent = fallback;
+        return;
+    }
+    container.appendChild(buildEntityLink(ctx, 'album', song.albumId || '', name, song));
+}
+
+export function buildAlbumNode(song, ctx, className = 'song-album', prefix = '') {
+    const wrap = el('span', className ? { class: className } : {});
+    const name = song && song.album ? String(song.album) : '';
+    if (!name) {
+        wrap.textContent = prefix ? prefix.trim() : '未知专辑';
+        return wrap;
+    }
+    if (prefix) wrap.appendChild(document.createTextNode(prefix));
+    wrap.appendChild(buildEntityLink(ctx, 'album', song.albumId || '', name, song));
+    return wrap;
+}
+
 export function copyText(text) {
     const str = String(text || '');
     if (!str) return Promise.resolve(false);
@@ -367,6 +527,7 @@ function makeActionButton(name, title, danger, onClick) {
 
 export function SongRow(song, handlers = {}) {
     const {
+        ctx,
         onPlay, onPlayNext, onAddDownloadList, onDownloadNow, onDownloadLyric, onRemove, onEdit,
         selectable, selected, onToggleSelect,
         hidePlayNextMenu,
@@ -512,26 +673,36 @@ export function SongRow(song, handlers = {}) {
         coverEl.appendChild(actionsEl);
         coverEl.appendChild(menuWrap);
         row.appendChild(coverEl);
+        const gridArtist = el('div', { class: 'song-artist' });
+        renderArtistInto(gridArtist, song, ctx, '未知歌手');
         row.appendChild(
             el('div', { class: 'song-info' },
                 el('div', { class: 'song-title-row' },
                     el('span', { class: 'song-title', text: song.title || '未知歌曲' })
                 ),
-                el('div', { class: 'song-artist', text: song.artist || '未知歌手' })
+                gridArtist
             )
         );
     } else if (isDetail) {
         coverEl.appendChild(bars);
         row.appendChild(coverEl);
+        const detailArtist = el('span', { class: 'song-artist' });
+        renderArtistInto(detailArtist, song, ctx, '未知歌手');
         row.appendChild(
             el('div', { class: 'song-info' },
                 el('div', { class: 'song-title-row' },
                     el('span', { class: 'song-title', text: song.title || '未知歌曲' })
                 ),
-                el('div', { class: 'song-artist', text: song.artist || '未知歌手' })
+                detailArtist
             )
         );
-        row.appendChild(el('div', { class: 'song-detail-col song-detail-col--album', text: song.album || '-' }));
+        const albumCol = el('div', { class: 'song-detail-col song-detail-col--album' });
+        if (song.album) {
+            albumCol.appendChild(buildAlbumNode(song, ctx, '', ''));
+        } else {
+            albumCol.textContent = '-';
+        }
+        row.appendChild(albumCol);
         row.appendChild(el('div', { class: 'song-detail-col song-detail-col--date', text: detailWikiField(song, 'publishDate') }));
         row.appendChild(el('div', { class: 'song-detail-col song-detail-col--bpm', text: detailWikiField(song, 'bpm') }));
         row.appendChild(el('div', { class: 'song-detail-col song-detail-col--genre', text: detailWikiField(song, 'genre') }));
@@ -539,9 +710,10 @@ export function SongRow(song, handlers = {}) {
         row.appendChild(actionsEl);
         row.appendChild(menuWrap);
     } else {
-        const artistChildren = [
-            el('span', { class: 'song-artist', text: song.artist || '未知歌手' }),
-        ];
+        const tileArtist = el('span', { class: 'song-artist' });
+        renderArtistInto(tileArtist, song, ctx, '未知歌手');
+
+        const artistChildren = [tileArtist];
         if (badgesList.length) {
             const badgesEl = el('span', { class: 'song-badges' });
             for (const name of badgesList) {
@@ -559,7 +731,7 @@ export function SongRow(song, handlers = {}) {
                 el('div', { class: 'song-title-row' },
                     el('span', { class: 'song-title', text: song.title || '未知歌曲' }),
                     song.album
-                        ? el('span', { class: 'song-album', text: `- ${song.album}` })
+                        ? buildAlbumNode(song, ctx, 'song-album', '- ')
                         : null
                 ),
                 el('div', { class: 'song-artist-row' }, ...artistChildren)
@@ -596,7 +768,7 @@ export function SongRow(song, handlers = {}) {
 }
 
 export function CollectionCard(item, handlers = {}) {
-    const { onOpen } = handlers;
+    const { onOpen, ctx } = handlers;
 
     const coverEl = el('div', { class: 'collection-card__cover' });
     if (item.pic) {
@@ -647,7 +819,6 @@ export function CollectionCard(item, handlers = {}) {
 
     const isPlaylist = item._type === 'playlist';
     const desc = item._extra?.description || '';
-    const artist = item.artist || (isPlaylist ? '未知创建者' : '未知歌手');
 
     const infoChildren = [
         el('div', { class: 'collection-card__title', text: item.title || '未知' }),
@@ -657,7 +828,16 @@ export function CollectionCard(item, handlers = {}) {
         infoChildren.push(el('div', { class: 'collection-card__desc', text: desc }));
     }
 
-    infoChildren.push(el('div', { class: 'collection-card__artist', text: artist }));
+    if (isPlaylist) {
+        infoChildren.push(el('div', {
+            class: 'collection-card__artist',
+            text: item.artist || '未知创建者',
+        }));
+    } else {
+        const cardArtist = el('div', { class: 'collection-card__artist' });
+        renderArtistInto(cardArtist, item, ctx, '未知歌手');
+        infoChildren.push(cardArtist);
+    }
 
     const card = el('div', {
             class: `collection-card collection-card--${isPlaylist ? 'playlist' : 'album'}`,

@@ -1,5 +1,6 @@
 import { store } from './store.js';
 import { el } from './dom.js';
+import { renderArtistInto } from './components.js';
 
 let ctx = null;
 let favCache = null;
@@ -171,8 +172,10 @@ function makeTrackNode(track, options = {}) {
         title: `${track.title || '未知'} - ${track.artist || '未知'}`,
     });
     node.appendChild(el('span', { class: 'side-tree-node__label', text: track.title || '未知' }));
-    if (track.artist) {
-        node.appendChild(el('span', { class: 'side-tree-node__artist', text: track.artist }));
+    if (track.artist || (track.artists && track.artists.length)) {
+        const artistNode = el('span', { class: 'side-tree-node__artist' });
+        renderArtistInto(artistNode, track, ctx, '');
+        node.appendChild(artistNode);
     }
     node.addEventListener('click', (e) => {
         e.stopPropagation();

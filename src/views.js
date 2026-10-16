@@ -15,6 +15,7 @@ import {
     confirmDialog,
     openModal,
     Dropdown,
+    renderArtistInto,
 } from './components.js';
 import {
     supportsFileSystemAccess,
@@ -896,6 +897,7 @@ function songRowHandlers(song, ctx, extra = {}) {
     const hasMv = mvStr !== '' && mvStr !== '0';
 
     return {
+        ctx,
         selectable: true,
         selected,
         onToggleSelect: (s) => store.toggleSelection(s),
@@ -917,6 +919,7 @@ function collectionMeta(item) {
         id: item.id,
         title: item.title,
         artist: item.artist,
+        artists: item.artists || [],
         pic: item.pic,
         trackCount: item._type === 'playlist'
             ? (item._extra?.trackCount || 0)
@@ -996,6 +999,7 @@ export function SearchView(ctx) {
             for (const album of albums) {
                 list.appendChild(CollectionCard(album, {
                     onOpen: () => openDetail('album', collectionMeta(album)),
+                    ctx,
                 }));
             }
             albumsSection.appendChild(list);
@@ -1097,6 +1101,7 @@ export function SearchView(ctx) {
         for (const album of slice) {
             list.appendChild(CollectionCard(album, {
                 onOpen: () => openDetail('album', collectionMeta(album)),
+                ctx,
             }));
         }
         root.appendChild(list);
@@ -1211,8 +1216,19 @@ export function SearchView(ctx) {
         const count = detail.trackCount || detail.tracks.length;
 
         const metaChildren = [];
-        if (detail.artist) {
-            metaChildren.push(el('span', { class: 'detail-header__artist', text: detail.artist }));
+        if (detail.artist || (detail.artists && detail.artists.length)) {
+            const artistSpan = el('span', { class: 'detail-header__artist' });
+            let artistSource = { artist: detail.artist, artists: detail.artists || [] };
+            if ((!artistSource.artists || !artistSource.artists.length) && detail.tracks && detail.tracks.length) {
+                const first = detail.tracks[0];
+                artistSource = {
+                    id: first.id,
+                    artist: detail.artist || first.artist,
+                    artists: first.artists || [],
+                };
+            }
+            renderArtistInto(artistSpan, artistSource, ctx, '');
+            metaChildren.push(artistSpan);
         }
         metaChildren.push(el('span', { class: 'detail-header__count', text: `共 ${count} 首` }));
 
@@ -1483,6 +1499,7 @@ export function SearchView(ctx) {
             } else if (typeKey === '10' || typeKey === '1000') {
                 list.appendChild(CollectionCard(item, {
                     onOpen: () => openDetail(item._type, collectionMeta(item)),
+                    ctx,
                 }));
             } else {
                 list.appendChild(SongRow(item, songRowHandlers(item, ctx)));
@@ -2397,6 +2414,7 @@ export function MyFavoritesView(ctx) {
 
     function renderPlaylistCard(item) {
         return CollectionCard(item, {
+            ctx,
             onOpen: () => {
                 ctx.searchActions.openDetail('playlist', {
                     id: item.id,
@@ -2882,6 +2900,7 @@ export function DownloadsView(ctx) {
         const downloadsAll = state.downloads;
         for (const song of slice) {
             const row = SongRow(song, {
+                ctx,
                 selectable: true,
                 selected: state.selection.some((s) => s.id === song.id),
                 onToggleSelect: (s) => store.toggleSelection(s),
@@ -3428,6 +3447,7 @@ export function StatusView(ctx) {
             actionButtons: {},
             buttonsKey: null,
             lastStatus: null,
+            artistKey: null,
         };
         cache.trackRows.set(track.id, rowCache);
         return rowCache;
@@ -3538,8 +3558,11 @@ export function StatusView(ctx) {
         const title = track.title || '未知歌曲';
         if (rowCache.titleEl.textContent !== title) rowCache.titleEl.textContent = title;
 
-        const artist = track.artist || '';
-        if (rowCache.artistEl.textContent !== artist) rowCache.artistEl.textContent = artist;
+        const artistKey = String(track.artist || '') + '|' + ((track.artists || []).map(a => a.id + ':' + a.name).join(','));
+        if (rowCache.artistKey !== artistKey) {
+            rowCache.artistKey = artistKey;
+            renderArtistInto(rowCache.artistEl, track, ctx, '');
+        }
 
         if (rowCache.lastStatus !== track.status) {
             rowCache.lastStatus = track.status;

@@ -103,7 +103,9 @@ function normalizeSong(raw) {
         id,
         title: raw.name ?? raw.title ?? '',
         artist,
+        artists: [],
         album,
+        albumId: '',
         url: raw.url ?? '',
         pic: raw.pic ?? raw.cover ?? '',
         lrc: raw.lrc ?? '',
@@ -250,16 +252,17 @@ class NeteaseAdapter {
         if (!Array.isArray(artists) && artists?.name) {
             artists = [artists];
         }
-        const artist = artists
-            .map(a => a?.name)
-            .filter(Boolean)
-            .join(' / ');
+        const artistList = artists
+            .map(a => ({ id: String(a?.id ?? ''), name: a?.name ?? '' }))
+            .filter(a => a.name);
+        const artist = artistList.map(a => a.name).join(' / ');
 
         const albumObj = item.al || item.album || {};
         const albumName = albumObj.name
             ?? item.al?.name
             ?? item.album?.name
             ?? '';
+        const albumId = String(albumObj.id ?? item.al?.id ?? item.album?.id ?? '');
         const pic = albumObj.picUrl ?? albumObj.pic ?? '';
 
         let duration = Number(item.dt ?? item.duration ?? 0) || 0;
@@ -269,7 +272,9 @@ class NeteaseAdapter {
             id: String(item.id ?? ''),
             title: item.name ?? '',
             artist,
+            artists: artistList,
             album: albumName,
+            albumId,
             url: '',
             pic,
             lrc: '',
@@ -333,12 +338,16 @@ class NeteaseAdapter {
 
     normalizeAlbum(item) {
         if (!item) return null;
-        const artist = item.artist?.name
-            || (Array.isArray(item.artists) ? item.artists.map(a => a.name).filter(Boolean).join(' / ') : '');
+        const rawArtists = Array.isArray(item.artists) ? item.artists : (item.artist ? [item.artist] : []);
+        const artists = rawArtists
+            .map(a => ({ id: String(a?.id ?? ''), name: a?.name ?? '' }))
+            .filter(a => a.name);
+        const artist = artists.map(a => a.name).join(' / ');
         return {
             id: String(item.id ?? ''),
             title: item.name ?? '',
             artist,
+            artists,
             url: '',
             pic: item.picUrl ?? item.blurPicUrl ?? '',
             lrc: '',
@@ -669,13 +678,13 @@ export class Meting {
     async enrichSongsWithAlbum(songs) {
         if (!Array.isArray(songs) || !songs.length) return songs;
 
-        const needs = songs.filter((s) => s && s.id && !s.album);
+        const needs = songs.filter((s) => s && s.id && (!s.album || !s.albumId || !s.artists || !s.artists.length));
         if (!needs.length) return songs;
 
         const netease = this.adapters && this.adapters.netease;
         if (!netease || typeof netease.request !== 'function') return songs;
 
-        const albumById = new Map();
+        const detailById = new Map();
         const ids = needs.map((s) => String(s.id));
         const BATCH = 100;
 
@@ -686,18 +695,27 @@ export class Meting {
                 const list = (data && data.songs) || [];
                 for (const ds of list) {
                     const albumName = ds?.al?.name || ds?.album?.name || '';
-                    if (albumName) albumById.set(String(ds.id), albumName);
+                    const albumId = String(ds?.al?.id ?? ds?.album?.id ?? '');
+                    const rawArtists = ds?.ar || ds?.artists || [];
+                    const artists = (Array.isArray(rawArtists) ? rawArtists : [])
+                        .map(a => ({ id: String(a?.id ?? ''), name: a?.name ?? '' }))
+                        .filter(a => a.name);
+                    detailById.set(String(ds.id), { album: albumName, albumId, artists });
                 }
             } catch {}
         }
 
-        if (!albumById.size) return songs;
+        if (!detailById.size) return songs;
 
         return songs.map((s) => {
-            if (s && s.id && !s.album && albumById.has(String(s.id))) {
-                return { ...s, album: albumById.get(String(s.id)) };
-            }
-            return s;
+            if (!s || !s.id) return s;
+            const info = detailById.get(String(s.id));
+            if (!info) return s;
+            const out = { ...s };
+            if (!out.album && info.album) out.album = info.album;
+            if (!out.albumId && info.albumId) out.albumId = info.albumId;
+            if ((!out.artists || !out.artists.length) && info.artists.length) out.artists = info.artists;
+            return out;
         });
     }
 
@@ -709,7 +727,7 @@ export class Meting {
 
     async song(id, options = {}) {
         const song = await this.pick('song').song(id, options);
-        if (!song || song.album) return song;
+        if (!song) return song;
         const enriched = await this.enrichSongsWithAlbum([song]);
         return enriched[0] || song;
     }
