@@ -1217,7 +1217,11 @@ export function SearchView(ctx) {
         const count = detail.trackCount || detail.tracks.length;
 
         const metaChildren = [];
-        if (detail.artist || (detail.artists && detail.artists.length)) {
+        if (detail.kind === 'playlist') {
+            if (detail.artist) {
+                metaChildren.push(el('span', { class: 'detail-header__artist', text: detail.artist }));
+            }
+        } else if (detail.artist || (detail.artists && detail.artists.length)) {
             const artistSpan = el('span', { class: 'detail-header__artist' });
             let artistSource = { artist: detail.artist, artists: detail.artists || [] };
             if ((!artistSource.artists || !artistSource.artists.length) && detail.tracks && detail.tracks.length) {
