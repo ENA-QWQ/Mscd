@@ -258,7 +258,7 @@ body.queue-empty:not(.has-selection) .layout {
 
 .search-wrap > .ena-btn::before {
     background: var(--fill);
-    height: calc(100% + 2px);
+    height: 100%;
 }
 
 .search-wrap > .ena-btn:hover {
@@ -823,7 +823,7 @@ body.playback-open .player-cover {
 /* ==================== 通用按钮 ==================== */
 .ena-btn {
     position: relative;
-    overflow: visible;
+    overflow: hidden;
     z-index: 1;
     display: inline-flex;
     align-items: center;
@@ -850,7 +850,7 @@ body.playback-open .player-cover {
     content: '';
     position: absolute;
     left: 0;
-    bottom: -2px;
+    bottom: 0;
     width: 100%;
     height: 0%;
     background: var(--fill);
@@ -863,7 +863,7 @@ body.playback-open .player-cover {
 }
 
 .ena-btn:hover::before {
-    height: calc(100% + 2px);
+    height: 100%;
 }
 
 .ena-btn:focus-visible {
@@ -895,7 +895,7 @@ body.playback-open .player-cover {
 
 .ena-btn--primary::before {
     background: var(--fill);
-    height: calc(100% + 2px);
+    height: 100%;
 }
 
 .ena-btn--primary:hover {
@@ -920,7 +920,7 @@ body.playback-open .player-cover {
 }
 
 .ena-btn--danger:hover::before {
-    height: calc(100% + 2px);
+    height: 100%;
 }
 
 .ena-btn--ghost {
@@ -989,7 +989,7 @@ body.playback-open .player-cover {
 
 .ena-btn--icon.ena-btn--primary::before {
     background: var(--hover-bg);
-    height: calc(100% + 2px);
+    height: 100%;
 }
 
 .ena-btn--icon.ena-btn--primary:hover {
@@ -4234,7 +4234,7 @@ body.has-selection .multi-select-bar {
         content: '';
         position: absolute;
         left: 0;
-        bottom: -2px;
+        bottom: 0;
         width: 100%;
         height: 0%;
         background: var(--fill);
@@ -4243,7 +4243,7 @@ body.has-selection .multi-select-bar {
     }
 
     .search-wrap > .ena-btn:hover::before {
-        height: calc(100% + 2px);
+        height: 100%;
     }
 
     .search-wrap > .ena-btn::after {
