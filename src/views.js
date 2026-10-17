@@ -26,6 +26,7 @@ import { getFieldsForView, buildFilterContext, evaluate, treeHasDynamicField } f
 import { getWikiFetcher, collectWikiOptions } from './wiki.js';
 import { openFilterEditor } from './filter-editor.js';
 import { attachListGestures } from './list-gestures.js';
+import { MosaicView } from './mosaic-view.js';
 
 function hexToRgb(hex) {
     let h = String(hex || '').replace('#', '');
@@ -1348,23 +1349,32 @@ export function SearchView(ctx) {
         const totalPages = Math.max(1, Math.ceil(sourceTracks.length / perPage));
         const page = Math.min(Math.max(1, detail.page || 1), totalPages);
         const start = (page - 1) * perPage;
-        const slice = sourceTracks.slice(start, start + perPage);
+        const isMosaic = store.get().settings.songView === 'mosaic' && sourceTracks.length >= 30;
+        const slice = isMosaic ? sourceTracks : sourceTracks.slice(start, start + perPage);
 
         store.setVisibleTracks(slice);
         store.setAllTracks(detail.tracks);
         store.setFilteredTracks(sourceTracks);
 
         const isAlbum = detail.kind === 'album';
-        const list = el('div', { class: 'song-list' + (isAlbum ? ' song-list--album-tracks' : '') });
-        if (!isAlbum) maybeAddDetailHeader(list);
-        for (const song of slice) {
-            const rowHandlers = songRowHandlers(song, ctx);
-            if (isAlbum) rowHandlers.viewOverride = 'tile';
-            list.appendChild(SongRow(song, rowHandlers));
+        if (isMosaic) {
+            const mosaicView = MosaicView(sourceTracks, {
+                ctx,
+                getHandlers: (song) => songRowHandlers(song, ctx),
+            });
+            root.appendChild(mosaicView.node);
+        } else {
+            const list = el('div', { class: 'song-list' + (isAlbum ? ' song-list--album-tracks' : '') });
+            if (!isAlbum) maybeAddDetailHeader(list);
+            for (const song of slice) {
+                const rowHandlers = songRowHandlers(song, ctx);
+                if (isAlbum) rowHandlers.viewOverride = 'tile';
+                list.appendChild(SongRow(song, rowHandlers));
+            }
+            root.appendChild(list);
         }
-        root.appendChild(list);
 
-        if (totalPages > 1) {
+        if (!isMosaic && totalPages > 1) {
             root.appendChild(Pagination({
                 page,
                 totalPages,
@@ -1616,6 +1626,8 @@ export function SearchView(ctx) {
         lastWikiMap = wikiMap;
         lastSongView = songView;
 
+        root.querySelectorAll('.mosaic-view').forEach((n) => n.__destroy?.());
+
         if (search.detail) {
             if (homeInstance) {
                 homeInstance.destroy?.();
@@ -1676,6 +1688,7 @@ export function SearchView(ctx) {
                 homeInstance.destroy?.();
                 homeInstance = null;
             }
+            root.querySelectorAll('.mosaic-view').forEach((n) => n.__destroy?.());
             unsubscribe();
         },
     };
@@ -1724,6 +1737,7 @@ export function LikedView(ctx, options = {}) {
         const state = store.get();
         const account = state.account;
 
+        root.querySelectorAll('.mosaic-view').forEach((n) => n.__destroy?.());
         root.innerHTML = '';
         if (headerHost) headerHost.innerHTML = '';
 
@@ -1853,20 +1867,29 @@ export function LikedView(ctx, options = {}) {
         const totalPages = Math.max(1, Math.ceil(sourceTracks.length / perPage));
         const currentPage = Math.min(Math.max(1, page), totalPages);
         const start = (currentPage - 1) * perPage;
-        const slice = sourceTracks.slice(start, start + perPage);
+        const isMosaic = store.get().settings.songView === 'mosaic' && sourceTracks.length >= 30;
+        const slice = isMosaic ? sourceTracks : sourceTracks.slice(start, start + perPage);
 
         store.setVisibleTracks(slice);
         store.setAllTracks(tracks);
         store.setFilteredTracks(sourceTracks);
 
-        const list = el('div', { class: 'song-list' });
-        maybeAddDetailHeader(list);
-        for (const song of slice) {
-            list.appendChild(SongRow(song, songRowHandlers(song, ctx)));
+        if (isMosaic) {
+            const mosaicView = MosaicView(sourceTracks, {
+                ctx,
+                getHandlers: (song) => songRowHandlers(song, ctx),
+            });
+            root.appendChild(mosaicView.node);
+        } else {
+            const list = el('div', { class: 'song-list' });
+            maybeAddDetailHeader(list);
+            for (const song of slice) {
+                list.appendChild(SongRow(song, songRowHandlers(song, ctx)));
+            }
+            root.appendChild(list);
         }
-        root.appendChild(list);
 
-        if (totalPages > 1) {
+        if (!isMosaic && totalPages > 1) {
             root.appendChild(Pagination({
                 page: currentPage,
                 totalPages,
@@ -1919,7 +1942,10 @@ export function LikedView(ctx, options = {}) {
 
     return {
         node: root,
-        destroy: () => unsubscribe(),
+        destroy: () => {
+            root.querySelectorAll('.mosaic-view').forEach((n) => n.__destroy?.());
+            unsubscribe();
+        },
     };
 }
 

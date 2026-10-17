@@ -1452,6 +1452,11 @@ function bindAccountButton() {
                 label: '网格',
                 iconPath: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
             },
+            {
+                value: 'mosaic',
+                label: '马赛克',
+                iconPath: '<rect x="2" y="2" width="10" height="10"/><rect x="14" y="2" width="8" height="6"/><rect x="14" y="10" width="8" height="12"/><rect x="2" y="14" width="10" height="8"/>',
+            },
         ];
         for (const opt of items) {
             const item = document.createElement('button');

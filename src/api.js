@@ -106,6 +106,7 @@ function normalizeSong(raw) {
         artists: [],
         album,
         albumId: '',
+        pop: null,
         url: raw.url ?? '',
         pic: raw.pic ?? raw.cover ?? '',
         lrc: raw.lrc ?? '',
@@ -275,6 +276,7 @@ class NeteaseAdapter {
             artists: artistList,
             album: albumName,
             albumId,
+            pop: typeof item.pop === 'number' ? item.pop : null,
             url: '',
             pic,
             lrc: '',
@@ -700,7 +702,8 @@ export class Meting {
                     const artists = (Array.isArray(rawArtists) ? rawArtists : [])
                         .map(a => ({ id: String(a?.id ?? ''), name: a?.name ?? '' }))
                         .filter(a => a.name);
-                    detailById.set(String(ds.id), { album: albumName, albumId, artists });
+                    const pop = typeof ds?.pop === 'number' ? ds.pop : null;
+                    detailById.set(String(ds.id), { album: albumName, albumId, artists, pop });
                 }
             } catch {}
         }
@@ -715,6 +718,7 @@ export class Meting {
             if (!out.album && info.album) out.album = info.album;
             if (!out.albumId && info.albumId) out.albumId = info.albumId;
             if ((!out.artists || !out.artists.length) && info.artists.length) out.artists = info.artists;
+            if (out.pop == null && info.pop != null) out.pop = info.pop;
             return out;
         });
     }
