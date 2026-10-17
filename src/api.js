@@ -175,7 +175,7 @@ class MetingAdapter {
     }
 
     async songUrl(id, br) {
-        const url = applyApiProxy(upgradeToHttps(this.buildUrl({ server: 'netease', type: 'url', id, br })));
+        const url = upgradeToHttps(this.buildUrl({ server: 'netease', type: 'url', id, br }));
         const response = await fetch(url, {
             method: 'GET',
             redirect: 'follow',
