@@ -7661,6 +7661,18 @@ body {
     .audio-fx__eq-range {
         min-height: 0;
     }
+
+    .ena-modal__panel:has(.audio-fx) {
+        height: 88vh;
+        max-height: 88vh;
+    }
+
+    .ena-modal__panel:has(.audio-fx) .ena-modal__body {
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding: 16px 16px 20px;
+    }
 }
 
 .view-switcher-btn {
