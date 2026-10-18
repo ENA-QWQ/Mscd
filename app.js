@@ -1953,7 +1953,7 @@ function initQueuePanel(ctx) {
         openViewBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             store.setQueuePanelOpen(false);
-            store.update({ view: 'queue' });
+            store.update({ view: 'queue', playbackOpen: false });
         });
     }
 
@@ -2354,6 +2354,22 @@ initSidebarTrees(ctx);
 initGlobalListGestures(ctx);
 initWikiProgressUI(store);
 initQueuePanel(ctx);
+
+(function bindPlaybackAutoClose() {
+    let lastView = store.get().view;
+    let lastTrackCount = store.get().queue.tracks.length;
+    store.subscribe((state) => {
+        const viewChanged = state.view !== lastView;
+        const trackCount = state.queue.tracks.length;
+        const queueCleared = lastTrackCount > 0 && trackCount === 0;
+        lastView = state.view;
+        lastTrackCount = trackCount;
+        if (!state.playbackOpen) return;
+        if (viewChanged || queueCleared) {
+            store.update({ playbackOpen: false });
+        }
+    });
+})();
 
 (function scheduleAboutAutoShow() {
     if (!shouldShowAbout(config)) return;
