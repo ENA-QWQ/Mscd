@@ -9188,62 +9188,117 @@ body.queue-panel-open {
 .status-task--waiting .ena-progress__bar {
     background: var(--text-tertiary);
 }
-
-.task-track__title-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-}
-
-.task-track__title-row .task-track__title {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.task-track__icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-    color: var(--text-tertiary);
-}
-
-.task-track__icon svg {
-    width: 12px;
-    height: 12px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+
+
+.task-track__title-row {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 6px;
+
+    min-width: 0;
+
 }
-
-.status-task__icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    flex-shrink: 0;
-    color: var(--text-secondary);
-    align-self: center;
-}
-
-.status-task__icon svg {
-    width: 14px;
-    height: 14px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.status-task__icon.hidden {
-    display: none;
+
+
+
+.task-track__title-row .task-track__title {
+
+    flex: 1 1 auto;
+
+    min-width: 0;
+
+}
+
+
+
+.task-track__icon {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 14px;
+
+    height: 14px;
+
+    flex-shrink: 0;
+
+    color: var(--text-tertiary);
+
+}
+
+
+
+.task-track__icon svg {
+
+    width: 12px;
+
+    height: 12px;
+
+    stroke: currentColor;
+
+    fill: none;
+
+    stroke-width: 2;
+
+    stroke-linecap: round;
+
+    stroke-linejoin: round;
+
+}
+
+
+.status-task__icon {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 16px;
+
+    height: 16px;
+
+    flex-shrink: 0;
+
+    color: var(--text-secondary);
+
+    align-self: center;
+
+}
+
+
+
+.status-task__icon svg {
+
+    width: 14px;
+
+    height: 14px;
+
+    stroke: currentColor;
+
+    fill: none;
+
+    stroke-width: 2;
+
+    stroke-linecap: round;
+
+    stroke-linejoin: round;
+
+}
+
+
+
+.status-task__icon.hidden {
+
+    display: none;
+
 }
 
 .song-artist-row {
@@ -9361,7 +9416,7 @@ body.queue-panel-open {
 
 .mosaic-view{position:relative;margin-left:calc(-1 * var(--content-pad-x));margin-right:calc(-1 * var(--content-pad-x));width:calc(100% + 2 * var(--content-pad-x));margin-bottom:20px;overflow:hidden}
 .mosaic-chunk{position:absolute;left:0;right:0;pointer-events:none;visibility:hidden}
-.mosaic-cell{position:absolute;overflow:hidden;cursor:pointer;background:var(--bg-cover);contain:layout style paint}
+.mosaic-cell{position:absolute;overflow:hidden;cursor:pointer;background:var(--bg-cover);contain:layout style}
 .mosaic-cell.has-menu-open{z-index:50}
 .mosaic-cover{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary)}
 .mosaic-cover img{width:100%;height:100%;object-fit:cover;display:block;decoding:async}

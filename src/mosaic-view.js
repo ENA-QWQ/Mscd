@@ -402,16 +402,19 @@ export function MosaicView(tracks, options) {
         for (let i = 0; i < tracks.length; i++) {
             const p = positions[i];
             if (!p) continue;
-            const top = p.y * unit;
-            const chunkIdx = Math.min(chunkCount - 1, Math.floor(top / CHUNK_HEIGHT));
+            const x0 = Math.round(p.x * unit);
+            const y0 = Math.round(p.y * unit);
+            const x1 = Math.round((p.x + p.u) * unit);
+            const y1 = Math.round((p.y + p.u) * unit);
+            const chunkIdx = Math.min(chunkCount - 1, Math.floor(y0 / CHUNK_HEIGHT));
             chunkItems[chunkIdx].push({
                 track: tracks[i],
                 index: i,
                 rect: {
-                    x: p.x * unit,
-                    y: top,
-                    w: p.u * unit + 1,
-                    h: p.u * unit + 1,
+                    x: x0,
+                    y: y0,
+                    w: Math.max(1, x1 - x0 + 0.25),
+                    h: Math.max(1, y1 - y0 + 0.25),
                 },
                 u: p.u,
             });
@@ -419,9 +422,20 @@ export function MosaicView(tracks, options) {
 
         const frag = document.createDocumentFragment();
         for (let i = 0; i < chunkCount; i++) {
+            let minTop = Infinity;
+            let maxBottom = -Infinity;
+            for (const it of chunkItems[i]) {
+                if (it.rect.y < minTop) minTop = it.rect.y;
+                const bottom = it.rect.y + it.rect.h;
+                if (bottom > maxBottom) maxBottom = bottom;
+            }
+            if (!isFinite(minTop)) {
+                minTop = i * CHUNK_HEIGHT;
+                maxBottom = minTop;
+            }
             const ph = el('div', { class: 'mosaic-chunk' });
-            ph.style.top = (i * CHUNK_HEIGHT) + 'px';
-            ph.style.height = Math.min(CHUNK_HEIGHT, totalHeight - i * CHUNK_HEIGHT) + 'px';
+            ph.style.top = minTop + 'px';
+            ph.style.height = Math.max(1, maxBottom - minTop) + 'px';
             const chunk = {
                 items: chunkItems[i],
                 cells: [],
