@@ -1238,6 +1238,8 @@ function bindPlayerBar() {
         }
 
         const isMvMode = state.playbackMode === 'mv';
+        const isLoadingAudio = !isMvMode && !!q.isLoading;
+        if (progressEl) progressEl.classList.toggle('is-loading', isLoadingAudio);
         const total = isMvMode ? (state.mvState.duration || 0) : (q.duration || 0);
         const cur = isMvMode ? (state.mvState.currentTime || 0) : (q.currentTime || 0);
         progressBar.style.width = total > 0 ? `${(cur / total) * 100}%` : '0%';

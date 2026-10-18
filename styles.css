@@ -9577,3 +9577,19 @@ body.queue-panel-open {
         font-size: .68rem;
     }
 }
+
+
+.player-progress.is-loading .player-progress-bar {
+    width: 30% !important;
+    transition: none;
+    animation: player-progress-indeterminate 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes player-progress-indeterminate {
+    0% {
+        transform: translateX(-110%);
+    }
+    100% {
+        transform: translateX(370%);
+    }
+}
