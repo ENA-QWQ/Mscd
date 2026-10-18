@@ -9689,3 +9689,38 @@ body.queue-panel-open {
 .filter-condition__value > .filter-condition__param {
     min-width: 64px;
 }
+
+
+.download-complete-prompt p {
+    margin: 0 0 8px;
+    font-size: .82rem;
+    color: var(--text-secondary);
+}
+
+.download-complete-prompt__list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.download-complete-prompt__row {
+    padding: 8px 10px;
+    background: var(--bg-subtle);
+}
+
+.download-complete-prompt__title {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.download-complete-prompt__meta {
+    font-size: .72rem;
+    color: var(--text-tertiary);
+    margin-top: 2px;
+}

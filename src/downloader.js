@@ -793,6 +793,7 @@ export class Downloader {
         this.api = api;
         this.config = cfg;
         this.taskStates = new Map();
+        this.onTaskComplete = null;
     }
 
     _recordHistory(song, opts = {}) {
@@ -827,6 +828,16 @@ export class Downloader {
             duration: Number(s.duration) || 0,
             batchId: String(opts.batchId || ''),
         }).catch(() => {});
+    }
+
+    _notifyTaskComplete(taskId, successKindsBySongId) {
+        if (typeof this.onTaskComplete !== 'function') return;
+        if (!successKindsBySongId || !Object.keys(successKindsBySongId).length) return;
+        try {
+            this.onTaskComplete({ taskId, successKindsBySongId });
+        } catch (err) {
+            console.warn('[downloader] onTaskComplete error:', err);
+        }
     }
 
     getState(taskId) {
@@ -1481,6 +1492,7 @@ export class Downloader {
                     finishedAt: Date.now(),
                 });
                 this.taskStates.delete(taskId);
+                this._notifyTaskComplete(taskId, { [String(song.id || '')]: ['lyric'] });
                 return { taskId };
             }
 
@@ -1698,6 +1710,7 @@ export class Downloader {
                     finishedAt: Date.now(),
                 });
                 this.taskStates.delete(taskId);
+                this._notifyTaskComplete(taskId, { [String(song.id || '')]: ['lyric'] });
                 return { taskId, filename };
             }
 
@@ -2376,6 +2389,17 @@ export class Downloader {
             this.taskStates.delete(taskId);
             this._maybeStartNextWaiting(taskId);
 
+            const successKindsBySongId = {};
+            for (const track of finalTask?.tracks || []) {
+                if (track.status !== 'done' && track.status !== 'tagging') continue;
+                const sid = String(track.songId || '');
+                if (!sid) continue;
+                const kind = track._kind || 'audio';
+                if (!successKindsBySongId[sid]) successKindsBySongId[sid] = [];
+                successKindsBySongId[sid].push(kind);
+            }
+            this._notifyTaskComplete(taskId, successKindsBySongId);
+
             return {
                 taskId,
                 successful: successCount,
@@ -2910,6 +2934,18 @@ export class Downloader {
             });
 
             this.taskStates.delete(taskId);
+
+            const successKindsBySongId = {};
+            for (const item of successful) {
+                const track = item.track;
+                if (!track) continue;
+                const sid = String(track.songId || '');
+                if (!sid) continue;
+                const kind = track._kind || 'audio';
+                if (!successKindsBySongId[sid]) successKindsBySongId[sid] = [];
+                successKindsBySongId[sid].push(kind);
+            }
+            this._notifyTaskComplete(taskId, successKindsBySongId);
 
             return {
                 taskId,

@@ -6,6 +6,7 @@ import { Player } from './src/player.js';
 import { Downloader } from './src/downloader.js';
 import { loadLyric, findCurrentIndex } from './src/lyric.js';
 import { initTooltip } from './src/tooltip.js';
+import { el } from './src/dom.js';
 import {
     SearchView,
     QueueView,
@@ -2361,6 +2362,98 @@ initSidebarTrees(ctx);
 initGlobalListGestures(ctx);
 initWikiProgressUI(store);
 initQueuePanel(ctx);
+
+(function setupDownloadCompletionPrompt() {
+    const KIND_LABEL = { audio: '音频', lyric: '歌词', mv: 'MV' };
+
+    function computeWantedKinds(song) {
+        const kinds = [];
+        const skipAudio = !!song._skipAudio;
+        const lyricOnly = !!song._lyricOnly;
+        const wantLyric = !!song._withLyric || lyricOnly;
+        const dlMv = !!song._mvDownload;
+        const mvStr = song.mv == null ? '' : String(song.mv);
+        const hasMv = mvStr !== '' && mvStr !== '0';
+        if (!skipAudio && !lyricOnly) kinds.push('audio');
+        if (wantLyric) kinds.push('lyric');
+        if (dlMv && hasMv) kinds.push('mv');
+        return kinds;
+    }
+
+    function applyPlans(plans) {
+        const downloads = [...store.get().downloads];
+        const removedIds = new Set();
+        for (const plan of plans) {
+            const idx = downloads.findIndex((d) => String(d.id) === String(plan.song.id));
+            if (idx < 0) continue;
+            if (plan.remaining.length === 0) {
+                removedIds.add(String(plan.song.id));
+                downloads.splice(idx, 1);
+            } else {
+                const needAudio = plan.remaining.includes('audio');
+                const needLyric = plan.remaining.includes('lyric');
+                const needMv = plan.remaining.includes('mv');
+                const updated = { ...downloads[idx] };
+                if (needAudio) {
+                    updated._skipAudio = false;
+                    updated._lyricOnly = false;
+                    updated._withLyric = needLyric;
+                } else if (needLyric) {
+                    updated._skipAudio = true;
+                    updated._lyricOnly = true;
+                    updated._withLyric = false;
+                } else {
+                    updated._skipAudio = true;
+                    updated._lyricOnly = false;
+                    updated._withLyric = false;
+                }
+                updated._mvDownload = needMv;
+                downloads[idx] = updated;
+            }
+        }
+        store.update({ downloads });
+        store.persist();
+        if (removedIds.size > 0) {
+            const sel = store.get().selection;
+            const newSel = sel.filter((s) => !removedIds.has(String(s.id)));
+            if (newSel.length !== sel.length) {
+                store.update({ selection: newSel });
+            }
+        }
+    }
+
+    function showCompletionPrompt(plans) {
+        const body = el('div', { class: 'download-complete-prompt' });
+        body.appendChild(el('p', { text: '是否移除已完成下载的项？' }));
+        openModal({
+            title: '下载完成',
+            body,
+            confirmText: '移除',
+            cancelText: '保留',
+            onConfirm: () => { applyPlans(plans); },
+        });
+    }
+
+    downloader.onTaskComplete = (info) => {
+        if (!info || !info.successKindsBySongId) return;
+        if (document.querySelector('.ena-modal.is-open')) return;
+        const downloads = store.get().downloads;
+        if (!downloads.length) return;
+        const plans = [];
+        for (const songId of Object.keys(info.successKindsBySongId)) {
+            const succeeded = info.successKindsBySongId[songId];
+            if (!succeeded || !succeeded.length) continue;
+            const song = downloads.find((d) => String(d.id) === String(songId));
+            if (!song) continue;
+            const wanted = computeWantedKinds(song);
+            if (!wanted.length) continue;
+            const remaining = wanted.filter((k) => !succeeded.includes(k));
+            plans.push({ song, succeeded, remaining });
+        }
+        if (!plans.length) return;
+        showCompletionPrompt(plans);
+    };
+})();
 
 (function bindPlaybackAutoClose() {
     let lastView = store.get().view;
