@@ -2220,6 +2220,13 @@ export function QueueView(ctx) {
             }
 
             row.dataset.index = String(index);
+            if (!row.querySelector('.song-index')) {
+                const idxEl = el('span', { class: 'song-index', text: String(index + 1) });
+                const checkbox = row.querySelector('.song-select');
+                const ref = checkbox || row.firstElementChild;
+                if (ref) ref.insertAdjacentElement('afterend', idxEl);
+                else row.appendChild(idxEl);
+            }
             songListEl.appendChild(row);
         }
 
@@ -3091,6 +3098,13 @@ export function DownloadsView(ctx) {
             });
             const realIndex = downloadsAll.indexOf(song);
             if (realIndex >= 0) row.dataset.index = String(realIndex);
+            if (realIndex >= 0 && !row.querySelector('.song-index')) {
+                const idxEl = el('span', { class: 'song-index', text: String(realIndex + 1) });
+                const checkbox = row.querySelector('.song-select');
+                const ref = checkbox || row.firstElementChild;
+                if (ref) ref.insertAdjacentElement('afterend', idxEl);
+                else row.appendChild(idxEl);
+            }
             songListEl.appendChild(row);
         }
 
@@ -4022,6 +4036,9 @@ export function SettingsView(ctx) {
     let themeCustomEl = null;
     let themeBtnEl = null;
     let namingFormatInput = null;
+    let seqCbInput = null;
+    let seqFormatGroup = null;
+    const seqFormatInputs = new Map();
     const themeModeInputs = new Map();
 
     function buildRadioGroup({ label, name, inputMap, onChange }) {
@@ -4397,8 +4414,47 @@ export function SettingsView(ctx) {
             class: 'setting-hint',
             text: '可用占位符：{title} 歌曲名、{artist} 歌手名、{album} 专辑名',
         }));
-        root.appendChild(formatGroup);
+        formatGroup.appendChild(el('div', { class: 'setting-sublabel', text: '批量下载文件名序号' }));
 
+        const seqCb = buildCheckbox({
+            label: '为批量下载的歌曲和歌词文件名添加序号',
+            onChange: (v) => {
+                store.update({ settings: { ...store.get().settings, batchFilenameSeq: v } });
+                store.persist();
+                if (seqFormatGroup) seqFormatGroup.classList.toggle('is-disabled', !v);
+            },
+        });
+        seqCbInput = seqCb.input;
+        formatGroup.appendChild(el('div', { class: 'setting-checkboxes' }, seqCb.node));
+
+        formatGroup.appendChild(el('div', { class: 'setting-sublabel', text: '序号格式' }));
+
+        const FORMATS = [
+            { id: '(n)', label: '(1)' },
+            { id: 'n.', label: '1.' },
+            { id: 'n)', label: '1)' },
+            { id: '[n]', label: '[1]' },
+            { id: 'n-', label: '1-' },
+        ];
+        const fmtOptions = el('div', { class: 'ena-radio-group' });
+        for (const fmt of FORMATS) {
+            const input = el('input', { type: 'radio', name: 'batch-filename-seq-format' });
+            input.addEventListener('change', () => {
+                if (input.checked) {
+                    store.update({ settings: { ...store.get().settings, batchFilenameSeqFormat: fmt.id } });
+                    store.persist();
+                }
+            });
+            seqFormatInputs.set(fmt.id, input);
+            fmtOptions.appendChild(el('label', { class: 'ena-radio' },
+                input,
+                el('span', { class: 'dot' }),
+                el('span', { text: fmt.label })
+            ));
+        }
+        seqFormatGroup = fmtOptions;
+        formatGroup.appendChild(fmtOptions);
+        root.appendChild(formatGroup);
         const categoryGroup = el('div', { class: 'setting-group' });
         categoryGroup.appendChild(el('div', { class: 'setting-label', text: '批量下载分类方式' }));
 
@@ -4544,6 +4600,18 @@ export function SettingsView(ctx) {
         if (namingFormatInput && document.activeElement !== namingFormatInput) {
             const want = settings.namingFormat || '';
             if (namingFormatInput.value !== want) namingFormatInput.value = want;
+        }
+
+        if (seqCbInput) {
+            const want = !!settings.batchFilenameSeq;
+            if (seqCbInput.checked !== want) seqCbInput.checked = want;
+        }
+        for (const [id, input] of seqFormatInputs) {
+            const want = id === (settings.batchFilenameSeqFormat || '(n)');
+            if (input.checked !== want) input.checked = want;
+        }
+        if (seqFormatGroup) {
+            seqFormatGroup.classList.toggle('is-disabled', !settings.batchFilenameSeq);
         }
 
         for (const [id, input] of batchCategoryInputs) {

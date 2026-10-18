@@ -2278,7 +2278,7 @@ body.has-selection .song-select {
 .downloads-view .song-row {
     padding: 8px 12px;
     gap: 10px;
-    padding-left: 56px;
+    padding-left: 34px;
 }
 
 .queue-view .song-cover,
@@ -9723,4 +9723,35 @@ body.queue-panel-open {
     font-size: .72rem;
     color: var(--text-tertiary);
     margin-top: 2px;
+}
+
+
+.queue-view .song-index,
+.downloads-view .song-index {
+    justify-content: flex-end;
+    width: 20px;
+    padding-right: 2px;
+    margin-right: -6px;
+}
+
+@media (max-width: 900px) {
+    .queue-view .song-index,
+    .downloads-view .song-index {
+        width: 16px;
+        padding-right: 1px;
+        margin-right: -4px;
+    }
+}
+
+
+.queue-view .song-row:has(.song-select):not(.song-row--detail),
+.downloads-view .song-row:has(.song-select):not(.song-row--detail) {
+    padding-left: 34px !important;
+}
+
+@media (max-width: 900px) {
+    .queue-view .song-row:has(.song-select):not(.song-row--detail),
+    .downloads-view .song-row:has(.song-select):not(.song-row--detail) {
+        padding-left: 28px !important;
+    }
 }

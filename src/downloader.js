@@ -709,8 +709,22 @@ function applyNamingFormat(song, format) {
 }
 
 function buildBaseName(song) {
-    const format = store.get().settings.namingFormat;
-    const raw = applyNamingFormat(song, format);
+    const settings = store.get().settings;
+    const format = settings.namingFormat;
+    let raw = applyNamingFormat(song, format);
+    if (song && song._seqIndex && settings.batchFilenameSeq) {
+        const n = Number(song._seqIndex) || 0;
+        if (n > 0) {
+            const fmt = String(settings.batchFilenameSeqFormat || '(n)');
+            let prefix;
+            if (fmt === 'n.') prefix = n + '. ';
+            else if (fmt === 'n)') prefix = n + ') ';
+            else if (fmt === '[n]') prefix = '[' + n + '] ';
+            else if (fmt === 'n-') prefix = n + '- ';
+            else prefix = '(' + n + ') ';
+            raw = prefix + raw;
+        }
+    }
     return sanitizeFilename(raw) || 'untitled';
 }
 
@@ -1855,6 +1869,14 @@ export class Downloader {
         const tagConcurrency = Math.max(2, Math.min(4, concurrency));
 
         if (!options.resumeTaskId && Array.isArray(songs)) {
+            if (songs.length > 1) {
+                const allDownloads = store.get().downloads;
+                songs = songs.map((s) => {
+                    if (!s || !s.id) return s;
+                    const idx = allDownloads.findIndex((d) => String(d.id) === String(s.id));
+                    return idx >= 0 ? { ...s, _seqIndex: idx + 1 } : s;
+                });
+            }
             songs = this.expandDownloadEntries(songs);
         }
 
@@ -1929,6 +1951,7 @@ export class Downloader {
                 _mvQuality: t._mvQuality,
                 _mvFallback: t._mvFallback,
                 _skipAudio: t._skipAudio,
+                _seqIndex: Number(t._seqIndex) || 0,
             }));
 
             quality = tracks[0]?._quality ?? quality;
@@ -1981,6 +2004,7 @@ export class Downloader {
                 _mvQuality: song._mvQuality,
                 _mvFallback: song._mvFallback,
                 _skipAudio: !!song._skipAudio,
+                _seqIndex: Number(song._seqIndex) || 0,
                 status: 'queued',
                 bytes: 0,
                 totalBytes: 0,
@@ -2426,6 +2450,14 @@ export class Downloader {
         const tagConcurrency = Math.max(2, Math.min(4, concurrency));
 
         if (!options.resumeTaskId && Array.isArray(songs)) {
+            if (songs.length > 1) {
+                const allDownloads = store.get().downloads;
+                songs = songs.map((s) => {
+                    if (!s || !s.id) return s;
+                    const idx = allDownloads.findIndex((d) => String(d.id) === String(s.id));
+                    return idx >= 0 ? { ...s, _seqIndex: idx + 1 } : s;
+                });
+            }
             songs = this.expandDownloadEntries(songs);
         }
 
@@ -2484,6 +2516,7 @@ export class Downloader {
                 _mvQuality: t._mvQuality,
                 _mvFallback: t._mvFallback,
                 _skipAudio: t._skipAudio,
+                _seqIndex: Number(t._seqIndex) || 0,
             }));
 
             quality = tracks[0]?._quality ?? quality;
@@ -2537,6 +2570,7 @@ export class Downloader {
                 _mvQuality: song._mvQuality,
                 _mvFallback: song._mvFallback,
                 _skipAudio: !!song._skipAudio,
+                _seqIndex: Number(song._seqIndex) || 0,
                 status: 'queued',
                 bytes: 0,
                 totalBytes: 0,

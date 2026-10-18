@@ -147,6 +147,8 @@ function createInitialState() {
             themeMode: 'auto',
             historyRecord: true,
             namingFormat: '{title} - {artist}',
+            batchFilenameSeq: false,
+            batchFilenameSeqFormat: '(n)',
             batchCategory: 'none',
             lyricSaveMode: 'same',
             songView: 'tile',
