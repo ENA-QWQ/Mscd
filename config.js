@@ -11,6 +11,11 @@ export const config = {
         },
     },
 
+    wiki: {
+        summaryApi: 'https://zm.wwoyun.cn/song/wiki/summary',
+        detailApi: 'https://zm.wwoyun.cn/song/detail',
+    },
+
     services: {
         search: 'netease',
         song: 'meting',

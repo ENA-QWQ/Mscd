@@ -21,9 +21,6 @@ const STORE_NAME = 'songWiki';
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const FAILED_TTL = 60 * 60 * 1000;
 
-const DEFAULT_WIKI_API = 'https://zm.wwoyun.cn/song/wiki/summary';
-const DEFAULT_DETAIL_API = 'https://zm.wwoyun.cn/song/detail';
-
 let dbPromise = null;
 
 function openDb() {
@@ -193,8 +190,8 @@ async function fetchPublishDates(ids, apiBase) {
 
 export class WikiFetcher {
     constructor(options = {}) {
-        this.apiBase = options.apiBase || DEFAULT_WIKI_API;
-        this.detailBase = options.detailBase || DEFAULT_DETAIL_API;
+        this.apiBase = options.apiBase || config.wiki.summaryApi;
+        this.detailBase = options.detailBase || config.wiki.detailApi;
         this.workerCount = options.workerCount || 4;
         this.batchSize = options.batchSize || 16;
         this.workers = [];

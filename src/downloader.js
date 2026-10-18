@@ -165,7 +165,7 @@ async function fetchWikiFields(id) {
     const promise = (async () => {
         const out = { genre: '', bpm: 0, publishDate: '', language: '' };
         try {
-            const baseUrl = 'https://zm.wwoyun.cn/song/wiki/summary?id=' + encodeURIComponent(key);
+            const baseUrl = config.wiki.summaryApi + '?id=' + encodeURIComponent(key);
             const url = applyApiProxy(baseUrl);
             const res = await fetch(url, { headers: { Accept: 'application/json' } });
             if (res.ok) {
