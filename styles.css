@@ -9593,3 +9593,22 @@ body.queue-panel-open {
         transform: translateX(370%);
     }
 }
+
+
+.content-area > .queue-view > .view-toolbar,
+.content-area > .downloads-view > .view-toolbar {
+    padding-bottom: 1px;
+    transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
+}
+
+.content-area > .queue-view > .view-toolbar .ena-btn,
+.content-area > .downloads-view > .view-toolbar .ena-btn,
+.content-area > .queue-view > .view-toolbar .ena-input,
+.content-area > .downloads-view > .view-toolbar .ena-input,
+.content-area > .queue-view > .view-toolbar .ena-dropdown,
+.content-area > .downloads-view > .view-toolbar .ena-dropdown {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
