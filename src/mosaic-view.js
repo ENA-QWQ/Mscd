@@ -16,8 +16,8 @@ function placeCells(n, columns) {
     const sizes = new Array(n);
     for (let i = 0; i < n; i++) {
         const p = (i * GOLDEN) % 1;
-        if (p < 0.15) sizes[i] = 4;
-        else if (p < 0.50) sizes[i] = 2;
+        if (p < 0.08) sizes[i] = 4;
+        else if (p < 0.42) sizes[i] = 2;
         else sizes[i] = 1;
     }
 
