@@ -1376,6 +1376,7 @@ export function SearchView(ctx) {
                     rowHandlers.viewOverride = 'tile';
                     rowHandlers.showIndex = true;
                     rowHandlers.index = start + i + 1;
+                    rowHandlers.showDuration = true;
                 }
                 list.appendChild(SongRow(song, rowHandlers));
             });

@@ -9508,3 +9508,30 @@ body.queue-panel-open {
         width: 24px;
     }
 }
+
+
+.song-list.song-list--album-tracks .song-duration {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 44px;
+    flex-shrink: 0;
+    margin-right: 12px;
+    font-family: 'LXGW WenKai Light', system-ui, sans-serif;
+    font-size: .72rem;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    transition: color .25s ease;
+}
+
+.song-list.song-list--album-tracks .song-row:hover .song-duration {
+    color: var(--hover-text);
+}
+
+@media (max-width: 900px) {
+    .song-list.song-list--album-tracks .song-duration {
+        width: 38px;
+        margin-right: 8px;
+        font-size: .68rem;
+    }
+}

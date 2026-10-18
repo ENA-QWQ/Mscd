@@ -536,6 +536,7 @@ export function SongRow(song, handlers = {}) {
         viewOverride,
         showIndex,
         index,
+        showDuration,
     } = handlers;
 
     const coverEl = el('div', { class: 'song-cover' });
@@ -746,6 +747,12 @@ export function SongRow(song, handlers = {}) {
                 el('div', { class: 'song-artist-row' }, ...artistChildren)
             )
         );
+        if (showDuration) {
+            row.appendChild(el('span', {
+                class: 'song-duration',
+                text: formatSongDuration(song.duration),
+            }));
+        }
         row.appendChild(actionsEl);
         row.appendChild(menuWrap);
     }
