@@ -1443,6 +1443,11 @@ function bindAccountButton() {
                 iconPath: '<rect x="3" y="5" width="18" height="5" rx="1"/><rect x="3" y="14" width="18" height="5" rx="1"/>',
             },
             {
+                value: 'list',
+                label: '列表',
+                iconPath: '<rect x="3" y="4" width="6" height="6" rx="1"/><line x1="12" y1="6" x2="21" y2="6"/><line x1="12" y1="10" x2="21" y2="10"/><rect x="3" y="14" width="6" height="6" rx="1"/><line x1="12" y1="16" x2="21" y2="16"/><line x1="12" y1="20" x2="21" y2="20"/>',
+            },
+            {
                 value: 'detail',
                 label: '详细信息',
                 iconPath: '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>',

@@ -630,11 +630,12 @@ export function SongRow(song, handlers = {}) {
     const songView = viewOverride || resolveSongRowView();
     const isDetail = songView === 'detail';
     const isGrid = songView === 'grid';
+    const isList = songView === 'list';
 
     const badgesList = Array.isArray(contentBadges) ? contentBadges.filter(Boolean) : [];
 
     const row = el('div', {
-        class: 'song-row' + (isDetail ? ' song-row--detail' : '') + (isGrid ? ' song-row--grid' : ''),
+        class: 'song-row' + (isDetail ? ' song-row--detail' : '') + (isGrid ? ' song-row--grid' : '') + (isList ? ' song-row--list' : ''),
         dataset: { id: song.id },
     });
     row.__song = song;
@@ -747,7 +748,7 @@ export function SongRow(song, handlers = {}) {
                 el('div', { class: 'song-artist-row' }, ...artistChildren)
             )
         );
-        if (showDuration) {
+        if (showDuration || isList) {
             row.appendChild(el('span', {
                 class: 'song-duration',
                 text: formatSongDuration(song.duration),

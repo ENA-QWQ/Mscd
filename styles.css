@@ -9535,3 +9535,45 @@ body.queue-panel-open {
         font-size: .68rem;
     }
 }
+
+
+.content-area[data-song-view="list"] .song-list:not(.song-list--album):not(.song-list--artist):not(.song-list--playlist):not(.song-list--album-tracks) {
+    grid-template-columns: 1fr;
+    gap: 4px;
+}
+
+.song-row--list {
+    padding: 8px 14px;
+    gap: 10px;
+}
+
+.song-duration {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 44px;
+    flex-shrink: 0;
+    margin-right: 12px;
+    font-family: 'LXGW WenKai Light', system-ui, sans-serif;
+    font-size: .72rem;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    transition: color .25s ease;
+}
+
+.song-row:hover .song-duration {
+    color: var(--hover-text);
+}
+
+@media (max-width: 900px) {
+    .song-row--list {
+        padding: 7px 10px;
+        gap: 8px;
+    }
+
+    .song-duration {
+        width: 38px;
+        margin-right: 8px;
+        font-size: .68rem;
+    }
+}
