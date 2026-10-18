@@ -30,6 +30,7 @@ import { initSidebarTrees } from './src/sidebar-tree.js';
 import { initGlobalListGestures } from './src/list-gestures.js';
 import { MVPlayer } from './src/mv-player.js';
 import { AudioEffects, openAudioEffectsModal } from './src/audio-effects.js';
+import { ThemeManager } from './src/theme-manager.js';
 
 const api = new Meting(config);
 const player = new Player(api, config);
@@ -519,6 +520,10 @@ const searchActions = {
 };
 
 const ctx = { api, store, player, downloader, config, searchActions, mvPlayer };
+
+const themeManager = new ThemeManager({ store, config });
+ctx.themeManager = themeManager;
+window.__themeManager = themeManager;
 ctx.openParseModal = () => openParseModal(ctx);
 ctx.openBatchAddModal = (songs, mode) => openBatchAddModal(songs, ctx, mode);
 
@@ -2651,5 +2656,7 @@ initSidebarResizer();
     window.addEventListener('resize', schedule);
     schedule();
 })();
+
+themeManager.init();
 
 window.__app = ctx;

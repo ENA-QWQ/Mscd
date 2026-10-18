@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "default": "mono",
+  "themes": [
+    {
+      "id": "mono",
+      "name": "默认主题",
+      "author": "MSCD 内置",
+      "version": "1.0.0",
+      "css": "mono/theme.css",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "accent": {
+        "default": "#2d2d2d",
+        "derivable": true
+      }
+    },
+    {
+      "id": "mono-round",
+      "name": "默认主题(圆角)",
+      "author": "MSCD 内置",
+      "version": "1.0.0",
+      "css": "mono-round/theme.css",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "accent": {
+        "default": "#2d2d2d",
+        "derivable": true
+      }
+    }
+  ]
+}

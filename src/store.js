@@ -1,12 +1,5 @@
 import { config } from '../config.js';
-import {
-    generateThemeVars,
-    applyThemeVars,
-    clearThemeVars,
-    applyColorScheme,
-    resolveMode,
-    onSystemThemeChange,
-} from './theme.js';
+import { resolveMode } from './theme.js';
 
 const STORAGE_KEY = 'meting-app-state';
 
@@ -116,6 +109,7 @@ function createInitialState() {
         },
 
         settings: {
+            themeId: '',
             quality: config.quality.default,
             downloadQuality: config.quality.download,
             concurrency: config.download.concurrency,
@@ -313,11 +307,6 @@ class Store {
         this.state = loadPersisted(createInitialState());
         this.listeners = new Set();
 
-        onSystemThemeChange(() => {
-            if ((this.state.settings.themeMode || 'auto') !== 'auto') return;
-            this.applyTheme();
-            this.notify();
-        });
     }
 
     get() {
@@ -648,16 +637,12 @@ class Store {
     }
 
     applyTheme() {
-        const { themeColor, themeMode } = this.state.settings;
-        const mode = themeMode || 'auto';
+        const mode = this.state.settings.themeMode || 'auto';
         const resolved = resolveMode(mode);
-
-        if (!themeColor && resolved === 'light') {
-            clearThemeVars();
-            return;
-        }
-        applyThemeVars(generateThemeVars(themeColor || '#2d2d2d', resolved));
-        applyColorScheme(resolved);
+        const root = document.documentElement;
+        root.setAttribute('data-mode', resolved);
+        root.style.setProperty('color-scheme', resolved);
+        root.style.removeProperty('--bg-page');
     }
 
     setTheme(themeColor) {

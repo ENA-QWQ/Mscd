@@ -55,6 +55,9 @@ export const config = {
     ui: {
         perPage: 50,
         themeColor: '',
+        defaultTheme: 'mono',
+        themeManifest: 'themes/index.json',
+    
     },
 
     about: {

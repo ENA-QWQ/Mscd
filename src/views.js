@@ -4081,6 +4081,58 @@ export function SettingsView(ctx) {
         return { input, node: lbl };
     }
 
+    let themeGroupCleanup = null;
+
+    function buildThemeGroup() {
+        const group = el('div', { class: 'setting-group' });
+        group.appendChild(el('div', { class: 'setting-label', text: '主题' }));
+
+        const grid = el('div', { class: 'theme-grid' });
+        group.appendChild(grid);
+
+        const hintEl = el('div', { class: 'setting-hint' });
+        group.appendChild(hintEl);
+
+        const tm = ctx.themeManager;
+
+        function rebuild() {
+            grid.innerHTML = '';
+            if (!tm || !tm.manifest) {
+                hintEl.textContent = '主题清单加载中…';
+                return;
+            }
+            hintEl.textContent = '';
+            const current = tm.currentThemeId;
+            for (const meta of tm.manifest.themes) {
+                const card = el('button', {
+                    class: 'theme-card' + (meta.id === current ? ' is-active' : ''),
+                    type: 'button',
+                    title: meta.name,
+                    dataset: { themeId: meta.id },
+                });
+                card.appendChild(el('div', { class: 'theme-card__meta' },
+                    el('div', { class: 'theme-card__name', text: meta.name }),
+                    el('div', { class: 'theme-card__author', text: meta.author || '' })
+                ));
+                card.addEventListener('click', async () => {
+                    const ok = await tm.switchTheme(meta.id);
+                    if (ok) rebuild();
+                });
+                grid.appendChild(card);
+            }
+        }
+
+        rebuild();
+
+        if (tm) {
+            const unsub = tm.subscribe(() => rebuild());
+            if (themeGroupCleanup) { try { themeGroupCleanup(); } catch (e) {} }
+            themeGroupCleanup = unsub;
+        }
+
+        return group;
+    }
+
     function buildAppearanceGroup() {
         const settings = store.get().settings;
         const group = el('div', { class: 'setting-group' });
@@ -4175,6 +4227,7 @@ export function SettingsView(ctx) {
         perPageGroup.appendChild(perPageRange);
         root.appendChild(perPageGroup);
 
+        root.appendChild(buildThemeGroup());
         root.appendChild(buildAppearanceGroup());
 
         root.appendChild(buildRadioGroup({
@@ -4636,7 +4689,13 @@ export function SettingsView(ctx) {
 
     return {
         node: root,
-        destroy: () => unsubscribe(),
+        destroy: () => {
+            if (themeGroupCleanup) {
+                try { themeGroupCleanup(); } catch (e) {}
+                themeGroupCleanup = null;
+            }
+            unsubscribe();
+        },
     };
 }
 

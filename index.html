@@ -36,7 +36,57 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Poiret+One&display=swap" rel="stylesheet" />
+
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="themes/mono/theme.css" id="theme-stylesheet" />
+    <script>
+        (function () {
+            var DEFAULT_THEME = 'mono';
+            var themeId = DEFAULT_THEME;
+            var mode = 'auto';
+
+            try {
+                var raw = localStorage.getItem('meting-app-state');
+                if (raw) {
+                    var saved = JSON.parse(raw);
+                    var s = saved && saved.settings;
+                    if (s) {
+                        if (typeof s.themeId === 'string' && s.themeId) themeId = s.themeId;
+                        if (s.themeMode === 'light' || s.themeMode === 'dark' || s.themeMode === 'auto') mode = s.themeMode;
+                    }
+                }
+            } catch (e) { }
+
+            var dark = mode === 'dark' ||
+                (mode === 'auto' && window.matchMedia &&
+                    window.matchMedia('(prefers-color-scheme: dark)').matches);
+            var resolved = dark ? 'dark' : 'light';
+
+            var root = document.documentElement;
+            root.setAttribute('data-theme', themeId);
+            root.setAttribute('data-mode', resolved);
+            root.style.setProperty('color-scheme', resolved);
+            root.style.setProperty('--bg-page', dark ? '#171717' : '#f0f0f0');
+
+            if (themeId !== DEFAULT_THEME) {
+                var defaultLink = document.getElementById('theme-stylesheet');
+                if (defaultLink) defaultLink.setAttribute('media', 'not all');
+                var newLink = document.createElement('link');
+                newLink.rel = 'stylesheet';
+                newLink.href = 'themes/' + themeId + '/theme.css';
+                newLink.onload = function () {
+                    newLink.id = 'theme-stylesheet';
+                    if (defaultLink && defaultLink.parentNode) defaultLink.parentNode.removeChild(defaultLink);
+                };
+                newLink.onerror = function () {
+                    if (defaultLink) defaultLink.removeAttribute('media');
+                    root.setAttribute('data-theme', DEFAULT_THEME);
+                };
+                document.head.appendChild(newLink);
+            }
+        })();
+    </script>
 </head>
 
 <body>

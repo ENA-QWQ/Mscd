@@ -1,0 +1,169 @@
+:root {
+    --bg-float-light: #f5f5f5;
+    --bg-overlay-light: rgba(255,255,255,0.9);
+    --bg-page-light: #f0f0f0;
+    --bg-subtle-light: rgba(0,0,0,0.02);
+    --border-faint-light: rgba(0,0,0,0.06);
+    --ease-emphasized: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-standard: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --font-body: 'LXGW WenKai Light', system-ui, -apple-system, sans-serif;
+    --font-display: 'Poiret One', system-ui, sans-serif;
+    --font-mono: ui-monospace, monospace;
+    --font-pixel: 'FusionPixel', system-ui, sans-serif;
+    --on-accent: #ffffff;
+    --on-accent-faint: rgba(255,255,255,0.6);
+    --on-accent-muted: rgba(255,255,255,0.55);
+    --progress-track-hover-light: rgba(0,0,0,0.16);
+    --progress-track-light: rgba(0,0,0,0.1);
+    --range-track-light: rgba(0,0,0,0.12);
+    --scrollbar-thumb-light: #d4d4d4;
+    --text-primary-light: #1f2937;
+    --radius-base: 0;
+    --radius-full: 50%;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 16px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --duration-fast: 150ms;
+    --duration-base: 250ms;
+    --duration-slow: 420ms;
+
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --text-tertiary: #9ca3af;
+    --border: #e5e7eb;
+    --border-strong: #888;
+    --fill: #2d2d2d;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #3b82f6;
+    --bg-page: #f0f0f0;
+
+    color-scheme: light;
+
+    --bg-top: #e6e6e6;
+    --bg-side: #f0f0f0;
+    --bg-player: #e6e6e6;
+    --bg-input: #ffffff;
+    --bg-menu: #ffffff;
+    --bg-float: #f5f5f5;
+    --border-line: #2d2d2d;
+
+    --sidebar-width: 260px;
+    --top-bar-height: 64px;
+    --player-bar-height: 64px;
+    --mobile-nav-height: 46px;
+    --content-pad-x: 28px;
+    --fill-light: #e8e8e8;
+
+    --bg-overlay: rgba(255, 255, 255, 0.9);
+    --bg-surface: #f5f5f5;
+    --bg-surface-hover: #ededed;
+    --bg-subtle: rgba(0, 0, 0, 0.02);
+    --bg-cover: #e5e7eb;
+    --bg-wipe: #e8e8e8;
+    --hover-bg: rgba(0, 0, 0, 0.08);
+    --border-faint: rgba(0, 0, 0, 0.06);
+    --progress-track: rgba(0, 0, 0, 0.1);
+    --progress-track-hover: rgba(0, 0, 0, 0.16);
+    --range-track: rgba(0, 0, 0, 0.12);
+    --overlay-cover: rgba(0, 0, 0, 0.5);
+    --overlay-detail: rgba(255, 255, 255, 0.72);
+    --waveform: #000000;
+    --hover-text: #2d2d2d;
+    --scrollbar-thumb: #d4d4d4;
+    --scrollbar-thumb-hover: #b8b8b8;
+    --scrim: rgba(0, 0, 0, 0.45);
+    --tree-bg-2: rgba(0, 0, 0, 0.025);
+    --tree-bg-3: rgba(0, 0, 0, 0.05);
+    --shadow-color: rgba(0,0,0,0.18);
+    --cover-overlay: rgba(0,0,0,0.35);
+    --on-cover-strong: rgba(255,255,255,0.85);
+    --on-cover: rgba(255,255,255,0.7);
+    --on-cover-shadow: rgba(0,0,0,0.85);
+    --on-cover-shadow-weak: rgba(0,0,0,0.6);
+    --on-dark-icon: rgba(255,255,255,0.8);
+    --selection-box-bg: rgba(45,45,45,0.08);
+    --mv-surface: #1a1a1a;
+    --mv-text-primary: #f5f5f5;
+    --mv-text-secondary: rgba(255,255,255,0.75);
+    --mv-text-tertiary: rgba(255,255,255,0.5);
+    --mv-progress-track: rgba(255,255,255,0.2);
+    --mv-progress-track-hover: rgba(255,255,255,0.3);
+    --mv-hover-bg: rgba(255,255,255,0.12);
+    --mv-border: rgba(255,255,255,0.3);
+    --playback-cover-shadow: 0 0 0 1px var(--border-faint-light), 1px 1px 0 rgba(0,0,0,0.028), 2px 2px 0 rgba(0,0,0,0.027), 3px 3px 0 rgba(0,0,0,0.026), 4px 4px 0 rgba(0,0,0,0.025), 5px 5px 0 rgba(0,0,0,0.024), 6px 6px 0 rgba(0,0,0,0.023), 7px 7px 0 rgba(0,0,0,0.022), 8px 8px 0 rgba(0,0,0,0.021), 9px 9px 0 var(--bg-subtle-light), 10px 10px 0 rgba(0,0,0,0.019), 11px 11px 0 rgba(0,0,0,0.018), 12px 12px 0 rgba(0,0,0,0.017), 13px 13px 0 rgba(0,0,0,0.016), 14px 14px 0 rgba(0,0,0,0.015), 15px 15px 0 rgba(0,0,0,0.014), 16px 16px 0 rgba(0,0,0,0.013), 17px 17px 0 rgba(0,0,0,0.012), 18px 18px 0 rgba(0,0,0,0.011), 19px 19px 0 rgba(0,0,0,0.01), 20px 20px 0 rgba(0,0,0,0.009), 21px 21px 0 rgba(0,0,0,0.008), 22px 22px 0 rgba(0,0,0,0.007), 23px 23px 0 rgba(0,0,0,0.006), 24px 24px 0 rgba(0,0,0,0.005), 25px 25px 0 rgba(0,0,0,0.0045), 26px 26px 0 rgba(0,0,0,0.004), 27px 27px 0 rgba(0,0,0,0.0035), 28px 28px 0 rgba(0,0,0,0.003), 29px 29px 0 rgba(0,0,0,0.0025), 30px 30px 0 rgba(0,0,0,0.002), 31px 31px 0 rgba(0,0,0,0.0018), 32px 32px 0 rgba(0,0,0,0.0016), 33px 33px 0 rgba(0,0,0,0.0014), 34px 34px 0 rgba(0,0,0,0.0012), 35px 35px 0 rgba(0,0,0,0.001);
+
+}
+
+
+
+
+
+:root[data-theme][data-mode="dark"] {
+    color-scheme: dark;
+    --bg-page: #171717;
+    --bg-top: rgba(24, 22, 22, 0.94);
+    --bg-side: rgba(8, 7, 7, 0.96);
+    --bg-player: rgba(24, 22, 22, 0.94);
+    --bg-input: rgba(58, 54, 54, 0.7);
+    --bg-menu: #1a1919;
+    --bg-float: #302d2d;
+    --bg-overlay: rgba(34, 32, 32, 0.92);
+    --bg-surface: #282626;
+    --bg-surface-hover: #322f2f;
+    --bg-subtle: rgba(255, 255, 255, 0.04);
+    --bg-cover: #3a3737;
+    --bg-wipe: #252323;
+    --text-primary: #f5f4f4;
+    --text-secondary: #c9c6c6;
+    --text-tertiary: #9c9a9a;
+    --border: #423f3f;
+    --border-strong: #7f7a7a;
+    --border-faint: rgba(255, 255, 255, 0.08);
+    --fill: #666666;
+    --fill-light: #3a3737;
+    --hover-bg: rgba(255, 255, 255, 0.16);
+    --hover-text: #e0e0e0;
+    --border-line: #666666;
+    --progress-track: rgba(255, 255, 255, 0.14);
+    --progress-track-hover: rgba(255, 255, 255, 0.2);
+    --range-track: rgba(255, 255, 255, 0.18);
+    --overlay-cover: rgba(0, 0, 0, 0.6);
+    --overlay-detail: rgba(21, 20, 20, 0.8);
+    --waveform: #ededed;
+    --scrollbar-thumb: #424242;
+    --scrollbar-thumb-hover: #5c5c5c;
+    --scrim: rgba(0, 0, 0, 0.6);
+    --tree-bg-2: rgba(255, 255, 255, 0.03);
+    --tree-bg-3: rgba(255, 255, 255, 0.06);
+    --success: hsl(158, 64%, 45%);
+    --warning: hsl(38, 92%, 55%);
+    --danger: hsl(0, 84%, 63%);
+    --info: hsl(214, 90%, 66%);
+    --on-accent: #ffffff;
+    --on-accent-muted: rgba(255, 255, 255, 0.55);
+    --on-accent-faint: rgba(255, 255, 255, 0.6);
+    --shadow-color: rgba(0, 0, 0, 0.4);
+    --cover-overlay: rgba(0, 0, 0, 0.5);
+    --on-cover-strong: rgba(255, 255, 255, 0.92);
+    --on-cover: rgba(255, 255, 255, 0.75);
+    --on-cover-shadow: rgba(0, 0, 0, 0.8);
+    --on-cover-shadow-weak: rgba(0, 0, 0, 0.6);
+    --on-dark-icon: rgba(255, 255, 255, 0.85);
+    --selection-box-bg: rgba(255, 255, 255, 0.1);
+    --mv-surface: #1a1a1a;
+    --mv-text-primary: #f5f5f5;
+    --mv-text-secondary: rgba(255, 255, 255, 0.75);
+    --mv-text-tertiary: rgba(255, 255, 255, 0.5);
+    --mv-progress-track: rgba(255, 255, 255, 0.2);
+    --mv-progress-track-hover: rgba(255, 255, 255, 0.3);
+    --mv-hover-bg: rgba(255, 255, 255, 0.12);
+    --mv-border: rgba(255, 255, 255, 0.3);
+}
