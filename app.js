@@ -19,6 +19,7 @@ import {
     openBatchAddModal,
     handleDownloadLyric,
     runWikiForTracks,
+    openConditionSelect,
 } from './src/views.js';
 import { Toast, closeAllMenus, AccountButton, openModal, icon, confirmDialog, Dropdown, shareSong, openShareCardModal, openAboutModal, shouldShowAbout, SongRow, renderArtistInto } from './src/components.js';
 import { initRouter } from './src/router.js';
@@ -1721,6 +1722,11 @@ function bindMultiSelectBar() {
     function handleAction(action) {
         const selection = store.get().selection;
 
+        if (action === 'select-by-condition') {
+            openConditionSelect(ctx);
+            return;
+        }
+
         if (action === 'select-all') {
             const tracks = store.get().visibleTracks;
             if (!tracks.length) {
@@ -1757,6 +1763,7 @@ function bindMultiSelectBar() {
                 Toast('没有可选的筛选结果', 'warning', 1600);
                 return;
             }
+
             const added = store.addSelection(tracks);
             if (!added) {
                 Toast('筛选结果已全部选中', 'warning', 1400);

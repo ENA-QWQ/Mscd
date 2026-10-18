@@ -27,6 +27,7 @@ import { getWikiFetcher, collectWikiOptions } from './wiki.js';
 import { openFilterEditor } from './filter-editor.js';
 import { attachListGestures } from './list-gestures.js';
 import { MosaicView } from './mosaic-view.js';
+import { getAllTracks, buildHistoryIndex, collectHistoryPaths } from './history.js';
 
 function hexToRgb(hex) {
     let h = String(hex || '').replace('#', '');
@@ -281,6 +282,7 @@ function openThreeTabDownloadModal(ctx, options) {
     let downloadMv = hideMvTab ? false : !!initial.downloadMv;
     let mvQuality = initial.mvQuality ?? (config.mv && config.mv.default) ?? 1080;
     let mvFallback = initial.mvFallback || 'max';
+    let historyRecord = initial.historyRecord !== false;
 
     const TABS = [
         { key: 'audio', label: '歌曲', get: () => downloadAudio, set: (v) => { downloadAudio = v; } },
@@ -388,6 +390,16 @@ function openThreeTabDownloadModal(ctx, options) {
             ));
         }
         panel.appendChild(metaGroup);
+
+        panel.appendChild(el('div', { class: 'setting-sublabel', text: '下载历史' }));
+        const historyInput = el('input', { type: 'checkbox' });
+        historyInput.checked = historyRecord;
+        historyInput.addEventListener('change', () => { historyRecord = historyInput.checked; });
+        panel.appendChild(el('label', { class: 'ena-checkbox' },
+            historyInput,
+            el('span', { class: 'box' }),
+            el('span', { text: '计入下载历史' })
+        ));
 
         return panel;
     }
@@ -551,6 +563,7 @@ function openThreeTabDownloadModal(ctx, options) {
                 downloadMv,
                 mvQuality,
                 mvFallback,
+                historyRecord,
             });
         },
     });
@@ -583,6 +596,7 @@ export function openDownloadOptionsModal(song, ctx, mode = 'now') {
             downloadMv: hasMv && song._mvDownload === true,
             mvQuality: settings.mvQuality,
             mvFallback: settings.mvFallback,
+            historyRecord: settings.historyRecord !== false,
         },
         onConfirm: (r) => {
             store.update({
@@ -590,12 +604,14 @@ export function openDownloadOptionsModal(song, ctx, mode = 'now') {
                     ...store.get().settings,
                     downloadQuality: r.audioQuality,
                     withLyric: r.downloadLyric,
+                    historyRecord: r.historyRecord !== false,
                 },
             });
             store.persist();
 
             const prepared = {
                 ...song,
+                _historyRecord: r.historyRecord !== false,
                 _quality: r.audioQuality,
                 _metaTitle: r.metaTitle,
                 _metaArtist: r.metaArtist,
@@ -773,6 +789,7 @@ export function openBatchAddModal(songs, ctx, mode) {
 
             const prepared = songs.map((s) => ({
                 ...s,
+                _historyRecord: r.historyRecord !== false,
                 _quality: r.audioQuality,
                 _metaTitle: r.metaTitle,
                 _metaArtist: r.metaArtist,
@@ -2613,9 +2630,124 @@ export function MyFavoritesView(ctx) {
     };
 }
 
+async function runHistoryForTracks(ctx, tracks) {
+    const store = ctx.store;
+    try {
+        const all = await getAllTracks();
+        const idx = buildHistoryIndex(all);
+        const paths = collectHistoryPaths(idx);
+        store.update({ historyIndex: idx, historyPaths: paths, historyReady: true });
+    } catch {
+        store.update({ historyReady: true });
+    }
+}
+
+export function openConditionSelect(ctx, options = {}) {
+    try {
+        _openConditionSelectInner(ctx, options);
+    } catch (err) {
+        console.error('[openConditionSelect]', err);
+        Toast('条件选择出错：' + (err && err.message ? err.message : '未知错误'), 'danger', 2600);
+    }
+}
+
+function _openConditionSelectInner(ctx, options = {}) {
+    const { store } = ctx;
+    const state = store.get();
+    const pool = Array.isArray(options.pool) && options.pool.length
+        ? options.pool
+        : (Array.isArray(state.allTracks) && state.allTracks.length
+            ? state.allTracks
+            : (Array.isArray(state.visibleTracks) ? state.visibleTracks : []));
+    if (!pool.length) {
+        Toast('当前视图没有可选的条目', 'warning', 1600);
+        return;
+    }
+
+    const view = state.view;
+    let fieldsKey = 'search';
+    if (view === 'queue') fieldsKey = 'queue';
+    else if (view === 'downloads') fieldsKey = 'downloads';
+    else if (view === 'myfavorites') fieldsKey = 'liked';
+
+    const fields = getFieldsForView(fieldsKey);
+    if (!fields.length) {
+        Toast('当前视图不支持条件选择', 'warning', 1600);
+        return;
+    }
+
+    const filterCtx = buildFilterContext(pool, {
+        downloads: state.downloads,
+        queue: state.queue.tracks,
+        wikiMap: state.wikiMap,
+    });
+
+    function applyAction(tree, action) {
+        if (!tree) {
+            if (action === 'replace') {
+                store.clearSelection();
+                Toast('已清空选择', 'info', 1400);
+                return true;
+            }
+            Toast('请先添加条件', 'warning', 1600);
+            return false;
+        }
+        const selected = pool.filter((s) => evaluate(tree, s, filterCtx));
+        if (action === 'add') {
+            if (!selected.length) {
+                Toast('没有符合条件的条目', 'warning', 1600);
+                return false;
+            }
+            const beforeSize = store.get().selection.length;
+            const before = new Set(store.get().selection.map((x) => x.id));
+            store.addSelection(selected);
+            const after = store.get().selection.length;
+            const added = after - beforeSize;
+            if (added <= 0) {
+                Toast('所选条件没有新增条目', 'warning', 1600);
+                return true;
+            }
+            Toast('已添加 ' + added + ' 首到选择（共 ' + after + ' 首）', 'success', 1600);
+            return true;
+        }
+        if (action === 'replace') {
+            store.update({ selection: selected.slice() });
+            if (!selected.length) {
+                Toast('没有符合条件的条目，已清空选择', 'info', 1600);
+            } else {
+                Toast('已选择 ' + selected.length + ' 首', 'success', 1600);
+            }
+            return true;
+        }
+        return true;
+    }
+
+    openFilterEditor({
+        title: '条件选择',
+        fields,
+        initial: null,
+        tracks: pool,
+        customActions: [
+            {
+                text: '添加选择',
+                primary: false,
+                onApply: (tree) => applyAction(tree, 'add'),
+            },
+            {
+                text: '替换已选',
+                primary: true,
+                onApply: (tree) => applyAction(tree, 'replace'),
+            },
+        ],
+        onApply: () => {},
+    });
+}
+
 export function DownloadsView(ctx) {
     const { store, player, downloader } = ctx;
     const root = el('div', { class: 'downloads-view' });
+
+    void runHistoryForTracks(ctx, []);
 
     const toolbar = el('div', { class: 'view-toolbar' });
 
@@ -2638,7 +2770,8 @@ export function DownloadsView(ctx) {
     toolbar.appendChild(searchWrap);
 
     const filterBtn = el('button', { class: 'ena-btn ena-btn--sm' }, icon('filter'), el('span', { text: '筛选' }));
-    filterBtn.addEventListener('click', () => {
+    filterBtn.addEventListener('click', async () => {
+        await runHistoryForTracks(ctx, store.get().downloads);
         openFilterEditor({
             title: '筛选下载列表',
             fields: getFieldsForView('downloads'),

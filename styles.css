@@ -9612,3 +9612,80 @@ body.queue-panel-open {
     transform: translateZ(0);
     backface-visibility: hidden;
 }
+
+
+.history-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-modal__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.history-modal__empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: .82rem;
+}
+
+.history-modal__item {
+    padding: 10px 12px;
+    background: var(--bg-subtle);
+}
+
+.history-modal__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.history-modal__kind {
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.history-modal__quality {
+    font-size: .68rem;
+    color: var(--text-tertiary);
+}
+
+.history-modal__time {
+    margin-left: auto;
+    font-size: .68rem;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+
+.history-modal__path {
+    font-size: .72rem;
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+
+
+
+.filter-condition .ena-dropdown__trigger,
+.filter-value__unit .ena-dropdown__trigger {
+    box-shadow: none;
+    border-bottom: 1px solid var(--border-line);
+}
+
+.filter-condition .ena-dropdown.is-open .ena-dropdown__trigger,
+.filter-value__unit .ena-dropdown.is-open .ena-dropdown__trigger {
+    box-shadow: none;
+    border-bottom-color: var(--fill);
+}
+
+
+.filter-condition__value > .filter-condition__param {
+    min-width: 64px;
+}

@@ -1,6 +1,7 @@
 import { el } from './dom.js';
 import { store } from './store.js';
 import { renderShareCard, sanitizeFilename } from './share-card.js';
+import { getTracksBySongId, formatHistoryTime } from './history.js';
 
 const ABOUT_STORAGE_KEY = 'mscd-about-read-version';
 
@@ -102,6 +103,7 @@ const ICON_PATHS = {
     close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
     refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
     info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     'chevron-left': '<polyline points="15 18 9 12 15 6"/>',
     list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
     plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
@@ -525,6 +527,51 @@ function makeActionButton(name, title, danger, onClick) {
     return btn;
 }
 
+export function openHistoryModal(song, ctx) {
+    if (!song || !song.id) return;
+    const body = el('div', { class: 'history-modal' });
+    const listWrap = el('div', { class: 'history-modal__list' });
+    const emptyEl = el('div', { class: 'history-modal__empty', text: '加载中…' });
+    body.appendChild(emptyEl);
+    body.appendChild(listWrap);
+
+    openModal({
+        title: '下载历史',
+        body,
+        showCancel: false,
+        confirmText: '关闭',
+    });
+
+    getTracksBySongId(song.id).then((tracks) => {
+        if (!tracks.length) {
+            emptyEl.textContent = '暂无下载记录';
+            return;
+        }
+        emptyEl.remove();
+        const KIND_LABEL = { audio: '音频', lyric: '歌词', mv: 'MV' };
+        const QUALITY_LABEL = { 128: '标准', 192: '较高', 320: 'HQ', 2000: '无损' };
+        for (const tr of tracks) {
+            const item = el('div', { class: 'history-modal__item' });
+            const head = el('div', { class: 'history-modal__head' });
+            head.appendChild(el('span', { class: 'history-modal__kind', text: KIND_LABEL[tr.kind] || tr.kind }));
+            if (tr.kind === 'audio' && tr.quality) {
+                head.appendChild(el('span', { class: 'history-modal__quality', text: QUALITY_LABEL[Number(tr.quality)] || (tr.quality + 'k') }));
+            } else if (tr.kind === 'mv' && tr.quality) {
+                head.appendChild(el('span', { class: 'history-modal__quality', text: Number(tr.quality) + 'P' }));
+            }
+            head.appendChild(el('span', { class: 'history-modal__time', text: formatHistoryTime(tr.finishedAt) }));
+            item.appendChild(head);
+            const pathText = tr.dirName ? (tr.dirName + ' / ' + (tr.filename || '')) : (tr.filename || '');
+            if (pathText) {
+                item.appendChild(el('div', { class: 'history-modal__path', text: pathText }));
+            }
+            listWrap.appendChild(item);
+        }
+    }).catch(() => {
+        emptyEl.textContent = '加载历史失败';
+    });
+}
+
 export function SongRow(song, handlers = {}) {
     const {
         ctx,
@@ -581,6 +628,11 @@ export function SongRow(song, handlers = {}) {
         menuItems.push({ icon: 'video', text: '下载 MV', handler: onDownloadMv });
     }
     if (song.id) {
+        menuItems.push({
+            icon: 'clock',
+            text: '下载历史',
+            handler: (s) => openHistoryModal(s, ctx),
+        });
         menuItems.push({
             icon: 'copy',
             text: '复制内容 ID',
@@ -1163,7 +1215,7 @@ export function Toast(message, type = 'success', duration = 2600) {
     }, LINE_IN + SLIDE + duration);
 }
 
-export function openModal({ title, body, confirmText = '确认', cancelText = '取消', showCancel = true, onConfirm, onCancel }) {
+export function openModal({ title, body, confirmText = '确认', cancelText = '取消', showCancel = true, onConfirm, onCancel, customActions = null }) {
     const root = document.getElementById('modal-root');
     if (!root) return null;
 
@@ -1172,8 +1224,26 @@ export function openModal({ title, body, confirmText = '确认', cancelText = '�
     const confirmBtn = el('button', { class: 'ena-btn ena-btn--primary', text: confirmText });
 
     const footerChildren = [];
+    const customActionButtons = [];
+    const hasCustom = Array.isArray(customActions) && customActions.length > 0;
     if (showCancel) footerChildren.push(cancelBtn);
-    footerChildren.push(confirmBtn);
+    if (hasCustom) {
+        for (const action of customActions) {
+            const btn = el('button', {
+                class: 'ena-btn' + (action.primary ? ' ena-btn--primary' : ''),
+                text: action.text,
+            });
+            btn.addEventListener('click', () => {
+                const result = action.onClick?.();
+                if (result === false) return;
+                close('custom');
+            });
+            customActionButtons.push(btn);
+            footerChildren.push(btn);
+        }
+    } else {
+        footerChildren.push(confirmBtn);
+    }
 
     const titleEl = el('div', { class: 'ena-modal__title', text: title });
     const headerEl = el('div', { class: 'ena-modal__header' }, titleEl, closeBtn);
@@ -1215,7 +1285,7 @@ export function openModal({ title, body, confirmText = '确认', cancelText = '�
     confirmBtn.addEventListener('click', () => close('confirm'));
     document.addEventListener('keydown', onEsc);
 
-    return { close: () => close('cancel'), confirmBtn, cancelBtn, titleEl, headerEl, panelEl: panel, modalEl: modal };
+    return { close: () => close('cancel'), confirmBtn, cancelBtn, titleEl, headerEl, panelEl: panel, modalEl: modal, customActionButtons };
 }
 
 export function confirmDialog(message, { title = '确认', confirmText = '确认', cancelText = '取消' } = {}) {

@@ -1,3 +1,14 @@
+import { store } from './store.js';
+
+function tsToDate(ts) {
+    const t = Number(ts) || 0;
+    if (!t) return '';
+    const d = new Date(t);
+    if (isNaN(d.getTime())) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
 function safeStr(v) {
     return v === null || v === undefined ? '' : String(v);
 }
@@ -103,6 +114,80 @@ export const FIELD_DEFS = {
         label: 'BPM', type: 'number', dynamic: true,
         get: (s, ctx) => ctx?.wikiMap?.get(String(s.id))?.bpm ?? 0,
     },
+    downloaded: {
+        label: '已下载过', type: 'boolean', dynamic: true, source: 'history',
+        paramOptions: [
+            { value: 'any', label: '全部' },
+            { value: 'audio', label: '音频' },
+            { value: 'lyric', label: '歌词' },
+            { value: 'mv', label: 'MV' },
+        ],
+        paramDefault: 'any',
+        get: (s, ctx, param) => {
+            const entry = ctx?.historyIndex?.get(String(s.id));
+            if (!entry) return false;
+            if (param === 'audio' || param === 'lyric' || param === 'mv') {
+                return Number(entry.byKind?.[param]?.count) > 0;
+            }
+            return Number(entry.count) > 0;
+        },
+    },
+    downloadCount: {
+        label: '下载次数', type: 'number', dynamic: true, source: 'history',
+        paramOptions: [
+            { value: 'any', label: '全部' },
+            { value: 'audio', label: '音频' },
+            { value: 'lyric', label: '歌词' },
+            { value: 'mv', label: 'MV' },
+        ],
+        paramDefault: 'any',
+        get: (s, ctx, param) => {
+            const entry = ctx?.historyIndex?.get(String(s.id));
+            if (!entry) return 0;
+            if (param === 'audio' || param === 'lyric' || param === 'mv') {
+                return Number(entry.byKind?.[param]?.count) || 0;
+            }
+            return Number(entry.count) || 0;
+        },
+    },
+    lastDownloadTime: {
+        label: '最近下载时间', type: 'date', dynamic: true, source: 'history',
+        paramOptions: [
+            { value: 'any', label: '全部' },
+            { value: 'audio', label: '音频' },
+            { value: 'lyric', label: '歌词' },
+            { value: 'mv', label: 'MV' },
+        ],
+        paramDefault: 'any',
+        get: (s, ctx, param) => {
+            const entry = ctx?.historyIndex?.get(String(s.id));
+            if (!entry) return '';
+            if (param === 'audio' || param === 'lyric' || param === 'mv') {
+                return tsToDate(entry.byKind?.[param]?.lastTime);
+            }
+            return tsToDate(entry.lastTime);
+        },
+    },
+    downloadPaths: {
+        label: '下载过的路径', type: 'enum', dynamic: true, source: 'history',
+        paramOptions: [
+            { value: 'any', label: '全部' },
+            { value: 'audio', label: '音频' },
+            { value: 'lyric', label: '歌词' },
+            { value: 'mv', label: 'MV' },
+        ],
+        paramDefault: 'any',
+        options: [],
+        get: (s, ctx, param) => {
+            const entry = ctx?.historyIndex?.get(String(s.id));
+            if (!entry) return [];
+            if (param === 'audio' || param === 'lyric' || param === 'mv') {
+                const set = entry.byKind?.[param]?.paths;
+                return set ? Array.from(set) : [];
+            }
+            return entry.paths ? Array.from(entry.paths) : [];
+        },
+    },
 };
 
 const FIELD_GROUP_DEFS = [
@@ -113,12 +198,13 @@ const FIELD_GROUP_DEFS = [
     { key: 'downloads', label: '下载属性', fields: ['quality', 'withLyric', 'lyricOnly'] },
     { key: 'wiki', label: '百科信息', fields: ['publishDate', 'hasAward', 'bizTags', 'language', 'genre', 'bpm'] },
     { key: 'cross', label: '跨列表', fields: ['isInDownloads', 'isInQueue'] },
+    { key: 'history', label: '下载历史', fields: ['downloaded', 'downloadCount', 'lastDownloadTime', 'downloadPaths'] },
 ];
 
 const VIEW_GROUPS = {
     search: ['base', 'duration', 'content', 'length', 'wiki'],
     queue: ['base', 'duration', 'content', 'length', 'cross', 'wiki'],
-    downloads: ['base', 'duration', 'content', 'length', 'downloads', 'cross', 'wiki'],
+    downloads: ['base', 'duration', 'content', 'length', 'downloads', 'cross', 'wiki', 'history'],
     playlist: ['base', 'duration', 'content', 'length', 'cross', 'wiki'],
     liked: ['base', 'duration', 'content', 'length', 'cross', 'wiki'],
 };
@@ -192,7 +278,11 @@ export function createCondition(fieldKey) {
     const field = FIELD_DEFS[key] || FIELD_DEFS.title;
     const ops = getOperatorsForField(field);
     const op = ops[0]?.key || 'contains';
-    return { type: 'condition', field: key, operator: op, value: defaultForOperator(op, field) };
+    const cond = { type: 'condition', field: key, operator: op, value: defaultForOperator(op, field) };
+    if (Array.isArray(field.paramOptions) && field.paramOptions.length) {
+        cond.param = field.paramDefault || field.paramOptions[0].value;
+    }
+    return cond;
 }
 
 export function defaultForOperator(op, field) {
@@ -233,7 +323,7 @@ export function evaluate(node, song, ctx) {
         const field = FIELD_DEFS[node.field];
         const op = OPERATORS[node.operator];
         if (!field || !op) return true;
-        const raw = field.get(song, ctx);
+        const raw = field.get(song, ctx, node.param);
 
         let value = node.value;
         if (field.type === 'duration' && value && typeof value === 'object') {
@@ -265,10 +355,16 @@ export function buildFilterContext(tracks, options = {}) {
         for (const t of options.queue) if (t?.id) queueIds.add(String(t.id));
     }
 
+    let historyIndex = options.historyIndex;
+    if (!historyIndex) {
+        try { historyIndex = store.get().historyIndex; } catch {}
+    }
+
     return {
         downloadIds,
         queueIds,
         wikiMap: options.wikiMap instanceof Map ? options.wikiMap : new Map(),
+        historyIndex: historyIndex instanceof Map ? historyIndex : new Map(),
     };
 }
 

@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { store } from './store.js';
+import { recordDownload } from './history.js';
 
 function applyApiProxy(url) {
     if (!url) return url;
@@ -794,6 +795,40 @@ export class Downloader {
         this.taskStates = new Map();
     }
 
+    _recordHistory(song, opts = {}) {
+        const s = song || {};
+        if (s._historyRecord === false) return;
+        try {
+            if (store.get().settings.historyRecord === false) return;
+        } catch { return; }
+        const kind = opts.kind || 'audio';
+        const songId = String(s.id || s.songId || '');
+        if (!songId) return;
+        let source = opts.source;
+        if (!source) {
+            try { source = store.get().settings.downloadMode === 'stream' ? 'stream' : 'blob'; } catch { source = 'blob'; }
+        }
+        let quality = opts.quality;
+        if (quality == null) quality = s._quality != null ? s._quality : 0;
+        recordDownload({
+            songId,
+            mvId: kind === 'mv' ? String(s.mv || s.mvid || '') : '',
+            kind,
+            quality: Number(quality) || 0,
+            filename: String(opts.filename || ''),
+            dirName: String(opts.dirName || ''),
+            source,
+            status: opts.status || 'done',
+            bytes: Number(opts.bytes) || 0,
+            title: s.title || '',
+            artist: s.artist || '',
+            album: s.album || '',
+            pic: s.pic || '',
+            duration: Number(s.duration) || 0,
+            batchId: String(opts.batchId || ''),
+        }).catch(() => {});
+    }
+
     getState(taskId) {
         return this.taskStates.get(taskId);
     }
@@ -1430,6 +1465,7 @@ export class Downloader {
                 const filename = buildBaseName(song) + '.lrc';
                 const blob = new Blob([lrc], { type: 'text/plain;charset=utf-8' });
                 triggerDownload(blob, filename);
+                this._recordHistory(song, { kind: 'lyric', filename, bytes: blob.size });
                 updateTrack({
                     status: 'done',
                     bytes: blob.size,
@@ -1505,8 +1541,20 @@ export class Downloader {
                 if (lrc) {
                     const lrcBlob = new Blob([lrc], { type: 'text/plain;charset=utf-8' });
                     triggerDownload(lrcBlob, meta.filename.replace(/\.(mp3|flac)$/i, '.lrc'));
+                    this._recordHistory(song, {
+                        kind: 'lyric',
+                        filename: meta.filename.replace(/\.(mp3|flac)$/i, '.lrc'),
+                        bytes: lrcBlob.size,
+                    });
                 }
             }
+
+            this._recordHistory(song, {
+                kind: meta.kind === 'mv' ? 'mv' : 'audio',
+                quality: meta.kind === 'mv' ? meta.br : undefined,
+                filename: meta.filename,
+                bytes,
+            });
 
             updateTrack({
                 status: 'done',
@@ -1634,6 +1682,7 @@ export class Downloader {
                 await writable.write(lrc);
                 await writable.close();
                 const size = new Blob([lrc]).size;
+                this._recordHistory(song, { kind: 'lyric', filename, dirName: dirHandle.name, bytes: size });
                 updateTrack({
                     status: 'done',
                     bytes: size,
@@ -1717,8 +1766,22 @@ export class Downloader {
                     const lrcWritable = await lrcHandle.createWritable();
                     await lrcWritable.write(lrc);
                     await lrcWritable.close();
+                    this._recordHistory(song, {
+                        kind: 'lyric',
+                        filename: uniqueLrc,
+                        dirName: dirHandle.name,
+                        bytes: new Blob([lrc]).size,
+                    });
                 }
             }
+
+            this._recordHistory(song, {
+                kind: meta.kind === 'mv' ? 'mv' : 'audio',
+                quality: meta.kind === 'mv' ? meta.br : undefined,
+                filename,
+                dirName: dirHandle.name,
+                bytes,
+            });
 
             updateTrack({
                 status: 'done',
@@ -2050,6 +2113,12 @@ export class Downloader {
                     await w.write(lrc);
                     await w.close();
                     const size = new Blob([lrc]).size;
+                    this._recordHistory(song, {
+                        kind: 'lyric',
+                        filename,
+                        dirName: dirHandle.name,
+                        bytes: size,
+                    });
                     updateTrack(trackId, {
                         status: 'done',
                         bytes: size,
@@ -2143,6 +2212,14 @@ export class Downloader {
                                 await lrcWritable.close();
                             }
                         }
+
+                        this._recordHistory(song, {
+                            kind: meta.kind === 'mv' ? 'mv' : 'audio',
+                            quality: meta.kind === 'mv' ? meta.br : undefined,
+                            filename,
+                            dirName: dirHandle.name,
+                            bytes,
+                        });
 
                         updateTrack(trackId, {
                             status: 'done',
@@ -2519,6 +2596,7 @@ export class Downloader {
                     const filename = buildBaseName(song) + '.lrc';
                     const size = new Blob([lrc]).size;
                     artifactByTrackId.set(trackId, { kind: 'lyric', lyric: lrc, filename });
+                    this._recordHistory(song, { kind: 'lyric', filename, bytes: size });
                     updateTrack(trackId, {
                         status: 'done',
                         bytes: size,
@@ -2590,6 +2668,19 @@ export class Downloader {
                             lyric = await this.fetchLyricText(song);
                         }
                         artifactByTrackId.set(trackId, { kind: 'audio', blob: finalBlob, lyric, filename: meta.filename });
+                        if (lyric) {
+                            this._recordHistory(song, {
+                                kind: 'lyric',
+                                filename: meta.filename.replace(/\.(mp3|flac)$/i, '.lrc'),
+                                bytes: new Blob([lyric]).size,
+                            });
+                        }
+                        this._recordHistory(song, {
+                            kind: meta.kind === 'mv' ? 'mv' : 'audio',
+                            quality: meta.kind === 'mv' ? meta.br : undefined,
+                            filename: meta.filename,
+                            bytes,
+                        });
                         updateTrack(trackId, {
                             status: 'done',
                             bytes,

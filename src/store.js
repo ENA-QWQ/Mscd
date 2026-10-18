@@ -92,6 +92,9 @@ function createInitialState() {
 
         wikiMap: new Map(),
         wikiOptions: { genre: [], language: [], bizTags: [] },
+        historyIndex: new Map(),
+        historyPaths: [],
+        historyReady: false,
         wikiProgress: { active: false, done: 0, total: 0 },
 
         downloadTasks: [],
@@ -142,6 +145,7 @@ function createInitialState() {
             batchLyricDelay: 0,
             themeColor: '',
             themeMode: 'auto',
+            historyRecord: true,
             namingFormat: '{title} - {artist}',
             batchCategory: 'none',
             lyricSaveMode: 'same',

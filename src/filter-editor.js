@@ -2,6 +2,7 @@ import { el } from './dom.js';
 import { store } from './store.js';
 import { icon, openModal, Dropdown, confirmDialog } from './components.js';
 import { getWikiFetcher, collectWikiOptions } from './wiki.js';
+import { getAllTracks, buildHistoryIndex, collectHistoryPaths } from './history.js';
 import {
     FIELD_DEFS,
     getOperatorsForField,
@@ -102,11 +103,68 @@ function ensureUid(group) {
     return group.__uid;
 }
 
-export function openFilterEditor({ title = '筛选', fields, initial, onApply, tracks = [] }) {
+async function ensureHistoryData(fields) {
+    if (!Array.isArray(fields) || !fields.some((f) => f && f.source === 'history')) return;
+    try {
+        if (store.get().historyReady) return;
+    } catch {}
+    const loadTask = (async () => {
+        try {
+            const all = await getAllTracks();
+            const idx = buildHistoryIndex(all);
+            const paths = collectHistoryPaths(idx);
+            store.update({ historyIndex: idx, historyPaths: paths, historyReady: true });
+        } catch {}
+    })();
+    const ensureHistoryDataTimeout = new Promise((resolve) => setTimeout(resolve, 2000));
+    await Promise.race([loadTask, ensureHistoryDataTimeout]);
+}
+
+export async function openFilterEditor({ title = '筛选', fields, initial, onApply, tracks = [], customActions = null }) {
+    await ensureHistoryData(fields);
+    function collectOptionsFromCurrentTracks() {
+        if (!Array.isArray(tracks) || !tracks.length) return null;
+        const wikiMap = store.get().wikiMap;
+        if (!(wikiMap instanceof Map) || wikiMap.size === 0) return null;
+        const genre = new Set();
+        const language = new Set();
+        const bizTags = new Set();
+        let hasAny = false;
+        for (const t of tracks) {
+            if (!t || !t.id) continue;
+            const entry = wikiMap.get(String(t.id));
+            if (!entry) continue;
+            hasAny = true;
+            if (entry.genre) genre.add(String(entry.genre));
+            if (entry.language) language.add(String(entry.language));
+            if (Array.isArray(entry.bizTags)) {
+                for (const tag of entry.bizTags) {
+                    if (tag) bizTags.add(String(tag));
+                }
+            }
+        }
+        if (!hasAny) return null;
+        return {
+            genre: Array.from(genre).sort(),
+            language: Array.from(language).sort(),
+            bizTags: Array.from(bizTags).sort(),
+        };
+    }
+
     function applyOptions(wikiOptions) {
+        let historyPaths = [];
+        try { historyPaths = store.get().historyPaths || []; } catch {}
+        const trackOptions = collectOptionsFromCurrentTracks();
+        const effectiveOptions = trackOptions || wikiOptions;
         for (const f of fields) {
             if (!f.dynamic) continue;
-            const list = wikiOptions[f.key] || [];
+            if (f.source === 'history') {
+                if (f.key.endsWith('Paths')) {
+                    f.options = historyPaths.map((v) => ({ value: String(v), label: String(v) }));
+                }
+                continue;
+            }
+            const list = effectiveOptions[f.key] || [];
             f.options = list.map((v) => ({ value: String(v), label: String(v) }));
         }
     }
@@ -117,6 +175,7 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply, t
 
     function shouldAnalyzeWiki(field) {
         if (!field || !field.dynamic) return false;
+        if (field.source === 'history') return false;
         if (!Array.isArray(tracks) || !tracks.length) return false;
         const wikiMap = store.get().wikiMap;
         if (!(wikiMap instanceof Map) || wikiMap.size === 0) return true;
@@ -178,6 +237,29 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply, t
     }
 
     applyOptions(collectFromStore());
+
+    async function ensureInitialWiki(tree) {
+        if (!tree) return;
+        const wikiFields = [];
+        const collect = (node) => {
+            if (!node) return;
+            if (node.type === 'condition') {
+                const f = fields.find((x) => x.key === node.field);
+                if (f && f.dynamic && f.source !== 'history') wikiFields.push(f);
+            } else if (node.type === 'group') {
+                for (const c of (node.children || [])) collect(c);
+            }
+        };
+        collect(tree);
+        for (const f of wikiFields) {
+            if (shouldAnalyzeWiki(f)) {
+                await ensureWikiForField(f);
+                break;
+            }
+        }
+    }
+
+    await ensureInitialWiki(initial);
 
     let draft = initial ? JSON.parse(JSON.stringify(initial)) : createGroup('and');
     if (!draft.children) draft.children = [];
@@ -290,6 +372,11 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply, t
                     cond.operator = ops[0]?.key || 'contains';
                 }
                 cond.value = defaultForOperator(cond.operator, field);
+                if (Array.isArray(field.paramOptions) && field.paramOptions.length) {
+                    cond.param = field.paramDefault || field.paramOptions[0].value;
+                } else {
+                    delete cond.param;
+                }
                 if (field.dynamic) {
                     await ensureWikiForField(field);
                 }
@@ -369,7 +456,26 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply, t
     }
 
     function renderValueEditor(host, cond, field, op) {
-        if (!op || field.type === 'boolean') return;
+        if (!op) return;
+
+        if (Array.isArray(field.paramOptions) && field.paramOptions.length) {
+            if (cond.param === undefined) {
+                cond.param = field.paramDefault || field.paramOptions[0].value;
+            }
+            const paramDropdown = trackDropdown(Dropdown({
+                options: field.paramOptions,
+                value: cond.param,
+                title: '内容类型',
+                className: 'filter-condition__param',
+                onChange: (v) => {
+                    cond.param = v;
+                    rerender();
+                },
+            }));
+            host.appendChild(paramDropdown.node);
+        }
+
+        if (field.type === 'boolean') return;
 
         if (field.type === 'date') {
             if (op.valueShape === 'range') {
@@ -545,11 +651,25 @@ export function openFilterEditor({ title = '筛选', fields, initial, onApply, t
 
     rerender();
 
+    const customActionDefs = Array.isArray(customActions) && customActions.length
+        ? customActions.map((a) => ({
+            text: a.text,
+            primary: !!a.primary,
+            onClick: () => {
+                const count = countConditions(draft);
+                const tree = count > 0 ? draft : null;
+                const result = typeof a.onApply === 'function' ? a.onApply(tree) : undefined;
+                return result === false ? false : true;
+            },
+        }))
+        : null;
+
     const modal = openModal({
         title,
         body,
         confirmText: '应用',
         cancelText: '取消',
+        customActions: customActionDefs,
         onConfirm: () => {
             const count = countConditions(draft);
             onApply(count > 0 ? draft : null);
