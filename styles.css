@@ -9489,3 +9489,22 @@ body.queue-panel-open {
 .mosaic-actions{transform:scale(1);pointer-events:auto}
 .mosaic-info{opacity:1}
 }
+
+
+.song-list.song-list--album-tracks .song-row:has(.song-select):not(.song-row--detail) {
+    padding-left: 36px;
+}
+
+.song-list.song-list--album-tracks .song-index {
+    width: 26px;
+}
+
+@media (max-width: 900px) {
+    .song-list.song-list--album-tracks .song-row:has(.song-select):not(.song-row--detail) {
+        padding-left: 32px;
+    }
+
+    .song-list.song-list--album-tracks .song-index {
+        width: 24px;
+    }
+}
