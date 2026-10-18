@@ -9380,6 +9380,24 @@ body.queue-panel-open {
     color: var(--fill);
 }
 
+.song-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 40px;
+    flex-shrink: 0;
+    padding-right: 6px;
+    font-family: 'LXGW WenKai Light', system-ui, sans-serif;
+    font-size: .72rem;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    transition: color .25s ease;
+}
+
+.song-row:hover .song-index {
+    color: var(--hover-text);
+}
+
 
 .queue-panel__body .queue-panel__row .song-playing-bars.__queue_panel_bars__ {
     position: absolute;

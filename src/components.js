@@ -534,6 +534,8 @@ export function SongRow(song, handlers = {}) {
         onDownloadMv,
         contentBadges,
         viewOverride,
+        showIndex,
+        index,
     } = handlers;
 
     const coverEl = el('div', { class: 'song-cover' });
@@ -722,6 +724,13 @@ export function SongRow(song, handlers = {}) {
                 badgesEl.appendChild(badge);
             }
             artistChildren.push(badgesEl);
+        }
+
+        if (showIndex) {
+            row.appendChild(el('span', {
+                class: 'song-index',
+                text: index != null ? String(index) : '',
+            }));
         }
 
         row.appendChild(bars);

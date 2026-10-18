@@ -1370,11 +1370,15 @@ export function SearchView(ctx) {
         } else {
             const list = el('div', { class: 'song-list' + (isAlbum ? ' song-list--album-tracks' : '') });
             if (!isAlbum) maybeAddDetailHeader(list);
-            for (const song of slice) {
+            slice.forEach((song, i) => {
                 const rowHandlers = songRowHandlers(song, ctx);
-                if (isAlbum) rowHandlers.viewOverride = 'tile';
+                if (isAlbum) {
+                    rowHandlers.viewOverride = 'tile';
+                    rowHandlers.showIndex = true;
+                    rowHandlers.index = start + i + 1;
+                }
                 list.appendChild(SongRow(song, rowHandlers));
-            }
+            });
             root.appendChild(list);
         }
 
