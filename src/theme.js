@@ -82,6 +82,22 @@ function hsla(h, s, l, a) {
     return `hsla(${Math.round(h)}, ${Math.round(s * 100)}%, ${Math.round(l)}%, ${a})`;
 }
 
+function hslToHex(h, s, l) {
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => {
+        const k = (n + h / 30) % 12;
+        const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+        return Math.round(255 * c).toString(16).padStart(2, '0');
+    };
+    return '#' + f(0) + f(8) + f(4);
+}
+
+function pickOnColor(hex) {
+    const { r, g, b } = hexToRgb(hex);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.6 ? '#1f2937' : '#ffffff';
+}
+
 export function generateThemeVars(themeHex, mode = 'auto') {
     const { h, s, l } = hexToHsl(themeHex);
     const resolved = resolveMode(mode);
@@ -91,7 +107,7 @@ export function generateThemeVars(themeHex, mode = 'auto') {
     // keeping enough contrast for the white text drawn on top of them.
     let accentHex = themeHex;
     if (!isLight && l < 0.5) {
-        accentHex = hsl(h, s, 40);
+        accentHex = hslToHex(h, Math.max(s, 0.4), 0.4);
     }
 
     const sBg = Math.min(0.42, Math.max(0.04, s * 0.55));
@@ -103,6 +119,7 @@ export function generateThemeVars(themeHex, mode = 'auto') {
         '--fill': accentHex,
         '--border-line': accentHex,
         '--hover-text': isLight ? accentHex : hsl(h, s, 88),
+        '--on-accent': pickOnColor(accentHex),
     };
 
     if (isLight) {

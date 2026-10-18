@@ -1,4 +1,5 @@
 import { Toast } from './components.js';
+import { generateThemeVars } from './theme.js';
 
 const STORAGE_KEY = 'meting-app-state';
 
@@ -328,8 +329,8 @@ export class ThemeManager {
             el.textContent = '';
             return;
         }
-        const lightVars = generateAccentVars(color, 'light');
-        const darkVars = generateAccentVars(color, 'dark');
+        const lightVars = generateThemeVars(color, 'light');
+        const darkVars = generateThemeVars(color, 'dark');
         if (!lightVars && !darkVars) {
             el.textContent = '';
             return;
