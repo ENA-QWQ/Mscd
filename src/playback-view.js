@@ -268,6 +268,17 @@ export function initPlaybackView(ctx) {
     overlay.addEventListener('touchstart', showBars, { passive: true });
     overlay.addEventListener('click', showBars);
 
+    overlay.addEventListener('click', (e) => {
+        if (!e.target.closest('.entity-link')) return;
+        const state = store.get();
+        if (!state.playbackOpen) return;
+        if (state.playbackMode === 'mv') {
+            if (ctx.mvPlayer) ctx.mvPlayer.exitMv();
+            return;
+        }
+        closePlayback();
+    }, true);
+
     let currentSongId = '';
     let currentTitleText = '';
     let titleScrollRAF = null;
