@@ -1880,20 +1880,10 @@ export class Downloader {
             songs = this.expandDownloadEntries(songs);
         }
 
-        let lyricSongs = null;
-        if (!options.resumeTaskId && Array.isArray(songs)) {
-            const lyrics = songs.filter((s) => s && s._kind === 'lyric');
-            if (lyrics.length) {
-                lyricSongs = lyrics;
-                songs = songs.filter((s) => s._kind !== 'lyric');
-            }
-        }
-
         let onlyLyricMode = false;
-        if (!options.resumeTaskId && !songs.length && lyricSongs && lyricSongs.length) {
-            songs = lyricSongs;
-            lyricSongs = null;
-            onlyLyricMode = true;
+        if (!options.resumeTaskId && Array.isArray(songs) && songs.length) {
+            const hasNonLyric = songs.some((s) => s && s._kind !== 'lyric');
+            if (!hasNonLyric) onlyLyricMode = true;
         }
 
         let taskId;
@@ -2038,57 +2028,6 @@ export class Downloader {
                 startedAt: Date.now(),
                 finishedAt: null,
                 tracks,
-            });
-        }
-
-        if (lyricSongs && lyricSongs.length) {
-            const lyricTaskId = newTaskId();
-            const lyricTracks = lyricSongs.map((song, index) => ({
-                id: `trk-${lyricTaskId}-${index}`,
-                songId: song.id,
-                title: song.title || '未知歌曲',
-                artist: song.artist || '',
-                album: song.album || '',
-                pic: song.pic || '',
-                _quality: song._quality ?? quality,
-                _kind: 'lyric',
-                _withLyric: false,
-                _lyricOnly: true,
-                _lyricWithTranslation: !!song._lyricWithTranslation,
-                _lyricDelay: Number(song._lyricDelay) || 0,
-                status: 'queued',
-                bytes: 0,
-                totalBytes: 0,
-                progress: 0,
-                speed: 0,
-                eta: null,
-                error: null,
-                paused: false,
-                startedAt: null,
-                finishedAt: null,
-            }));
-            const lyricUniqueIds = new Set(lyricSongs.map((s) => String(s.id || s.songId || '')));
-            const lyricSingle = lyricUniqueIds.size === 1;
-            const lyricLabel = lyricSingle
-                ? `歌词：${lyricSongs[0].title || '未知歌曲'} - ${lyricSongs[0].artist || '未知艺人'}`
-                : `下载歌词 ${lyricSongs.length} 首`;
-            store.upsertDownloadTask(lyricTaskId, {
-                type: 'batch',
-                kind: 'batch-lyric',
-                mode: 'batch-disk',
-                label: lyricLabel,
-                status: 'waiting',
-                waitingForTaskId: taskId,
-                phase: 'waiting',
-                done: 0,
-                total: lyricTracks.length,
-                bytes: 0,
-                totalBytes: 0,
-                packagingProgress: null,
-                errors: [],
-                startedAt: null,
-                finishedAt: null,
-                tracks: lyricTracks,
             });
         }
 
