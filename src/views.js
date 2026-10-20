@@ -114,6 +114,40 @@ export async function runWikiForTracks(ctx, tracks, options = {}) {
     }
 }
 
+function openDescriptionModal(title, text) {
+    if (!text) return;
+    const body = el('div', {
+        class: 'description-modal',
+        text,
+        style: {
+            whiteSpace: 'pre-wrap',
+            lineHeight: '1.8',
+            fontSize: '.84rem',
+            color: 'var(--text-secondary)',
+        },
+    });
+    openModal({
+        title,
+        body,
+        showCancel: false,
+        confirmText: '关闭',
+    });
+}
+
+function makeDescriptionEl(text, modalTitle) {
+    const node = el('div', {
+        class: 'detail-header__description',
+        text,
+    });
+    node.style.cursor = 'pointer';
+    node.setAttribute('title', '点击查看完整介绍');
+    node.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openDescriptionModal(modalTitle, text);
+    });
+    return node;
+}
+
 function openDownloadSettingsModal(ctx, options) {
     const { config } = ctx;
     const {
@@ -1173,10 +1207,7 @@ export function SearchView(ctx) {
             text: `专辑 ${detail.albumSize || 0}　　单曲 ${detail.musicSize || 0}`,
         }));
         if (detail.briefDesc) {
-            infoChildren.push(el('div', {
-                class: 'detail-header__description',
-                text: detail.briefDesc,
-            }));
+            infoChildren.push(makeDescriptionEl(detail.briefDesc, '歌手介绍'));
         }
 
         const info = el('div', { class: 'detail-header__info' }, ...infoChildren);
@@ -1288,10 +1319,7 @@ export function SearchView(ctx) {
         infoChildren.push(el('div', { class: 'detail-header__title', text: detail.title || '未知' }));
 
         if (detail.description) {
-            infoChildren.push(el('div', {
-                class: 'detail-header__description',
-                text: detail.description,
-            }));
+            infoChildren.push(makeDescriptionEl(detail.description, '歌单介绍'));
         }
 
         infoChildren.push(el('div', { class: 'detail-header__meta' }, ...metaChildren));
