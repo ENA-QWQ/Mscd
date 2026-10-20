@@ -561,6 +561,16 @@
     border-radius: var(--radius-panel) 0 0 0;
 }
 
+@media (max-width: 900px) {
+    :root[data-theme="mono-round"] .side-nav a {
+        border-radius: 999px;
+    }
+
+    :root[data-theme="mono-round"] .side-nav a::before {
+        border-radius: 999px;
+    }
+}
+
 /* artist covers: force circle */
 :root[data-theme="mono-round"] .artist-card__cover,
 :root[data-theme="mono-round"] .artist-detail__cover,
