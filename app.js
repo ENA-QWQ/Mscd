@@ -2370,6 +2370,8 @@ initQueuePanel(ctx);
 
 (function setupDownloadCompletionPrompt() {
     const KIND_LABEL = { audio: '音频', lyric: '歌词', mv: 'MV' };
+    const pendingKinds = new Map();
+    let promptTimer = null;
 
     function computeWantedKinds(song) {
         const kinds = [];
@@ -2383,6 +2385,38 @@ initQueuePanel(ctx);
         if (wantLyric) kinds.push('lyric');
         if (dlMv && hasMv) kinds.push('mv');
         return kinds;
+    }
+
+    function mergeSuccessKinds(successKindsBySongId) {
+        for (const songId of Object.keys(successKindsBySongId || {})) {
+            const kinds = successKindsBySongId[songId] || [];
+            if (!kinds.length) continue;
+            const key = String(songId);
+            const set = pendingKinds.get(key) || new Set();
+            for (const kind of kinds) set.add(kind);
+            pendingKinds.set(key, set);
+        }
+    }
+
+    function hasActiveTaskForPending() {
+        if (!pendingKinds.size) return false;
+        const tasks = store.get().downloadTasks || [];
+        for (const task of tasks) {
+            if (task.status !== 'active' && task.status !== 'waiting') continue;
+            for (const track of task.tracks || []) {
+                if (!track || !track.songId) continue;
+                if (!pendingKinds.has(String(track.songId))) continue;
+                if (
+                    track.status === 'queued' ||
+                    track.status === 'resolving' ||
+                    track.status === 'downloading' ||
+                    track.status === 'tagging'
+                ) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     function applyPlans(plans) {
@@ -2427,7 +2461,13 @@ initQueuePanel(ctx);
         }
     }
 
-    function showCompletionPrompt(plans) {
+    function clearPending(ids) {
+        for (const id of ids || []) {
+            pendingKinds.delete(String(id));
+        }
+    }
+
+    function showCompletionPrompt(plans, ids) {
         const body = el('div', { class: 'download-complete-prompt' });
         body.appendChild(el('p', { text: '是否移除已完成下载的项？' }));
         openModal({
@@ -2435,28 +2475,58 @@ initQueuePanel(ctx);
             body,
             confirmText: '移除',
             cancelText: '保留',
-            onConfirm: () => { applyPlans(plans); },
+            onConfirm: () => {
+                applyPlans(plans);
+                clearPending(ids);
+            },
+            onCancel: () => {
+                clearPending(ids);
+            },
         });
+    }
+
+    function schedulePrompt() {
+        if (promptTimer) return;
+        promptTimer = setTimeout(() => {
+            promptTimer = null;
+            if (!pendingKinds.size) return;
+            if (document.querySelector('.ena-modal.is-open')) {
+                schedulePrompt();
+                return;
+            }
+            if (hasActiveTaskForPending()) {
+                schedulePrompt();
+                return;
+            }
+            const downloads = store.get().downloads;
+            if (!downloads.length) {
+                pendingKinds.clear();
+                return;
+            }
+            const plans = [];
+            const ids = [];
+            for (const [songId, kindSet] of pendingKinds) {
+                const succeeded = Array.from(kindSet);
+                const song = downloads.find((d) => String(d.id) === String(songId));
+                if (!song) continue;
+                const wanted = computeWantedKinds(song);
+                if (!wanted.length) continue;
+                const remaining = wanted.filter((k) => !succeeded.includes(k));
+                plans.push({ song, succeeded, remaining });
+                ids.push(songId);
+            }
+            if (!plans.length) {
+                pendingKinds.clear();
+                return;
+            }
+            showCompletionPrompt(plans, ids);
+        }, 200);
     }
 
     downloader.onTaskComplete = (info) => {
         if (!info || !info.successKindsBySongId) return;
-        if (document.querySelector('.ena-modal.is-open')) return;
-        const downloads = store.get().downloads;
-        if (!downloads.length) return;
-        const plans = [];
-        for (const songId of Object.keys(info.successKindsBySongId)) {
-            const succeeded = info.successKindsBySongId[songId];
-            if (!succeeded || !succeeded.length) continue;
-            const song = downloads.find((d) => String(d.id) === String(songId));
-            if (!song) continue;
-            const wanted = computeWantedKinds(song);
-            if (!wanted.length) continue;
-            const remaining = wanted.filter((k) => !succeeded.includes(k));
-            plans.push({ song, succeeded, remaining });
-        }
-        if (!plans.length) return;
-        showCompletionPrompt(plans);
+        mergeSuccessKinds(info.successKindsBySongId);
+        schedulePrompt();
     };
 })();
 
