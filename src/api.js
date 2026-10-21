@@ -285,6 +285,36 @@ class NeteaseAdapter {
         };
     }
 
+    normalizeMv(item) {
+        if (!item) return null;
+        const rawArtists = Array.isArray(item.artists) ? item.artists : [];
+        const artists = rawArtists
+            .map(a => ({ id: String(a?.id ?? ''), name: a?.name ?? '' }))
+            .filter(a => a.name);
+        const artist = item.artistName || artists.map(a => a.name).join(' / ');
+        const duration = Math.round((Number(item.duration) || 0) / 1000);
+        return {
+            id: String(item.id ?? ''),
+            title: item.name ?? '',
+            artist,
+            artists,
+            album: '',
+            albumId: '',
+            pop: null,
+            url: '',
+            pic: upgradeToHttps(item.cover ?? ''),
+            lrc: '',
+            duration,
+            mv: String(item.id ?? ''),
+            _type: 'mv',
+            _extra: {
+                playCount: Number(item.playCount) || 0,
+                briefDesc: item.briefDesc ?? '',
+                desc: item.desc ?? '',
+            },
+        };
+    }
+
     normalizeArtist(item) {
         if (!item) return null;
         const alias = Array.isArray(item.alias)
@@ -408,6 +438,9 @@ class NeteaseAdapter {
         } else if (searchType === 1000) {
             items = this.pickArray(r.playlists || []).map(p => this.normalizePlaylist(p));
             total = r.playlistCount ?? items.length;
+        } else if (searchType === 1004) {
+            items = this.pickArray(r.mvs || []).map(m => this.normalizeMv(m)).filter(Boolean);
+            total = r.mvCount ?? items.length;
         }
 
         return { items, total };

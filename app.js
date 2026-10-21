@@ -140,7 +140,7 @@ function getCachedDetailMeta(kind, id) {
     return entry ? { ...entry } : null;
 }
 
-const SEARCH_TYPES = ['1', '10', '100', '1000'];
+const SEARCH_TYPES = ['1', '10', '100', '1000', '1004'];
 
 function emptyTypeResult() {
     return { items: [], total: 0, page: 1, loading: false, error: null, loaded: false };
@@ -526,6 +526,7 @@ ctx.themeManager = themeManager;
 window.__themeManager = themeManager;
 ctx.openParseModal = () => openParseModal(ctx);
 ctx.openBatchAddModal = (songs, mode) => openBatchAddModal(songs, ctx, mode);
+ctx.openMvDownloadOptionsModal = openMvDownloadOptionsModal;
 
 function bindSidebar() {
     const nav = document.getElementById('side-nav');
@@ -557,6 +558,7 @@ function bindSearchBar() {
         { value: '10', label: '专辑' },
         { value: '100', label: '歌手' },
         { value: '1000', label: '歌单' },
+        { value: '1004', label: 'MV' },
     ];
 
     let searchMode = '0';

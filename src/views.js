@@ -6,6 +6,7 @@ import {
     SongRow,
     CollectionCard,
     ArtistCard,
+    MvCard,
     AccountButton,
     EmptyState,
     LoadingState,
@@ -297,11 +298,13 @@ function openThreeTabDownloadModal(ctx, options) {
         cancelText = '取消',
         initial = {},
         hideMvTab = false,
+        onlyMv = false,
+        mvLevels = null,
         onConfirm,
     } = options;
 
-    let activeTab = 'audio';
-    let downloadAudio = initial.downloadAudio !== false;
+    let activeTab = onlyMv ? 'mv' : 'audio';
+    let downloadAudio = onlyMv ? false : initial.downloadAudio !== false;
     let audioQuality = initial.audioQuality ?? config.quality.download;
     let metaTitle = initial.metaTitle !== false;
     let metaArtist = initial.metaArtist !== false;
@@ -310,26 +313,29 @@ function openThreeTabDownloadModal(ctx, options) {
     let metaBpm = initial.metaBpm === true;
     let metaGenre = initial.metaGenre === true;
     let metaCover = initial.metaCover !== false;
-    let downloadLyric = !!initial.downloadLyric;
+    let downloadLyric = onlyMv ? false : !!initial.downloadLyric;
     let lyricWithTranslation = !!initial.lyricWithTranslation;
     let lyricDelay = Number(initial.lyricDelay) || 0;
-    let downloadMv = hideMvTab ? false : !!initial.downloadMv;
+    let downloadMv = onlyMv ? true : (hideMvTab ? false : !!initial.downloadMv);
     let mvQuality = initial.mvQuality ?? (config.mv && config.mv.default) ?? 1080;
     let mvFallback = initial.mvFallback || 'max';
     let historyRecord = initial.historyRecord !== false;
 
-    const TABS = [
-        { key: 'audio', label: '歌曲', get: () => downloadAudio, set: (v) => { downloadAudio = v; } },
-        { key: 'lyric', label: '歌词', get: () => downloadLyric, set: (v) => { downloadLyric = v; } },
-    ];
-    if (!hideMvTab) {
+    const TABS = [];
+    if (!onlyMv) {
+        TABS.push({ key: 'audio', label: '歌曲', get: () => downloadAudio, set: (v) => { downloadAudio = v; } });
+        TABS.push({ key: 'lyric', label: '歌词', get: () => downloadLyric, set: (v) => { downloadLyric = v; } });
+    }
+    if (onlyMv || !hideMvTab) {
         TABS.push({ key: 'mv', label: 'MV', get: () => downloadMv, set: (v) => { downloadMv = v; } });
     }
 
     const tabsEl = el('div', { class: 'search-tabs' });
     const tabsNav = el('div', { class: 'search-tabs__nav' });
     const panelEl = el('div', { class: 'download-tabs-panel', style: { minHeight: '210px' } });
-    const body = el('div', { class: 'download-tabs' }, tabsEl, panelEl);
+    const body = el('div', { class: 'download-tabs' });
+    if (TABS.length > 1) body.appendChild(tabsEl);
+    body.appendChild(panelEl);
 
     const tabButtons = {};
 
@@ -488,7 +494,7 @@ function openThreeTabDownloadModal(ctx, options) {
 
         panel.appendChild(el('div', { class: 'setting-sublabel', text: '优先分辨率' }));
 
-        const mvLevels = [
+        const levels = Array.isArray(mvLevels) && mvLevels.length ? mvLevels : [
             { br: 240, label: '240P' },
             { br: 480, label: '480P' },
             { br: 720, label: '720P' },
@@ -496,7 +502,7 @@ function openThreeTabDownloadModal(ctx, options) {
         ];
         mvQualityInputs = [];
         const qualityGroup = el('div', { class: 'ena-radio-group' });
-        for (const level of mvLevels) {
+        for (const level of levels) {
             const input = el('input', { type: 'radio', name: 'batch-mv-quality' });
             input.checked = mvQuality === level.br;
             input.addEventListener('change', () => {
@@ -726,37 +732,25 @@ export async function openMvDownloadOptionsModal(song, ctx, mode = 'now') {
         selectedBr = levels[0] ? levels[0].br : selectedBr;
     }
 
-    const radioName = 'mv-quality-' + Date.now();
-    const optionsEl = el('div', { class: 'ena-radio-group' });
-    for (const level of levels) {
-        const input = el('input', { type: 'radio', name: radioName });
-        if (level.br === selectedBr) input.checked = true;
-        input.addEventListener('change', () => {
-            if (input.checked) selectedBr = level.br;
-        });
-        optionsEl.appendChild(el('label', { class: 'ena-radio' },
-            input,
-            el('span', { class: 'dot' }),
-            el('span', { text: level.label })
-        ));
-    }
-
-    const body = el('div', { class: 'download-options' });
-    body.appendChild(el('div', { class: 'setting-label', text: '选择清晰度' }));
-    body.appendChild(optionsEl);
-
-    openModal({
+    openThreeTabDownloadModal(ctx, {
         title: '下载 MV',
-        body,
         confirmText: '开始下载',
-        onConfirm: () => {
-            store.update({ settings: { ...store.get().settings, mvQuality: selectedBr } });
+        onlyMv: true,
+        mvLevels: levels,
+        initial: {
+            downloadMv: true,
+            mvQuality: selectedBr,
+            mvFallback: store.get().settings.mvFallback || 'max',
+            historyRecord: store.get().settings.historyRecord !== false,
+        },
+        onConfirm: (r) => {
+            store.update({ settings: { ...store.get().settings, mvQuality: r.mvQuality } });
             store.persist();
             const mvSong = {
                 id: mvid,
                 mv: mvid,
                 _kind: 'mv',
-                _quality: selectedBr,
+                _quality: r.mvQuality,
                 _withLyric: false,
                 _lyricOnly: false,
                 title: detail.name || song.title || '',
@@ -768,7 +762,7 @@ export async function openMvDownloadOptionsModal(song, ctx, mode = 'now') {
             if (mode === 'addToList') {
                 addToDownloadList(mvSong, store);
             } else {
-                startSingleDownload(mvSong, selectedBr, ctx);
+                startSingleDownload(mvSong, r.mvQuality, ctx);
             }
         },
     });
@@ -1449,6 +1443,7 @@ export function SearchView(ctx) {
         { key: '100', label: '歌手' },
         { key: '10', label: '专辑' },
         { key: '1000', label: '歌单' },
+        { key: '1004', label: 'MV' },
     ];
 
     const AGG_SECTIONS = [
@@ -1456,6 +1451,7 @@ export function SearchView(ctx) {
         { key: '100', label: '歌手' },
         { key: '10', label: '专辑' },
         { key: '1000', label: '歌单' },
+        { key: '1004', label: 'MV' },
     ];
 
     const AGG_SINGLE_LIMIT = 20;
@@ -1537,6 +1533,7 @@ export function SearchView(ctx) {
         if (typeKey === '1000') listClass += ' song-list--playlist';
         else if (typeKey === '10') listClass += ' song-list--album';
         else if (typeKey === '100') listClass += ' song-list--artist';
+        else if (typeKey === '1004') listClass += ' song-list--mv';
 
         let sourceItems = items;
         if (typeKey === '1' && items.length) {
@@ -1564,6 +1561,16 @@ export function SearchView(ctx) {
                 list.appendChild(CollectionCard(item, {
                     onOpen: () => openDetail(item._type, collectionMeta(item)),
                     ctx,
+                }));
+            } else if (typeKey === '1004') {
+                list.appendChild(MvCard(item, {
+                    ctx,
+                    onOpen: () => {
+                        const hash = '#/mv/' + encodeURIComponent(item.id);
+                        if (window.location.hash !== hash) {
+                            window.location.hash = hash;
+                        }
+                    },
                 }));
             } else {
                 list.appendChild(SongRow(item, songRowHandlers(item, ctx)));
@@ -1612,7 +1619,7 @@ export function SearchView(ctx) {
 
             host.appendChild(section);
 
-            if (key === '100' || key === '10') {
+            if (key === '100' || key === '10' || key === '1004') {
                 const list = section.querySelector('.song-list');
                 if (list) trimToFirstRow(list);
             }

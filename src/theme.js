@@ -118,7 +118,7 @@ export function generateThemeVars(themeHex, mode = 'auto') {
     const accent = {
         '--fill': accentHex,
         '--border-line': accentHex,
-        '--hover-text': isLight ? accentHex : hsl(h, s, 88),
+        '--hover-text': isLight ? hslToHex(h, s, Math.min(l, 0.3)) : hsl(h, s, 88),
         '--on-accent': pickOnColor(accentHex),
     };
 

@@ -144,6 +144,26 @@ function resolveSongRowView() {
     return state.settings.songView || 'tile';
 }
 
+function formatPlayCount(n) {
+    const num = Number(n) || 0;
+    if (num >= 100000000) {
+        return (num / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
+    }
+    if (num >= 10000) {
+        return (num / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+    }
+    return String(num);
+}
+
+function formatMvDuration(sec) {
+    if (!sec || !isFinite(sec) || isNaN(sec)) return '';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 function formatSongDuration(sec) {
     if (!sec || !isFinite(sec) || isNaN(sec)) return '-';
     const m = Math.floor(sec / 60);
@@ -510,6 +530,8 @@ export function closeAllMenus() {
         m.classList.remove('is-open');
         const row = m.closest('.song-row');
         if (row) row.classList.remove('has-menu-open');
+        const card = m.closest('.mv-card');
+        if (card) card.classList.remove('has-menu-open');
     });
 }
 
@@ -965,6 +987,130 @@ export function ArtistCard(item, handlers = {}) {
 
     const card = el('div', { class: 'artist-card' }, coverEl, infoEl);
     card.addEventListener('click', () => onOpen?.(item));
+    return card;
+}
+
+export function MvCard(item, handlers = {}) {
+    const { onOpen, ctx } = handlers;
+
+    const coverEl = el('div', { class: 'mv-card__cover' });
+    if (item.pic) {
+        const img = el('img', { src: item.pic, alt: '', loading: 'lazy' });
+        img.addEventListener('error', () => {
+            coverEl.innerHTML = '';
+            coverEl.appendChild(icon('video'));
+        });
+        coverEl.appendChild(img);
+    } else {
+        coverEl.appendChild(icon('video'));
+    }
+
+    coverEl.appendChild(el('div', { class: 'mv-card__play' }, icon('play', true)));
+
+    const badgeEl = el('div', { class: 'mv-card__badges' });
+    const durText = formatMvDuration(item.duration);
+    if (durText) {
+        badgeEl.appendChild(el('span', { class: 'mv-card__badge', text: durText }));
+    }
+    const playCount = item._extra && item._extra.playCount ? Number(item._extra.playCount) : 0;
+    if (playCount > 0) {
+        const playBadge = el('span', { class: 'mv-card__badge mv-card__badge--play' });
+        const playIcon = icon('play', true);
+        playIcon.setAttribute('class', 'mv-card__badge-icon');
+        playBadge.appendChild(playIcon);
+        playBadge.appendChild(document.createTextNode(formatPlayCount(playCount)));
+        badgeEl.appendChild(playBadge);
+    }
+    coverEl.appendChild(badgeEl);
+
+    const menuPanel = el('div', { class: 'song-menu-panel' });
+    if (item.mv) {
+        const dlBtn = el('button', { class: 'song-menu-item' },
+            icon('download'),
+            el('span', { text: '下载 MV' })
+        );
+        dlBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeAllMenus();
+            if (ctx && ctx.openMvDownloadOptionsModal) {
+                ctx.openMvDownloadOptionsModal(item, ctx, 'now');
+            }
+        });
+        menuPanel.appendChild(dlBtn);
+    }
+
+    if (item.id) {
+        const copyBtn = el('button', { class: 'song-menu-item' },
+            icon('copy'),
+            el('span', { text: '复制内容 ID' })
+        );
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeAllMenus();
+            copyText(item.id).then((ok) => {
+                if (ok) Toast('已复制内容 ID：' + item.id, 'success', 1600);
+                else Toast('复制失败', 'danger', 1600);
+            });
+        });
+        menuPanel.appendChild(copyBtn);
+
+        const shareBtn = el('button', { class: 'song-menu-item' },
+            icon('link'),
+            el('span', { text: '复制链接' })
+        );
+        shareBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeAllMenus();
+            const url = window.location.origin + window.location.pathname + '#/mv/' + encodeURIComponent(item.id);
+            copyText(url).then((ok) => {
+                if (ok) Toast('已复制链接', 'success', 1600);
+                else Toast('复制失败', 'danger', 1600);
+            });
+        });
+        menuPanel.appendChild(shareBtn);
+    }
+
+    const menuTrigger = el('button', {
+        class: 'mv-card__more',
+        title: '更多操作',
+    }, icon('dots-vertical', true));
+    const menuWrap = el('div', { class: 'mv-card__menu song-menu' }, menuTrigger, menuPanel);
+
+    const infoChildren = [
+        el('div', { class: 'mv-card__title', text: item.title || '未知 MV' }),
+    ];
+    if (item.artist) {
+        const artistLine = el('div', { class: 'mv-card__artist' });
+        renderArtistInto(artistLine, item, ctx, '未知艺人');
+        infoChildren.push(artistLine);
+    }
+    const desc = item._extra && item._extra.briefDesc ? String(item._extra.briefDesc) : '';
+    if (desc) {
+        infoChildren.push(el('div', { class: 'mv-card__desc', text: desc }));
+    }
+
+    const card = el('div', { class: 'mv-card' },
+        coverEl,
+        el('div', { class: 'mv-card__info' }, ...infoChildren),
+        menuWrap
+    );
+
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.song-menu')) return;
+        if (e.target.closest('.mv-card__more')) return;
+        onOpen?.(item);
+    });
+
+    menuTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const willOpen = !menuWrap.classList.contains('is-open');
+        closeAllMenus();
+        if (willOpen) {
+            menuWrap.classList.add('is-open');
+            card.classList.add('has-menu-open');
+        }
+    });
+
     return card;
 }
 
