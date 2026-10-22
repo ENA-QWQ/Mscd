@@ -70,6 +70,7 @@ function createInitialState() {
         playbackOpen: false,
         playbackMode: 'song',
         queuePanelOpen: false,
+        mvOpen: false,
 
         mvState: {
             mvid: '',
@@ -81,6 +82,7 @@ function createInitialState() {
             error: null,
             duration: 0,
             currentTime: 0,
+            isPlaying: false,
         },
 
         wikiMap: new Map(),

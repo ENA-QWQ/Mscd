@@ -36,7 +36,9 @@ const api = new Meting(config);
 const player = new Player(api, config);
 const downloader = new Downloader(api, config);
 const mvPlayer = new MVPlayer(api, player, store);
+const standaloneMvPlayer = new MVPlayer(api, player, { standalone: true });
 player.mvPlayer = mvPlayer;
+player.standaloneMvPlayer = standaloneMvPlayer;
 
 const audioEffects = new AudioEffects();
 audioEffects.attach(player.audio);
@@ -519,7 +521,7 @@ const searchActions = {
     },
 };
 
-const ctx = { api, store, player, downloader, config, searchActions, mvPlayer };
+const ctx = { api, store, player, downloader, config, searchActions, mvPlayer, standaloneMvPlayer };
 
 const themeManager = new ThemeManager({ store, config });
 ctx.themeManager = themeManager;
@@ -701,6 +703,10 @@ function bindPlayerBar() {
     if (mvBtn) {
         mvBtn.addEventListener('click', async () => {
             const state = store.get();
+            if (state.mvOpen) {
+                if (ctx.standaloneMvPlayer) ctx.standaloneMvPlayer.exitMv();
+                return;
+            }
             if (state.playbackMode === 'mv') {
                 mvPlayer.exitMv();
                 return;
@@ -787,6 +793,12 @@ function bindPlayerBar() {
 
         store.subscribe((state) => {
             if (state.playbackMode !== 'mv') closeMvQualityMenu();
+        });
+    }
+
+    if (mvWebFullscreenBtn) {
+        store.subscribe((state) => {
+            mvWebFullscreenBtn.style.display = state.mvOpen ? 'none' : '';
         });
     }
 
@@ -1209,7 +1221,31 @@ function bindPlayerBar() {
             });
         }
 
-        if (song) {
+        if (state.mvOpen && state.mvState && state.mvState.detail) {
+            const detail = state.mvState.detail;
+            const mvKey = 'mv:' + (detail.id || detail.mvid || '');
+            titleEl.textContent = detail.name || '未知 MV';
+            if (artistEl.dataset.artistKey !== mvKey) {
+                artistEl.dataset.artistKey = mvKey;
+                artistEl.textContent = detail.artistName || '';
+            }
+            if (coverEl.dataset.songId !== mvKey) {
+                coverEl.dataset.songId = mvKey;
+                coverEl.innerHTML = '';
+                if (detail.cover) {
+                    const img = document.createElement('img');
+                    img.src = detail.cover;
+                    img.alt = '';
+                    img.onerror = () => {
+                        coverEl.innerHTML = '';
+                        coverEl.appendChild(createCoverPlaceholder());
+                    };
+                    coverEl.appendChild(img);
+                } else {
+                    coverEl.appendChild(createCoverPlaceholder());
+                }
+            }
+        } else if (song) {
             titleEl.textContent = song.title || '未知歌曲';
             const artistKey = String(song.id || '') + '|' + (song.artist || '') + '|' + ((song.artists || []).map((a) => a.id).join(','));
             if (artistEl.dataset.artistKey !== artistKey) {
@@ -1255,7 +1291,8 @@ function bindPlayerBar() {
         currentEl.textContent = formatTime(cur);
         durationEl.textContent = formatTime(total);
 
-        if (q.isPlaying) {
+        const playState = state.mvOpen ? (state.mvState && state.mvState.isPlaying) : q.isPlaying;
+        if (playState) {
             playIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
             playBtn.title = '暂停';
         } else {

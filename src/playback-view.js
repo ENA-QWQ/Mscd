@@ -212,6 +212,13 @@ export function initPlaybackView(ctx) {
     mvVideo.preload = 'metadata';
     mvVideo.setAttribute('webkit-playsinline', 'true');
 
+    if (ctx.mvPlayer && typeof ctx.mvPlayer.bindVideo === 'function') {
+        ctx.mvPlayer.bindVideo(mvVideo);
+    }
+    if (ctx.standaloneMvPlayer && typeof ctx.standaloneMvPlayer.bindVideo === 'function') {
+        ctx.standaloneMvPlayer.bindVideo(mvVideo);
+    }
+
     const mvLoading = el('div', { class: 'mv-loading' },
         el('div', { class: 'loading-bars' },
             el('span'), el('span'), el('span')
@@ -815,6 +822,10 @@ export function initPlaybackView(ctx) {
     }
 
     closeBtn.addEventListener('click', () => {
+        if (store.get().mvOpen) {
+            if (ctx.standaloneMvPlayer) ctx.standaloneMvPlayer.exitMv();
+            return;
+        }
         if (store.get().playbackMode === 'mv') {
             if (ctx.mvPlayer) ctx.mvPlayer.exitMv();
             return;
@@ -929,6 +940,7 @@ export function initPlaybackView(ctx) {
 
     let lastSongKey = '';
     let wasPlaybackOpen = !!store.get().playbackOpen;
+    let wasMvOpen = !!store.get().mvOpen;
     let closeTimer = null;
     let lastPlaybackMode = store.get().playbackMode || 'song';
 
@@ -957,6 +969,16 @@ export function initPlaybackView(ctx) {
             lastPlaybackMode = state.playbackMode;
             applyPlaybackMode(state.playbackMode);
         }
+
+        const isMvOpen = !!state.mvOpen;
+        if (isMvOpen && !wasMvOpen) {
+            document.body.classList.add('mv-web-fullscreen');
+            overlay.classList.add('is-web-fullscreen');
+        }
+        if (isMvOpen) {
+            closeBtn.title = '关闭 MV';
+        }
+        wasMvOpen = isMvOpen;
 
         if (state.playbackMode === 'mv') {
             const mv = state.mvState;

@@ -2,18 +2,41 @@ import { store } from './store.js';
 import { Toast } from './components.js';
 
 export class MVPlayer {
-    constructor(api, player) {
+    constructor(api, player, options = {}) {
         this.api = api;
         this.player = player;
+        this.standalone = !!(options && options.standalone);
         this.video = null;
         this.pendingSeekTime = null;
         this.videoBound = false;
+        this._switchingSrc = false;
+    }
+
+    bindVideo(video) {
+        if (!video) return;
+        if (this.video === video && this.videoBound) return;
+        this.video = video;
+        if (!this.videoBound) {
+            this.videoBound = true;
+            this.bindVideoEvents(video);
+        }
+    }
+
+    _isMvActive() {
+        if (this.standalone) return !!store.get().mvOpen;
+        return store.get().playbackMode === 'mv';
     }
 
     getVideo() {
-        if (!this.video) {
-            this.video = document.querySelector('.mv-video');
+        if (this.video) {
+            if (!this.videoBound) {
+                this.videoBound = true;
+                this.bindVideoEvents(this.video);
+            }
+            return this.video;
         }
+        if (this.standalone) return null;
+        this.video = document.querySelector('.mv-video');
         if (this.video && !this.videoBound) {
             this.videoBound = true;
             this.bindVideoEvents(this.video);
@@ -23,14 +46,14 @@ export class MVPlayer {
 
     bindVideoEvents(v) {
         v.addEventListener('loadeddata', () => {
-            if (store.get().playbackMode !== 'mv') return;
+            if (!this._isMvActive()) return;
             requestAnimationFrame(() => {
                 v.classList.add('is-ready');
             });
         });
 
         v.addEventListener('timeupdate', () => {
-            if (store.get().playbackMode !== 'mv') return;
+            if (!this._isMvActive()) return;
             const s = store.get().mvState;
             store.update({
                 mvState: {
@@ -64,12 +87,23 @@ export class MVPlayer {
         });
 
         v.addEventListener('play', () => {
+            if (this.standalone) {
+                const s = store.get().mvState;
+                store.update({ mvState: { ...s, isPlaying: true } });
+                return;
+            }
             const s = store.get();
             if (s.playbackMode !== 'mv') return;
             store.update({ queue: { ...s.queue, isPlaying: true } });
         });
 
         v.addEventListener('pause', () => {
+            if (this.standalone) {
+                if (this._switchingSrc) return;
+                const s = store.get().mvState;
+                store.update({ mvState: { ...s, isPlaying: false } });
+                return;
+            }
             const s = store.get();
             if (s.playbackMode !== 'mv') return;
             if (this._switchingSrc) return;
@@ -130,7 +164,8 @@ export class MVPlayer {
             },
         });
 
-        if (store.get().queue.isPlaying) {
+        const shouldPlay = this.standalone ? true : store.get().queue.isPlaying;
+        if (shouldPlay) {
             try { await v.play(); } catch {}
         }
     }
@@ -140,6 +175,31 @@ export class MVPlayer {
         const mvStr = song.mv != null ? String(song.mv) : '';
         if (mvStr === '' || mvStr === '0') return;
         const audio = this.player.audio;
+
+        if (this.standalone) {
+            const v = this.getVideo();
+            if (!v) {
+                Toast('MV 播放器未就绪', 'warning', 2000);
+                store.update({ mvOpen: false });
+                return;
+            }
+            if (store.get().playbackMode === 'mv' && this.player && this.player.mvPlayer && this.player.mvPlayer !== this) {
+                try { this.player.mvPlayer.exitMv(); } catch {}
+            }
+            try { audio.pause(); } catch {}
+            try {
+                store.update({ mvOpen: true, playbackOpen: true, playbackMode: 'mv' });
+                const { targetBr } = await this.loadDetail(String(song.mv));
+                await this.loadUrl(targetBr, 0);
+            } catch (err) {
+                Toast(`MV 加载失败：${err.message}`, 'danger', 2400);
+                this.stopVideo();
+                this.clearMvState();
+                store.update({ mvOpen: false, playbackOpen: false, playbackMode: 'song' });
+            }
+            return;
+        }
+
         const songProgress = audio.duration > 0 ? audio.currentTime / audio.duration : 0;
         const wasPlaying = !audio.paused;
 
@@ -160,6 +220,23 @@ export class MVPlayer {
     }
 
     exitMv() {
+        if (this.standalone) {
+            const v = this.getVideo();
+            if (v) {
+                this._switchingSrc = true;
+                try { v.pause(); } catch {}
+                v.removeAttribute('src');
+                try { v.load(); } catch {}
+                this._switchingSrc = false;
+            }
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+            this.clearMvState();
+            store.update({ mvOpen: false, playbackOpen: false, playbackMode: 'song' });
+            return;
+        }
+
         const s = store.get();
         const v = this.getVideo();
         const audio = this.player.audio;
@@ -301,11 +378,13 @@ export class MVPlayer {
                 duration: 0,
                 loading: false,
                 error: null,
+                isPlaying: false,
             },
         });
     }
 
     goToIndex(idx) {
+        if (this.standalone) return;
         const q = store.get().queue;
         const song = q.tracks[idx];
         if (!song) return;
@@ -343,6 +422,7 @@ export class MVPlayer {
     }
 
     next() {
+        if (this.standalone) return;
         const q = store.get().queue;
         if (!q.tracks.length) return;
         const idx = this.findNextIndex(1);
@@ -355,6 +435,7 @@ export class MVPlayer {
     }
 
     prev() {
+        if (this.standalone) return;
         const v = this.getVideo();
         if (v && v.currentTime > 3) {
             v.currentTime = 0;
@@ -368,6 +449,7 @@ export class MVPlayer {
     }
 
     handleEnded() {
+        if (this.standalone) return;
         const q = store.get().queue;
         if (q.playMode === 'repeat-one') {
             const v = this.getVideo();

@@ -336,7 +336,11 @@ export class Player {
     }
 
     toggle() {
-        if (store.get().playbackMode === 'mv' && this.mvPlayer) {
+        const state = store.get();
+        if (state.mvOpen && this.standaloneMvPlayer) {
+            return this.standaloneMvPlayer.toggle();
+        }
+        if (state.playbackMode === 'mv' && this.mvPlayer) {
             return this.mvPlayer.toggle();
         }
 
@@ -370,10 +374,14 @@ export class Player {
     }
 
     next() {
-        const q = store.get().queue;
+        const state = store.get();
+        if (state.mvOpen && this.standaloneMvPlayer) {
+            return this.standaloneMvPlayer.next();
+        }
+        const q = state.queue;
         if (q.tracks.length === 0) return;
 
-        if (store.get().playbackMode === 'mv' && this.mvPlayer) {
+        if (state.playbackMode === 'mv' && this.mvPlayer) {
             return this.mvPlayer.next();
         }
 
@@ -387,10 +395,14 @@ export class Player {
     }
 
     prev() {
-        const q = store.get().queue;
+        const state = store.get();
+        if (state.mvOpen && this.standaloneMvPlayer) {
+            return this.standaloneMvPlayer.prev();
+        }
+        const q = state.queue;
         if (q.tracks.length === 0) return;
 
-        if (store.get().playbackMode === 'mv' && this.mvPlayer) {
+        if (state.playbackMode === 'mv' && this.mvPlayer) {
             return this.mvPlayer.prev();
         }
 
@@ -531,7 +543,11 @@ export class Player {
     }
 
     seek(percent) {
-        if (store.get().playbackMode === 'mv' && this.mvPlayer) {
+        const state = store.get();
+        if (state.mvOpen && this.standaloneMvPlayer) {
+            return this.standaloneMvPlayer.seek(percent);
+        }
+        if (state.playbackMode === 'mv' && this.mvPlayer) {
             return this.mvPlayer.seek(percent);
         }
         if (!this.audio.duration) return;
@@ -548,6 +564,7 @@ export class Player {
         const vol = Math.max(0, Math.min(1, v));
         this.audio.volume = vol;
         if (this.mvPlayer) this.mvPlayer.setVolume(vol);
+        if (this.standaloneMvPlayer) this.standaloneMvPlayer.setVolume(vol);
         store.update({ queue: { ...store.get().queue, volume: vol } });
         store.persist();
     }

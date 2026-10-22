@@ -750,6 +750,7 @@ export async function openMvDownloadOptionsModal(song, ctx, mode = 'now') {
                 id: mvid,
                 mv: mvid,
                 _kind: 'mv',
+                _skipAudio: true,
                 _quality: r.mvQuality,
                 _withLyric: false,
                 _lyricOnly: false,

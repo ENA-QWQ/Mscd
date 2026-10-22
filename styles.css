@@ -2994,18 +2994,6 @@ body.has-selection .multi-select-bar {
     transition: color .25s ease;
 }
 
-.mv-card__desc {
-    font-size: .7rem;
-    color: var(--text-tertiary);
-    margin-top: 4px;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    word-break: break-word;
-}
-
 .mv-card:hover .mv-card__title,
 .mv-card:hover .mv-card__artist {
     color: var(--hover-text);
@@ -3082,10 +3070,6 @@ body.has-selection .multi-select-bar {
 
     .mv-card__artist {
         font-size: .66rem;
-    }
-
-    .mv-card__desc {
-        display: none;
     }
 
     .mv-card__badge {
@@ -8519,6 +8503,11 @@ body.mv-web-fullscreen .player-bar .ena-btn--icon.ena-btn--primary {
     color: var(--on-accent);
 }
 
+body.mv-web-fullscreen .player-bar .ena-btn--icon.ena-btn--primary,
+body.mv-web-fullscreen .player-bar .ena-btn--icon.ena-btn--primary:hover {
+    color: #ffffff;
+}
+
 body.mv-web-fullscreen .player-bar .player-progress-bar {
     background: var(--bg-overlay-light);
 }
@@ -8775,11 +8764,11 @@ body.mv-web-fullscreen.mv-bars-hidden .playback-overlay__top {
 }
 
 body.mv-web-fullscreen .playback-overlay__top .ena-btn--icon {
-    color: var(--on-accent);
+    color: #ffffff;
 }
 
 body.mv-web-fullscreen .playback-overlay__top .ena-btn--icon:hover {
-    color: var(--on-accent);
+    color: #ffffff;
 }
 
 body.playback-mode-mv .playback-overlay__top .ena-btn--icon svg {
@@ -8804,8 +8793,13 @@ body.playback-mode-mv .mv-top-info {
 
 body.mv-web-fullscreen .mv-top-info {
     display: flex;
-    color: var(--on-accent);
+    color: #ffffff;
     text-shadow: 0 1px 4px var(--on-cover-shadow-weak);
+}
+
+body.mv-web-fullscreen .mv-top-title,
+body.mv-web-fullscreen .mv-top-artist {
+    color: #ffffff;
 }
 
 .mv-top-title {
@@ -9874,6 +9868,225 @@ body.queue-panel-open {
     .downloads-view .song-row:has(.song-select):not(.song-row--detail) {
         padding-left: 28px !important;
     }
+}
+
+/* ==================== 独立 MV 播放器 ==================== */
+.mv-overlay {
+    --mv-surface: #1a1a1a;
+    --mv-text-primary: #f5f5f5;
+    --mv-text-secondary: rgba(255, 255, 255, 0.75);
+    --mv-text-tertiary: rgba(255, 255, 255, 0.5);
+    --mv-border: rgba(255, 255, 255, 0.3);
+    --mv-progress-track: rgba(255, 255, 255, 0.2);
+    --mv-progress-track-hover: rgba(255, 255, 255, 0.3);
+    --mv-hover-bg: rgba(255, 255, 255, 0.12);
+
+    --text-primary: var(--mv-text-primary);
+    --text-secondary: var(--mv-text-secondary);
+    --text-tertiary: var(--mv-text-tertiary);
+    --border-line: var(--mv-border);
+    --progress-track: var(--mv-progress-track);
+    --progress-track-hover: var(--mv-progress-track-hover);
+    --hover-bg: var(--mv-hover-bg);
+    --hover-text: #ffffff;
+
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: var(--mv-surface);
+    visibility: hidden;
+    pointer-events: none;
+    clip-path: inset(100% 0 0 0);
+    transition: clip-path .42s var(--ease-standard), visibility 0s .42s;
+}
+
+.mv-overlay.is-open {
+    visibility: visible;
+    pointer-events: auto;
+    clip-path: inset(0 0 0 0);
+    transition: clip-path .42s var(--ease-standard), visibility 0s 0s;
+}
+
+.mv-overlay__panel {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--mv-surface);
+}
+
+.mv-overlay .mv-video {
+    top: 0;
+    height: 100%;
+    background: #000;
+}
+
+.mv-overlay .mv-loading {
+    top: 0;
+}
+
+.mv-overlay .mv-play-indicator {
+    top: 0;
+}
+
+.mv-overlay__panel.is-paused .mv-play-indicator {
+    opacity: 1;
+}
+
+.mv-overlay__top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    min-height: 52px;
+    box-sizing: border-box;
+    background: var(--mv-surface);
+    color: var(--mv-text-primary);
+    clip-path: inset(0 0 0 0);
+    transition: clip-path .35s var(--ease-standard);
+}
+
+.mv-overlay.is-bars-hidden .mv-overlay__top {
+    clip-path: inset(0 0 100% 0);
+}
+
+.mv-overlay__top .ena-btn--icon {
+    color: var(--mv-text-primary);
+    flex-shrink: 0;
+}
+
+.mv-overlay__top .ena-btn--icon:hover {
+    color: #ffffff;
+}
+
+.mv-overlay__top .mv-top-info {
+    display: flex;
+    margin-left: 4px;
+    min-width: 0;
+    flex: 1;
+    color: var(--mv-text-primary);
+    text-shadow: none;
+}
+
+.mv-overlay__top .mv-top-title {
+    font-size: .82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mv-overlay__top .mv-top-artist {
+    font-size: .66rem;
+    opacity: .8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mv-overlay__bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    background: var(--mv-surface);
+    color: var(--mv-text-primary);
+    padding: 0 14px 8px;
+    box-sizing: border-box;
+    clip-path: inset(0 0 0 0);
+    transition: clip-path .35s var(--ease-standard);
+}
+
+.mv-overlay.is-bars-hidden .mv-overlay__bottom {
+    clip-path: inset(100% 0 0 0);
+    pointer-events: none;
+}
+
+.mv-overlay__progress-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.mv-overlay__time {
+    font-family: var(--font-body);
+    font-size: .68rem;
+    color: var(--mv-text-tertiary);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    min-width: 34px;
+    text-align: center;
+    line-height: 1;
+}
+
+.mv-overlay__progress {
+    flex: 1 1 auto;
+    height: 3px;
+    background: var(--mv-progress-track);
+    cursor: pointer;
+    overflow: hidden;
+    position: relative;
+    transition: height .22s var(--ease-standard), background .2s ease;
+}
+
+.mv-overlay__progress:hover {
+    height: 6px;
+    background: var(--mv-progress-track-hover);
+}
+
+.mv-overlay__progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--mv-text-primary);
+    transition: width .1s linear;
+    pointer-events: none;
+}
+
+.mv-overlay__controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 52px;
+    flex-shrink: 0;
+}
+
+.mv-overlay__controls .ena-btn--icon {
+    color: var(--mv-text-primary);
+    width: 40px;
+    height: 40px;
+}
+
+.mv-overlay__controls .ena-btn--icon:hover {
+    color: #ffffff;
+}
+
+.mv-overlay__controls .mv-overlay__play {
+    width: 56px;
+    height: 56px;
+}
+
+.mv-overlay__controls .mv-overlay__play svg {
+    width: 24px;
+    height: 24px;
+}
+
+.mv-overlay .mv-quality-menu {
+    z-index: 1200;
+}
+
+body.mv-standalone-open {
+    overflow: hidden;
 }
 
 /* ==================== 主题选择 ==================== */

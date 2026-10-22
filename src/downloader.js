@@ -1221,6 +1221,10 @@ export class Downloader {
         const out = [];
         for (const song of songs) {
             if (!song) continue;
+            if (song._kind === 'mv') {
+                out.push(song);
+                continue;
+            }
             const skipAudio = !!song._skipAudio;
             const lyricOnly = !!song._lyricOnly;
             const wantLyric = !!song._withLyric || lyricOnly;
@@ -1415,6 +1419,9 @@ export class Downloader {
     }
 
     async downloadOne(song, quality) {
+        if (song && song._kind === 'mv' && (store.get().settings.mvDirMode || 'same') === 'separate') {
+            return this.downloadAsZip([song], quality);
+        }
         const { retry, retryDelay } = this.config.download;
         const withLyric = !!song._withLyric;
         const taskId = newTaskId();
@@ -1778,8 +1785,12 @@ export class Downloader {
             store.upsertDownloadTask(taskId, { phase: 'tagging' });
             const finalBlob = await this.writeTags(blob, meta);
 
-            const filename = await pickUniqueFilename(dirHandle, meta.filename);
-            const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+            let targetDir = dirHandle;
+            if (meta.kind === 'mv' && (store.get().settings.mvDirMode || 'same') === 'separate') {
+                targetDir = await getOrCreateSubdir(dirHandle, 'MV', new Map());
+            }
+            const filename = await pickUniqueFilename(targetDir, meta.filename);
+            const fileHandle = await targetDir.getFileHandle(filename, { create: true });
             const writable = await fileHandle.createWritable();
             await writable.write(finalBlob);
             await writable.close();
@@ -2859,9 +2870,13 @@ export class Downloader {
             const zip = new window.JSZip();
             const categoryMode = store.get().settings.batchCategory || 'none';
             const lyricMode = store.get().settings.lyricSaveMode || 'same';
+            const mvMode = store.get().settings.mvDirMode || 'same';
             for (const { track, kind, blob, lyric, filename } of successful) {
                 let folder = '';
-                if (categoryMode === 'artist') {
+                const isMv = track._kind === 'mv';
+                if (isMv && mvMode === 'separate') {
+                    folder = 'MV/';
+                } else if (categoryMode === 'artist') {
                     const a = getMainArtist(track.artist);
                     if (a) folder = sanitizeFilename(a) + '/';
                 } else if (categoryMode === 'album') {

@@ -44,6 +44,10 @@ function parseUrl() {
 }
 
 export function buildUrl(state) {
+    if (state.mvOpen && state.mvState && state.mvState.mvid) {
+        return `#/mv/${encodeURIComponent(state.mvState.mvid)}`;
+    }
+
     if (state.playbackOpen) {
         const q = state.queue;
         const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
@@ -127,6 +131,8 @@ export function initRouter(ctx) {
             key = `detail:${parsed.type}:${parsed.id}`;
         } else if (parsed.kind === 'playback') {
             key = `playback:${parsed.songId}`;
+        } else if (parsed.kind === 'mv') {
+            key = `mv:${parsed.mvid}`;
         } else if (parsed.kind === 'search') {
             key = `search:${parsed.keyword}:${parsed.type}:${parsed.page}`;
         } else if (parsed.kind === 'view') {
@@ -143,6 +149,15 @@ export function initRouter(ctx) {
         try {
             if (parsed.kind !== 'playback' && store.get().playbackOpen) {
                 store.update({ playbackOpen: false });
+            }
+
+            if (parsed.kind !== 'mv' && store.get().mvOpen) {
+                const smvp = ctx.standaloneMvPlayer;
+                if (smvp) {
+                    smvp.exitMv();
+                } else {
+                    store.update({ mvOpen: false });
+                }
             }
 
             if (parsed.kind === 'home') {
@@ -168,34 +183,13 @@ export function initRouter(ctx) {
             }
 
             if (parsed.kind === 'mv') {
-                if (!ctx.mvPlayer) return;
+                const mvp = ctx.standaloneMvPlayer || ctx.mvPlayer;
+                if (!mvp) return;
                 try {
-                    const detail = await ctx.api.mvDetail(parsed.mvid);
-                    const song = {
-                        id: parsed.mvid,
-                        title: detail.name || '',
-                        artist: detail.artistName || '',
-                        album: '',
-                        pic: detail.cover || '',
-                        mv: parsed.mvid,
-                        duration: detail.duration ? detail.duration / 1000 : 0,
-                    };
-                    store.update({
-                        queue: {
-                            ...store.get().queue,
-                            tracks: [song],
-                            currentIndex: 0,
-                            currentTime: 0,
-                            duration: 0,
-                            isPlaying: true,
-                            error: null,
-                        },
-                        playbackOpen: true,
-                    });
-                    await ctx.mvPlayer.enterMv(song);
+                    await mvp.enterMv({ id: parsed.mvid, mv: parsed.mvid });
                 } catch {
                     history.replaceState({ __app: true, __depth: 0 }, '', '#/');
-                    store.update({ playbackOpen: false });
+                    store.update({ mvOpen: false });
                 }
                 return;
             }
@@ -239,7 +233,10 @@ export function initRouter(ctx) {
 
         const depth = (window.history.state && window.history.state.__depth) || 0;
 
-        if (want.startsWith('#/song/') && current.startsWith('#/song/')) {
+        if (
+            (want.startsWith('#/song/') && current.startsWith('#/song/')) ||
+            (want.startsWith('#/mv/') && current.startsWith('#/mv/'))
+        ) {
             history.replaceState({ __app: true, __depth: depth }, '', want);
             return;
         }

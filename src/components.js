@@ -1084,10 +1084,6 @@ export function MvCard(item, handlers = {}) {
         renderArtistInto(artistLine, item, ctx, '未知艺人');
         infoChildren.push(artistLine);
     }
-    const desc = item._extra && item._extra.briefDesc ? String(item._extra.briefDesc) : '';
-    if (desc) {
-        infoChildren.push(el('div', { class: 'mv-card__desc', text: desc }));
-    }
 
     const card = el('div', { class: 'mv-card' },
         coverEl,
