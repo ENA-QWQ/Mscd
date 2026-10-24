@@ -14,6 +14,14 @@ function formatMobileTime(sec) {
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function formatLyricTime(sec) {
+    const n = Number(sec);
+    if (!isFinite(n) || n < 0) return '';
+    const m = Math.floor(n / 60);
+    const s = Math.floor(n % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function initPlaybackView(ctx) {
     const { store, player } = ctx;
 
@@ -660,6 +668,13 @@ export function initPlaybackView(ctx) {
             const row = el('div', { class: 'playback-lyric__line' });
             row.dataset.index = String(index);
             row.dataset.startTime = String(line.time);
+
+            row.appendChild(el('div', {
+                class: 'playback-lyric__time',
+                text: formatLyricTime(line.time),
+            }));
+
+            row.appendChild(el('span', { class: 'playback-lyric__arrow' }, icon('chevron-left')));
 
             const textEl = el('div', { class: 'playback-lyric__text' });
 
