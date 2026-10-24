@@ -59,7 +59,62 @@ export function initPlaybackView(ctx) {
 
     const lyricPlaceholder = el('div', { class: 'playback-lyric__placeholder', text: '暂无歌词' });
 
-    const rightEl = el('div', { class: 'playback-overlay__right' }, lyricEl, lyricPlaceholder);
+    function makeLyricToolBtn(title, text) {
+        const btn = el('button', { class: 'ena-btn ena-btn--icon', type: 'button', title });
+        btn.appendChild(el('span', { class: 'playback-lyric-tools__label', text }));
+        return btn;
+    }
+
+    const lyricToolsEl = el('div', { class: 'playback-lyric-tools' });
+    const delayValEl = el('span', { class: 'playback-lyric-tools__val', text: '0.0s' });
+    const fontValEl = el('span', { class: 'playback-lyric-tools__val', text: '1.0x' });
+    const delayIncBtn = makeLyricToolBtn('增加歌词延迟', '+');
+    const delayDecBtn = makeLyricToolBtn('减少歌词延迟', '−');
+    const fontIncBtn = makeLyricToolBtn('增大歌词字号', 'A+');
+    const fontDecBtn = makeLyricToolBtn('减小歌词字号', 'A−');
+    const transBtn = makeLyricToolBtn('显示/隐藏翻译', '译');
+
+    lyricToolsEl.appendChild(el('div', { class: 'playback-lyric-tools__group' }, delayIncBtn, delayValEl, delayDecBtn));
+    lyricToolsEl.appendChild(el('div', { class: 'playback-lyric-tools__group' }, fontIncBtn, fontValEl, fontDecBtn));
+    lyricToolsEl.appendChild(el('div', { class: 'playback-lyric-tools__group' }, transBtn));
+
+    let lyricPrefs = (() => {
+        try {
+            const s = store.get().settings.playbackLyric;
+            if (s && typeof s === 'object') {
+                const d = Number(s.delay);
+                const f = Number(s.fontScale);
+                return {
+                    delay: Number.isFinite(d) ? Math.max(-2, Math.min(2, d)) : 0,
+                    fontScale: Number.isFinite(f) ? Math.max(0.6, Math.min(1.6, f)) : 1,
+                    showTranslation: s.showTranslation !== false,
+                };
+            }
+        } catch {}
+        return { delay: 0, fontScale: 1, showTranslation: true };
+    })();
+
+    function persistLyricPrefs() {
+        try {
+            const st = store.get().settings;
+            store.update({ settings: { ...st, playbackLyric: { ...lyricPrefs } } });
+            store.persist();
+        } catch {}
+    }
+
+    function applyLyricPrefs() {
+        lyricEl.style.setProperty('--lyric-font-scale', String(lyricPrefs.fontScale));
+        lyricEl.classList.toggle('hide-translation', !lyricPrefs.showTranslation);
+        const dText = (lyricPrefs.delay > 0 ? '+' : '') + lyricPrefs.delay.toFixed(1) + 's';
+        if (delayValEl.textContent !== dText) delayValEl.textContent = dText;
+        const fText = lyricPrefs.fontScale.toFixed(1) + 'x';
+        if (fontValEl.textContent !== fText) fontValEl.textContent = fText;
+        transBtn.classList.toggle('ena-btn--primary', lyricPrefs.showTranslation);
+    }
+
+    applyLyricPrefs();
+
+    const rightEl = el('div', { class: 'playback-overlay__right' }, lyricEl, lyricPlaceholder, lyricToolsEl);
 
     const inner = el('div', { class: 'playback-overlay__inner' }, leftEl, rightEl);
 
@@ -349,6 +404,52 @@ export function initPlaybackView(ctx) {
     window.addEventListener('resize', handleTitleResize);
     let currentLineIndex = -1;
     let lyricLoading = false;
+
+    function refreshLyricScroll() {
+        if (currentLineIndex < 0) return;
+        requestAnimationFrame(() => {
+            const row = lyricLines.children[currentLineIndex];
+            if (row) scrollLineIntoCenter(row, true);
+        });
+    }
+
+    delayIncBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        lyricPrefs.delay = Math.min(2, Math.round((lyricPrefs.delay + 0.1) * 10) / 10);
+        applyLyricPrefs();
+        persistLyricPrefs();
+    });
+
+    delayDecBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        lyricPrefs.delay = Math.max(-2, Math.round((lyricPrefs.delay - 0.1) * 10) / 10);
+        applyLyricPrefs();
+        persistLyricPrefs();
+    });
+
+    fontIncBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        lyricPrefs.fontScale = Math.min(1.6, Math.round((lyricPrefs.fontScale + 0.1) * 10) / 10);
+        applyLyricPrefs();
+        persistLyricPrefs();
+        refreshLyricScroll();
+    });
+
+    fontDecBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        lyricPrefs.fontScale = Math.max(0.6, Math.round((lyricPrefs.fontScale - 0.1) * 10) / 10);
+        applyLyricPrefs();
+        persistLyricPrefs();
+        refreshLyricScroll();
+    });
+
+    transBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        lyricPrefs.showTranslation = !lyricPrefs.showTranslation;
+        applyLyricPrefs();
+        persistLyricPrefs();
+        refreshLyricScroll();
+    });
     let lyricToken = 0;
     let followPaused = false;
     let followTimer = null;
@@ -547,11 +648,13 @@ export function initPlaybackView(ctx) {
         if (!lines.length) {
             lyricEl.classList.add('hidden');
             lyricPlaceholder.classList.remove('hidden');
+            lyricToolsEl.classList.add('hidden');
             return;
         }
 
         lyricEl.classList.remove('hidden');
         lyricPlaceholder.classList.add('hidden');
+        lyricToolsEl.classList.remove('hidden');
 
         lines.forEach((line, index) => {
             const row = el('div', { class: 'playback-lyric__line' });
@@ -727,7 +830,7 @@ export function initPlaybackView(ctx) {
     function handleTimeUpdate() {
         if (!currentLyric.hasTimestamps || !currentLyric.lines.length) return;
         const q = store.get().queue;
-        const t = q.currentTime || 0;
+        const t = (q.currentTime || 0) - lyricPrefs.delay;
         const idx = findCurrentIndex(currentLyric.lines, t);
         if (idx >= 0) updateHighlight(idx, true);
     }
@@ -738,7 +841,7 @@ export function initPlaybackView(ctx) {
         if (!currentLyric.hasWordTimestamps || !currentLyric.lines.length) return;
         const q = store.get().queue;
         if (!q.isPlaying) return;
-        const t = player.audio.currentTime || 0;
+        const t = (player.audio.currentTime || 0) - lyricPrefs.delay;
         const idx = findCurrentIndex(currentLyric.lines, t);
         if (idx >= 0) updateWordHighlight(idx, t);
         wordRaf = requestAnimationFrame(tickWordRaf);

@@ -5915,7 +5915,7 @@ body.playback-open .sidebar {
 }
 
 .playback-lyric__text {
-    font-size: 1.2rem;
+    font-size: calc(1.2rem * var(--lyric-font-scale, 1));
     line-height: 1.6;
     color: var(--text-tertiary);
     transition: color 280ms var(--ease-standard),
@@ -5948,7 +5948,7 @@ body.playback-open .sidebar {
 }
 
 .playback-lyric__translation {
-    font-size: .85rem;
+    font-size: calc(.85rem * var(--lyric-font-scale, 1));
     line-height: 1.5;
     color: var(--text-tertiary);
     transition: color 280ms var(--ease-standard),
@@ -5981,6 +5981,71 @@ body.playback-open .sidebar {
     justify-content: center;
     color: var(--text-tertiary);
     font-size: .9rem;
+}
+
+.playback-lyric-tools {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    z-index: 6;
+}
+
+.playback-lyric-tools .ena-btn--icon {
+    background: color-mix(in srgb, var(--bg-surface) 55%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.playback-lyric-tools__group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+}
+
+.playback-lyric-tools__label {
+    font-family: var(--font-body);
+    font-size: .88rem;
+    font-weight: 600;
+    letter-spacing: .2px;
+    line-height: 1;
+}
+
+.playback-lyric-tools__val {
+    font-family: var(--font-body);
+    font-size: .68rem;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    padding: 2px 0;
+}
+
+.playback-lyric.hide-translation .playback-lyric__translation {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    .playback-lyric-tools {
+        right: 0;
+        gap: var(--space-4);
+    }
+
+    .playback-lyric-tools .ena-btn--icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .playback-lyric-tools__label {
+        font-size: .8rem;
+    }
+
+    .playback-lyric-tools__val {
+        font-size: .62rem;
+    }
 }
 
 .playback-cover,
