@@ -925,6 +925,38 @@ function bindPlayerBar() {
 
     let progressDragging = false;
 
+    const progressTipEl = document.createElement('div');
+    progressTipEl.className = 'player-progress__tip';
+    document.body.appendChild(progressTipEl);
+
+    function updateProgressTip(clientX) {
+        const total = store.get().queue.duration || 0;
+        const rect = progressEl.getBoundingClientRect();
+        if (total <= 0 || rect.width <= 0) {
+            progressTipEl.classList.remove('is-visible');
+            return;
+        }
+        const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        progressTipEl.textContent = `${formatTime(percent * total)} / ${formatTime(total)}`;
+        const tipW = progressTipEl.getBoundingClientRect().width;
+        const minX = rect.left + tipW / 2;
+        const maxX = rect.right - tipW / 2;
+        const x = Math.max(minX, Math.min(clientX, maxX));
+        progressTipEl.style.left = `${x}px`;
+        progressTipEl.style.top = `${rect.top - 6}px`;
+        progressTipEl.classList.add('is-visible');
+    }
+
+    function hideProgressTip() {
+        progressTipEl.classList.remove('is-visible');
+    }
+
+    progressEl.addEventListener('pointerenter', (e) => {
+        if (e.pointerType === 'mouse') updateProgressTip(e.clientX);
+    });
+
+    progressEl.addEventListener('pointerleave', hideProgressTip);
+
     function seekFromPointer(e) {
         const rect = progressEl.getBoundingClientRect();
         if (rect.width <= 0) return;
@@ -941,6 +973,7 @@ function bindPlayerBar() {
     });
 
     progressEl.addEventListener('pointermove', (e) => {
+        updateProgressTip(e.clientX);
         if (!progressDragging) return;
         seekFromPointer(e);
     });
@@ -953,6 +986,7 @@ function bindPlayerBar() {
 
     progressEl.addEventListener('pointercancel', () => {
         progressDragging = false;
+        hideProgressTip();
     });
 
     volumeSlider.addEventListener('input', (e) => {

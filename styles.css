@@ -534,6 +534,32 @@ body.playback-open .player-cover {
     background: var(--progress-track-hover);
 }
 
+.player-progress__tip {
+    position: fixed;
+    z-index: 310;
+    pointer-events: none;
+    padding: 2px 8px;
+    border-radius: var(--radius-base, 0);
+    background: var(--bg-float);
+    font-family: var(--font-body);
+    font-size: .68rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transform: translate(-50%, -100%);
+    zoom: calc(1 / var(--page-zoom, 1));
+    clip-path: inset(0 0 100% 0);
+    visibility: hidden;
+    transition: clip-path .25s var(--ease-standard), visibility 0s .25s;
+}
+
+.player-progress__tip.is-visible {
+    clip-path: inset(0 0 0 0);
+    visibility: visible;
+    transition: clip-path .25s var(--ease-standard), visibility 0s 0s;
+}
+
 .player-progress-bar {
     height: 100%;
     width: 0%;
