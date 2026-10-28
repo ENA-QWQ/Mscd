@@ -1037,16 +1037,45 @@ export function CollectionCard(item, handlers = {}) {
     }
 
     const menuPanel = el('div', { class: 'song-menu-panel' });
-    const openBtn = el('button', { class: 'song-menu-item' },
+    const playAllBtn = el('button', { class: 'song-menu-item' },
         icon('play', true),
-        el('span', { text: '查看详情' })
+        el('span', { text: '播放全部' })
     );
-    openBtn.addEventListener('click', (e) => {
+    playAllBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         closeAllMenus();
-        onOpen?.(item);
+        if (!ctx || !ctx.api || !ctx.player) {
+            onOpen?.(item);
+            return;
+        }
+        const kind = item._type;
+        if (kind !== 'playlist' && kind !== 'album') {
+            onOpen?.(item);
+            return;
+        }
+        const labelEl = playAllBtn.querySelector('span');
+        if (!labelEl) return;
+        const originalText = labelEl.textContent;
+        labelEl.textContent = '加载中…';
+        playAllBtn.disabled = true;
+        try {
+            const tracks = kind === 'playlist'
+                ? await ctx.api.playlist(item.id)
+                : await ctx.api.album(item.id);
+            if (!tracks || !tracks.length) {
+                Toast('暂无可播放的歌曲', 'warning', 1600);
+                return;
+            }
+            ctx.player.setQueue(tracks, 0, true);
+            Toast(`开始播放 ${tracks.length} 首`, 'success', 1600);
+        } catch (err) {
+            Toast(`播放失败：${err && err.message ? err.message : '未知错误'}`, 'danger', 2600);
+        } finally {
+            labelEl.textContent = originalText;
+            playAllBtn.disabled = false;
+        }
     });
-    menuPanel.appendChild(openBtn);
+    menuPanel.appendChild(playAllBtn);
 
     if (item.id) {
         const copyBtn = el('button', { class: 'song-menu-item' },
