@@ -1664,6 +1664,7 @@ export function SearchView(ctx) {
                 list.appendChild(CollectionCard(item, {
                     onOpen: () => openDetail(item._type, collectionMeta(item)),
                     ctx,
+                    preview: typeKey === '1000',
                 }));
             } else if (typeKey === '1004') {
                 list.appendChild(MvCard(item, {
@@ -2612,6 +2613,7 @@ export function MyFavoritesView(ctx) {
     function renderPlaylistCard(item) {
         return CollectionCard(item, {
             ctx,
+            preview: true,
             onOpen: () => {
                 ctx.searchActions.openDetail('playlist', {
                     id: item.id,

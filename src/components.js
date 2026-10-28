@@ -5,6 +5,162 @@ import { getTracksBySongId, formatHistoryTime } from './history.js';
 
 const ABOUT_STORAGE_KEY = 'mscd-about-read-version';
 
+const playlistPreviewCache = new Map();
+const playlistPreviewQueue = [];
+let playlistPreviewActive = 0;
+const PLAYLIST_PREVIEW_CONCURRENCY = 4;
+let playlistPreviewObserver = null;
+
+function isPlaylistPreviewMobile() {
+    try { return window.matchMedia('(max-width: 900px)').matches; } catch { return false; }
+}
+
+function getPlaylistPreviewObserver() {
+    if (playlistPreviewObserver) return playlistPreviewObserver;
+    if (typeof IntersectionObserver !== 'function') return null;
+    playlistPreviewObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            const target = entry.target;
+            playlistPreviewObserver.unobserve(target);
+            const fn = target.__loadPlaylistPreview;
+            if (typeof fn === 'function') {
+                target.__loadPlaylistPreview = null;
+                fn();
+            }
+        }
+    }, { rootMargin: '200px 0px' });
+    return playlistPreviewObserver;
+}
+
+function runPlaylistPreviewTask(fn) {
+    return new Promise((resolve, reject) => {
+        const run = () => {
+            playlistPreviewActive++;
+            Promise.resolve()
+                .then(fn)
+                .then((v) => resolve(v))
+                .catch((e) => reject(e))
+                .finally(() => {
+                    playlistPreviewActive--;
+                    if (playlistPreviewQueue.length) {
+                        const next = playlistPreviewQueue.shift();
+                        next();
+                    }
+                });
+        };
+        if (playlistPreviewActive < PLAYLIST_PREVIEW_CONCURRENCY) run();
+        else playlistPreviewQueue.push(run);
+    });
+}
+
+function getPrimaryArtistName(song) {
+    if (!song) return '';
+    if (Array.isArray(song.artists) && song.artists.length) {
+        const a = song.artists[0];
+        if (a && a.name) return String(a.name);
+    }
+    const raw = String(song.artist || '');
+    const parts = raw.split(/\s*[\/、，,]\s*|\s*&\s*/).filter(Boolean);
+    return parts.length ? parts[0].trim() : raw.trim();
+}
+
+function applyPlaylistPreview(wrap, entry, ctx, limit) {
+    wrap.innerHTML = '';
+    wrap.classList.remove('collection-card__preview--loading', 'collection-card__preview--ok', 'collection-card__preview--empty');
+    if (!entry || entry.status !== 'ok' || !entry.tracks || !entry.tracks.length) {
+        wrap.classList.add('collection-card__preview--empty');
+        return;
+    }
+    const tracks = entry.tracks.slice(0, limit);
+    for (let i = 0; i < tracks.length; i++) {
+        const song = tracks[i];
+        const row = el('div', { class: 'collection-card__preview-item' });
+        row.appendChild(el('span', {
+            class: 'collection-card__preview-index',
+            text: String(i + 1).padStart(2, '0'),
+        }));
+        row.appendChild(el('span', {
+            class: 'collection-card__preview-title',
+            text: song.title || '未知歌曲',
+        }));
+        const primaryArtist = getPrimaryArtistName(song);
+        if (primaryArtist) {
+            row.appendChild(el('span', {
+                class: 'collection-card__preview-artist',
+                text: '· ' + primaryArtist,
+            }));
+        }
+        row.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const player = ctx && ctx.player;
+            if (player && typeof player.playNow === 'function') {
+                player.playNow(song);
+            }
+        });
+        wrap.appendChild(row);
+    }
+    wrap.classList.add('collection-card__preview--ok');
+}
+
+function renderPlaylistPreviewSkeleton(wrap) {
+    wrap.innerHTML = '';
+    wrap.classList.remove('collection-card__preview--ok', 'collection-card__preview--empty');
+    wrap.classList.add('collection-card__preview--loading');
+    wrap.appendChild(el('div', { class: 'loading-bars' },
+        el('span'), el('span'), el('span')
+    ));
+}
+
+function createPlaylistPreviewEl(item, ctx, limit) {
+    const wrap = el('div', { class: 'collection-card__preview' });
+    const id = String(item && item.id ? item.id : '');
+    if (!id) {
+        wrap.classList.add('collection-card__preview--empty');
+        return wrap;
+    }
+
+    const cached = playlistPreviewCache.get(id);
+    if (cached) {
+        applyPlaylistPreview(wrap, cached, ctx, limit);
+        return wrap;
+    }
+
+    renderPlaylistPreviewSkeleton(wrap);
+
+    const load = async () => {
+        if (playlistPreviewCache.has(id)) {
+            applyPlaylistPreview(wrap, playlistPreviewCache.get(id), ctx, limit);
+            return;
+        }
+        try {
+            const result = await runPlaylistPreviewTask(() => ctx.api.playlistPreview(id, limit));
+            const tracks = (result && result.tracks) || [];
+            const total = (result && result.total) || 0;
+            const entry = {
+                tracks,
+                total,
+                status: tracks.length ? 'ok' : 'empty',
+            };
+            playlistPreviewCache.set(id, entry);
+            applyPlaylistPreview(wrap, entry, ctx, limit);
+        } catch {
+            playlistPreviewCache.set(id, { tracks: [], total: 0, status: 'error' });
+            applyPlaylistPreview(wrap, playlistPreviewCache.get(id), ctx, limit);
+        }
+    };
+
+    const observer = getPlaylistPreviewObserver();
+    if (observer) {
+        wrap.__loadPlaylistPreview = load;
+        observer.observe(wrap);
+    } else {
+        load();
+    }
+
+    return wrap;
+}
+
 function getAboutReadVersion() {
     try {
         return localStorage.getItem(ABOUT_STORAGE_KEY) || '';
@@ -859,7 +1015,14 @@ export function SongRow(song, handlers = {}) {
 }
 
 export function CollectionCard(item, handlers = {}) {
-    const { onOpen, ctx } = handlers;
+    const { onOpen, ctx, preview = false, previewLimit = 4 } = handlers;
+
+    const isPlaylist = item._type === 'playlist';
+    const canPreview = preview
+        && isPlaylist
+        && ctx && ctx.api && typeof ctx.api.playlistPreview === 'function'
+        && !isPlaylistPreviewMobile();
+    const previewEl = canPreview ? createPlaylistPreviewEl(item, ctx, previewLimit) : null;
 
     const coverEl = el('div', { class: 'collection-card__cover' });
     if (item.pic) {
@@ -908,7 +1071,6 @@ export function CollectionCard(item, handlers = {}) {
 
     const menuWrap = el('div', { class: 'collection-card__menu song-menu' }, menuTrigger, menuPanel);
 
-    const isPlaylist = item._type === 'playlist';
     const desc = item._extra?.description || '';
 
     const infoChildren = [
@@ -930,12 +1092,17 @@ export function CollectionCard(item, handlers = {}) {
         infoChildren.push(cardArtist);
     }
 
+    const cardChildren = [
+        coverEl,
+        el('div', { class: 'collection-card__info' }, ...infoChildren),
+    ];
+    if (previewEl) cardChildren.push(previewEl);
+    cardChildren.push(menuWrap);
+
     const card = el('div', {
             class: `collection-card collection-card--${isPlaylist ? 'playlist' : 'album'}`,
         },
-        coverEl,
-        el('div', { class: 'collection-card__info' }, ...infoChildren),
-        menuWrap
+        ...cardChildren
     );
 
     card.addEventListener('click', (e) => {

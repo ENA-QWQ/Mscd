@@ -2702,8 +2702,108 @@ body.has-selection .multi-select-bar {
 }
 
 .collection-card--playlist .collection-card__menu {
+    right: calc(clamp(220px, 44%, 300px) + var(--space-3) + 4px);
+    bottom: 10px;
+}
+
+.collection-card--playlist:has(.collection-card__preview--empty) .collection-card__menu,
+.collection-card--playlist:not(:has(.collection-card__preview)) .collection-card__menu {
     right: 12px;
-    bottom: 12px;
+}
+
+@media (max-width: 900px) {
+    .collection-card--playlist .collection-card__menu {
+        right: 12px;
+    }
+}
+
+.collection-card__preview {
+    order: 2;
+    flex: 0 0 clamp(220px, 44%, 300px);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 0 0 0 var(--space-3);
+    border-left: 1px solid var(--border-faint);
+    align-self: stretch;
+    overflow: hidden;
+}
+
+.collection-card__preview--loading {
+    justify-content: center;
+    align-items: center;
+}
+
+.collection-card__preview--loading .loading-bars {
+    width: 26px;
+    height: 20px;
+    gap: 3px;
+}
+
+.collection-card__preview--loading .loading-bars span {
+    width: 3px;
+}
+
+.collection-card__preview--empty {
+    display: none;
+}
+
+.collection-card__preview-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+    font-size: .76rem;
+    line-height: 1.2;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color .2s ease;
+}
+
+.collection-card__preview-item:hover {
+    color: var(--text-primary);
+}
+
+.collection-card__preview-index {
+    flex: 0 0 auto;
+    min-width: 16px;
+    font-family: var(--font-body);
+    font-size: .68rem;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+
+.collection-card__preview-title {
+    flex: 0 1 auto;
+    max-width: 65%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.collection-card__preview-artist {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-tertiary);
+}
+
+.collection-card__preview-item:hover .collection-card__preview-artist {
+    color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+    .collection-card__preview {
+        display: none !important;
+    }
 }
 
 .collection-card--album {

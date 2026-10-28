@@ -563,6 +563,16 @@ class NeteaseAdapter {
         return this.normalizePlaylist(playlist);
     }
 
+    async playlistPreview(id, limit = 5) {
+        const data = await this.request('/playlist/detail', { id });
+        const playlist = data?.playlist;
+        if (!playlist) return { tracks: [], total: 0 };
+        const total = Number(playlist.trackCount) || 0;
+        const raw = Array.isArray(playlist.tracks) ? playlist.tracks.slice(0, limit) : [];
+        const tracks = raw.map(t => this.normalizeSong(t)).filter(Boolean);
+        return { tracks, total };
+    }
+
     async artistDetail(id) {
         const data = await this.request('/artist/detail', { id });
         const a = data?.data?.artist;
@@ -830,6 +840,17 @@ export class Meting {
             } catch {}
         }
         return null;
+    }
+
+    async playlistPreview(id, limit = 5) {
+        const netease = this.adapters && this.adapters.netease;
+        if (netease && typeof netease.playlistPreview === 'function') {
+            try {
+                const result = await netease.playlistPreview(id, limit);
+                if (result) return result;
+            } catch {}
+        }
+        return { tracks: [], total: 0 };
     }
 
     async artistDetail(id) {
