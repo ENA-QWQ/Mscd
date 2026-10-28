@@ -411,9 +411,12 @@ const searchActions = {
                     musicSize: meta._extra?.musicSize || 0,
                     tracks: [],
                     albums: [],
+                    mvs: [],
                     view: 'overview',
                     hotSongsPage: 1,
                     albumsPage: 1,
+                    mvsPage: 1,
+                    mvsHasMore: false,
                     loading: true,
                     error: null,
                     prevDetail: s.detail || null,
@@ -426,10 +429,11 @@ const searchActions = {
         }
 
         try {
-            const [info, songsResult, albumsResult] = await Promise.all([
+            const [info, songsResult, albumsResult, mvsResult] = await Promise.all([
                 api.artistDetail(id),
                 api.artistSongs(id, { limit: 50 }),
                 api.artistAlbums(id, { limit: 50 }),
+                api.artistMvs(id, { limit: 50 }),
             ]);
             const cur = store.get().search;
             if (!cur.detail || cur.detail.id !== id || cur.detail.kind !== 'artist') return;
@@ -447,6 +451,8 @@ const searchActions = {
                         tracks: songsResult.songs,
                         albums: albumsResult.albums,
                         albumsTotal: albumsResult.total,
+                        mvs: mvsResult.mvs,
+                        mvsHasMore: mvsResult.hasMore,
                         loading: false,
                     },
                 },

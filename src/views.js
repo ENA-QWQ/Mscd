@@ -996,6 +996,43 @@ export function SearchView(ctx) {
         const songs = (detail.tracks || []).slice(0, 12);
         const albums = (detail.albums || []).slice(0, 12);
 
+        const mvs = (detail.mvs || []).slice(0, 30);
+
+        const mvsSection = el('div', { class: 'artist-section' });
+        const mvsHeader = el('div', { class: 'artist-section__header' });
+        mvsHeader.appendChild(el('div', { class: 'view-title', text: '热门 MV' }));
+        const mvsAllBtn = el('button', { class: 'ena-btn ena-btn--sm' }, '查看全部');
+        mvsAllBtn.addEventListener('click', () => {
+            const cur = store.get().search;
+            if (!cur.detail) return;
+            store.update({
+                search: { ...cur, detail: { ...cur.detail, view: 'mvs', mvsPage: 1 } },
+            });
+        });
+        mvsHeader.appendChild(mvsAllBtn);
+        mvsSection.appendChild(mvsHeader);
+
+        if (!mvs.length) {
+            mvsSection.appendChild(EmptyState('暂无 MV', 'video'));
+            root.appendChild(mvsSection);
+        } else {
+            const mvsList = el('div', { class: 'song-list song-list--mv' });
+            for (const mv of mvs) {
+                mvsList.appendChild(MvCard(mv, {
+                    ctx,
+                    onOpen: () => {
+                        const hash = '#/mv/' + encodeURIComponent(mv.id);
+                        if (window.location.hash !== hash) {
+                            window.location.hash = hash;
+                        }
+                    },
+                }));
+            }
+            mvsSection.appendChild(mvsList);
+            root.appendChild(mvsSection);
+            trimToFirstRow(mvsList);
+        }
+
         const songsSection = el('div', { class: 'artist-section' });
         const songsHeader = el('div', { class: 'artist-section__header' });
         songsHeader.appendChild(el('div', { class: 'view-title', text: '热门单曲' }));
@@ -1168,6 +1205,69 @@ export function SearchView(ctx) {
         }
     }
 
+    function renderArtistMvs(detail) {
+        const all = detail.mvs || [];
+        if (!all.length) {
+            root.appendChild(EmptyState('暂无 MV', 'video'));
+            store.setVisibleTracks([]);
+            return;
+        }
+
+        const perPage = store.get().settings.perPage;
+        const totalPages = Math.max(1, Math.ceil(all.length / perPage));
+        const page = Math.min(Math.max(1, detail.mvsPage || 1), totalPages);
+        const start = (page - 1) * perPage;
+        const slice = all.slice(start, start + perPage);
+
+        store.setVisibleTracks([]);
+        store.setAllTracks([]);
+        store.setFilteredTracks([]);
+
+        const header = el('div', { class: 'artist-section__header' });
+        const backBtn = el('button', {
+            class: 'ena-btn ena-btn--icon',
+            title: '返回',
+        }, icon('chevron-left'));
+        backBtn.addEventListener('click', () => {
+            const cur = store.get().search;
+            if (!cur.detail) return;
+            store.update({
+                search: { ...cur, detail: { ...cur.detail, view: 'overview' } },
+            });
+        });
+        header.appendChild(backBtn);
+        header.appendChild(el('div', { class: 'view-title', text: '全部 MV' }));
+        root.appendChild(header);
+
+        const list = el('div', { class: 'song-list song-list--mv' });
+        for (const mv of slice) {
+            list.appendChild(MvCard(mv, {
+                ctx,
+                onOpen: () => {
+                    const hash = '#/mv/' + encodeURIComponent(mv.id);
+                    if (window.location.hash !== hash) {
+                        window.location.hash = hash;
+                    }
+                },
+            }));
+        }
+        root.appendChild(list);
+
+        if (totalPages > 1) {
+            root.appendChild(Pagination({
+                page,
+                totalPages,
+                onPage: (p) => {
+                    const cur = store.get().search;
+                    if (!cur.detail) return;
+                    store.update({
+                        search: { ...cur, detail: { ...cur.detail, mvsPage: p } },
+                    });
+                },
+            }));
+        }
+    }
+
     function renderArtistDetail(detail) {
         root.innerHTML = '';
 
@@ -1231,6 +1331,8 @@ export function SearchView(ctx) {
             renderArtistSongs(detail);
         } else if (view === 'albums') {
             renderArtistAlbums(detail);
+        } else if (view === 'mvs') {
+            renderArtistMvs(detail);
         } else {
             renderArtistOverview(detail);
         }

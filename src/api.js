@@ -302,7 +302,7 @@ class NeteaseAdapter {
             albumId: '',
             pop: null,
             url: '',
-            pic: upgradeToHttps(item.cover ?? ''),
+            pic: upgradeToHttps(item.cover ?? item.imgurl ?? ''),
             lrc: '',
             duration,
             mv: String(item.id ?? ''),
@@ -595,6 +595,12 @@ class NeteaseAdapter {
         return { albums, total };
     }
 
+    async artistMvs(id, { limit = 50, offset = 0 } = {}) {
+        const data = await this.request('/artist/mv', { id, limit, offset });
+        const mvs = (data?.mvs || []).map(m => this.normalizeMv(m)).filter(Boolean);
+        return { mvs, hasMore: data?.hasMore === true };
+    }
+
     async searchUser(keyword, { limit = 30, offset = 0 } = {}) {
         const data = await this.request('/cloudsearch', {
             keywords: keyword,
@@ -842,6 +848,12 @@ export class Meting {
         const adapter = this.pick('artist');
         if (typeof adapter.artistAlbums !== 'function') throw new Error('当前后端不支持歌手专辑');
         return adapter.artistAlbums(id, options);
+    }
+
+    async artistMvs(id, options = {}) {
+        const adapter = this.pick('artist');
+        if (typeof adapter.artistMvs !== 'function') return { mvs: [], hasMore: false };
+        return adapter.artistMvs(id, options);
     }
 
     async searchUser(keyword, options = {}) {
