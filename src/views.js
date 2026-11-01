@@ -3439,7 +3439,7 @@ function getTaskStats(task) {
     const sp = formatSpeed(totalSpeed);
     if (sp) stats.push({ text: sp });
     const etaStr = formatEta(eta);
-    if (etaStr) stats.push({ text: `剩 ${etaStr}` });
+    if (etaStr) stats.push({ text: `预计完成 ${etaStr}` });
     if (failedCount > 0) stats.push({ text: `失败 ${failedCount}`, className: 'status-task__fail' });
 
     return stats;
@@ -3474,7 +3474,7 @@ function updateTrackMeta(metaEl, track) {
         const sp = formatSpeed(track.speed);
         if (sp) parts.push({ text: sp, cls: 'task-track__speed' });
         const eta = formatEta(track.eta);
-        if (eta) parts.push({ text: `剩 ${eta}`, cls: 'task-track__eta' });
+        if (eta) parts.push({ text: `预计完成 ${eta}`, cls: 'task-track__eta' });
     } else if (track.status === 'error' && track.error) {
         parts.push({ text: track.error, cls: 'task-track__error' });
     }

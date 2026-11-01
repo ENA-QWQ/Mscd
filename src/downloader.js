@@ -2022,7 +2022,7 @@ export class Downloader {
             const isSingleSongBatch = uniqueSongIds.size === 1 && !onlyLyricMode;
             const batchLabel = isSingleSongBatch
                 ? `${songs[0].title || '未知歌曲'} - ${songs[0].artist || '未知艺人'}`
-                : `批量下载 ${total} 首`;
+                : `批量下载 ${total} 个任务`;
             store.upsertDownloadTask(taskId, {
                 type: 'batch',
                 kind: onlyLyricMode ? 'batch-lyric' : 'batch-audio',
@@ -2537,7 +2537,7 @@ export class Downloader {
             const isSingleSongBatch = uniqueSongIds.size === 1;
             const batchLabel = isSingleSongBatch
                 ? `${songs[0].title || '未知歌曲'} - ${songs[0].artist || '未知艺人'}`
-                : `批量下载 ${total} 首`;
+                : `批量下载 ${total} 个任务`;
             store.upsertDownloadTask(taskId, {
                 type: 'batch',
                 mode: 'batch-zip',
