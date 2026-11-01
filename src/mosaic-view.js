@@ -1,6 +1,6 @@
 import { el } from './dom.js';
 import { store } from './store.js';
-import { icon, renderArtistInto, renderAlbumInto, closeAllMenus, Toast, copyText, shareSong, openShareCardModal } from './components.js';
+import { icon, renderArtistInto, renderAlbumInto, closeAllMenus, Toast, copyText, shareSong, openShareCardModal, positionFloatingMenu } from './components.js';
 
 const GOLDEN = 0.6180339887498949;
 const CHUNK_HEIGHT = 1000;
@@ -135,8 +135,11 @@ export function MosaicView(tracks, options) {
 
     const onDocClick = () => closePanel();
     const onKeyDown = (e) => { if (e.key === 'Escape') closePanel(); };
+    const onScrollOrResize = () => closePanel();
     document.addEventListener('click', onDocClick);
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
 
     function getPlayingId() {
         const q = store.get().queue;
@@ -183,18 +186,11 @@ export function MosaicView(tracks, options) {
             });
             panel.appendChild(btn);
         }
-        const rect = anchor.getBoundingClientRect();
-        panel.style.position = 'fixed';
-        panel.style.top = (rect.bottom + 6) + 'px';
-        const panelWidth = 180;
-        let left = rect.right - panelWidth;
-        if (left < 8) left = 8;
-        if (left + panelWidth > window.innerWidth - 8) left = window.innerWidth - panelWidth - 8;
-        panel.style.left = left + 'px';
         document.body.appendChild(panel);
         panel.__cell = cell;
         openPanel = panel;
         cell.classList.add('has-menu-open');
+        positionFloatingMenu(anchor, panel, { gap: 6, edge: 8, align: 'right' });
         requestAnimationFrame(() => panel.classList.add('is-open'));
     }
 
@@ -492,6 +488,8 @@ export function MosaicView(tracks, options) {
         closePanel();
         document.removeEventListener('click', onDocClick);
         document.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('scroll', onScrollOrResize, true);
+        window.removeEventListener('resize', onScrollOrResize);
     };
 
     return { node: root, destroy: root.__destroy };

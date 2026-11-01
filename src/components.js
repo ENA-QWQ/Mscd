@@ -681,6 +681,62 @@ export function openShareCardModal(song) {
     });
 }
 
+export function positionFloatingMenu(trigger, panel, options = {}) {
+    if (!trigger || !panel) return;
+    const gap = Number.isFinite(options.gap) ? options.gap : 6;
+    const edge = Number.isFinite(options.edge) ? options.edge : 8;
+    const align = options.align === 'left' ? 'left' : 'right';
+
+    const prevVisibility = panel.style.visibility;
+    panel.style.position = 'fixed';
+    panel.style.visibility = 'hidden';
+    panel.style.top = '0px';
+    panel.style.left = '0px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+
+    const probe0 = panel.getBoundingClientRect();
+    const pw = probe0.width;
+    const ph = probe0.height;
+
+    panel.style.left = '100px';
+    const probe1 = panel.getBoundingClientRect();
+    const scaleX = ((probe1.left - probe0.left) / 100) || 1;
+
+    panel.style.left = '0px';
+    panel.style.top = '100px';
+    const probe2 = panel.getBoundingClientRect();
+    const scaleY = ((probe2.top - probe0.top) / 100) || 1;
+
+    panel.style.top = '0px';
+
+    const vpProbe = document.createElement('div');
+    vpProbe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;visibility:hidden;pointer-events:none';
+    document.body.appendChild(vpProbe);
+    const vpRect = vpProbe.getBoundingClientRect();
+    document.body.removeChild(vpProbe);
+    const vw = vpRect.right;
+    const vh = vpRect.bottom;
+
+    const rect = trigger.getBoundingClientRect();
+
+    let visualLeft = align === 'right' ? rect.right - pw : rect.left;
+    if (visualLeft < edge) visualLeft = edge;
+    if (visualLeft + pw > vw - edge) visualLeft = vw - pw - edge;
+    if (visualLeft < edge) visualLeft = edge;
+
+    let visualTop = rect.bottom + gap;
+    if (visualTop + ph > vh - edge) {
+        const above = rect.top - gap - ph;
+        if (above >= edge) visualTop = above;
+        else visualTop = Math.max(edge, vh - edge - ph);
+    }
+
+    panel.style.left = ((visualLeft - probe0.left) / scaleX) + 'px';
+    panel.style.top = ((visualTop - probe0.top) / scaleY) + 'px';
+    panel.style.visibility = prevVisibility || '';
+}
+
 export function closeAllMenus() {
     document.querySelectorAll('.song-menu.is-open').forEach((m) => {
         m.classList.remove('is-open');
@@ -688,6 +744,15 @@ export function closeAllMenus() {
         if (row) row.classList.remove('has-menu-open');
         const card = m.closest('.mv-card');
         if (card) card.classList.remove('has-menu-open');
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('scroll', () => {
+        if (document.querySelector('.song-menu.is-open')) closeAllMenus();
+    }, true);
+    window.addEventListener('resize', () => {
+        if (document.querySelector('.song-menu.is-open')) closeAllMenus();
     });
 }
 
@@ -1008,6 +1073,7 @@ export function SongRow(song, handlers = {}) {
         if (willOpen) {
             menuWrap.classList.add('is-open');
             row.classList.add('has-menu-open');
+            positionFloatingMenu(menuTrigger, menuPanel, { gap: 6, align: 'right' });
         }
     });
 
@@ -1145,6 +1211,7 @@ export function CollectionCard(item, handlers = {}) {
         closeAllMenus();
         if (willOpen) {
             menuWrap.classList.add('is-open');
+            positionFloatingMenu(menuTrigger, menuPanel, { gap: 6, align: 'right' });
         }
     });
 
@@ -1300,6 +1367,7 @@ export function MvCard(item, handlers = {}) {
         if (willOpen) {
             menuWrap.classList.add('is-open');
             card.classList.add('has-menu-open');
+            positionFloatingMenu(menuTrigger, menuPanel, { gap: 6, align: 'right' });
         }
     });
 

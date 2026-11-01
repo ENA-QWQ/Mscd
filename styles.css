@@ -7919,7 +7919,10 @@ body {
 .multi-select-menu,
 .ena-dropdown__menu,
 .view-switcher-menu,
-.mv-quality-menu {
+.mv-quality-menu,
+.song-menu-panel,
+.mosaic-menu-panel,
+.playback-mobile-more-menu {
     zoom: calc(1 / var(--page-zoom, 1));
 }
 
@@ -9841,19 +9844,19 @@ body.queue-panel-open {
 .mosaic-cover img{width:100%;height:100%;object-fit:cover;display:block;decoding:async}
 .mosaic-cover>svg{width:38%;height:38%;max-width:48px;max-height:48px}
 
-.mosaic-cover-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--cover-overlay);color:var(--on-accent);transform:scale(0);transform-origin:bottom left;transition:transform .25s var(--ease-standard);pointer-events:none;z-index:1}
+.mosaic-cover-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--cover-overlay);color:#fff;transform:scale(0);transform-origin:bottom left;transition:transform .25s var(--ease-standard);pointer-events:none;z-index:1}
 .mosaic-cell:hover .mosaic-cover-overlay{transform:scale(1)}
-.mosaic-cover-overlay svg{width:clamp(20px,calc(var(--cell-size) * .15),56px);height:clamp(20px,calc(var(--cell-size) * .15),56px);fill:var(--on-accent);stroke:none}
-.mosaic-info{position:absolute;left:0;right:0;bottom:0;padding:clamp(4px,calc(var(--cell-size) * .04),10px);z-index:2;pointer-events:none;color:var(--on-accent);text-shadow:0 1px 3px var(--on-cover-shadow),0 0 1px var(--on-cover-shadow-weak);display:flex;flex-direction:column;gap:1px;opacity:0;transition:opacity .25s var(--ease-standard)}
+.mosaic-cover-overlay svg{width:clamp(20px,calc(var(--cell-size) * .15),56px);height:clamp(20px,calc(var(--cell-size) * .15),56px);fill:#fff;stroke:none}
+.mosaic-info{position:absolute;left:0;right:0;bottom:0;padding:clamp(4px,calc(var(--cell-size) * .04),10px);z-index:2;pointer-events:none;color:#fff;text-shadow:0 1px 3px var(--on-cover-shadow),0 0 1px var(--on-cover-shadow-weak);display:flex;flex-direction:column;gap:1px;opacity:0;transition:opacity .25s var(--ease-standard)}
 .mosaic-cell:hover .mosaic-info{opacity:1}
-.mosaic-title{font-size:clamp(9px,calc(var(--cell-size) * .07),20px);font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mosaic-title{font-size:clamp(9px,calc(var(--cell-size) * .07),20px);font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
 .mosaic-artist{font-size:clamp(8px,calc(var(--cell-size) * .05),13px);line-height:1.3;color:var(--on-cover-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mosaic-album{font-size:clamp(7px,calc(var(--cell-size) * .04),11px);line-height:1.3;color:var(--on-cover);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mosaic-info .entity-link{pointer-events:auto;cursor:pointer;color:inherit}
 .mosaic-info .entity-link:hover{color:var(--on-accent)}
 .mosaic-actions{position:absolute;top:clamp(4px,calc(var(--cell-size) * .04),10px);right:clamp(4px,calc(var(--cell-size) * .04),10px);display:flex;gap:4px;transform:scale(0);transform-origin:top right;transition:transform .25s var(--ease-standard);z-index:3;pointer-events:none}
 .mosaic-cell:hover .mosaic-actions,.mosaic-cell.has-menu-open .mosaic-actions{transform:scale(1);pointer-events:auto}
-.mosaic-action{width:clamp(22px,calc(var(--cell-size) * .13),32px);height:clamp(22px,calc(var(--cell-size) * .13),32px);background:transparent;border:none;color:var(--on-accent);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;position:relative;overflow:hidden}
+.mosaic-action{width:clamp(22px,calc(var(--cell-size) * .13),32px);height:clamp(22px,calc(var(--cell-size) * .13),32px);background:transparent;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;position:relative;overflow:hidden}
 .mosaic-action::before{content:'';position:absolute;inset:0;background:var(--overlay-cover);transform:scale(0);transform-origin:bottom left;transition:transform .22s var(--ease-standard);pointer-events:none}
 .mosaic-action:hover::before{transform:scale(1)}
 .mosaic-action svg{position:relative;z-index:1;width:clamp(10px,calc(var(--cell-size) * .055),16px);height:clamp(10px,calc(var(--cell-size) * .055),16px);filter:drop-shadow(0 1px 2px var(--on-cover-shadow-weak))}
