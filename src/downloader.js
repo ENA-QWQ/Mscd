@@ -252,6 +252,50 @@ function getExtension(quality) {
     return quality === 2000 ? '.flac' : '.mp3';
 }
 
+const AUDIO_EXT_RE = /\.(mp3|flac|m4a|aac|ogg|opus|wav|ape|wv)$/i;
+
+async function detectAudioExt(blob) {
+    try {
+        if (!blob || typeof blob.slice !== 'function' || !blob.size) return '';
+        const head = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+        if (head.length >= 4 && head[0] === 0x66 && head[1] === 0x4c && head[2] === 0x61 && head[3] === 0x43) return '.flac';
+        if (head.length >= 3 && head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33) return '.mp3';
+        if (head.length >= 12 && head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46
+            && head[8] === 0x57 && head[9] === 0x41 && head[10] === 0x56 && head[11] === 0x45) return '.wav';
+        if (head.length >= 12 && head[4] === 0x66 && head[5] === 0x74 && head[6] === 0x79 && head[7] === 0x70) return '.m4a';
+        if (head.length >= 4 && head[0] === 0xff && (head[1] & 0xe0) === 0xe0) {
+            return ((head[1] >> 1) & 0x03) === 0 ? '.aac' : '.mp3';
+        }
+        if (head.length >= 4 && head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53) return '.ogg';
+        if (head.length >= 4 && head[0] === 0x4d && head[1] === 0x41 && head[2] === 0x43 && head[3] === 0x20) return '.ape';
+        if (head.length >= 4 && head[0] === 0x77 && head[1] === 0x76 && head[2] === 0x70 && head[3] === 0x6b) return '.wv';
+        return '';
+    } catch {
+        return '';
+    }
+}
+
+async function applyDetectedExt(blob, meta) {
+    if (!blob || !meta || meta.kind === 'mv') return meta;
+    const detected = await detectAudioExt(blob);
+    if (!detected || detected === meta.ext) return meta;
+    const name = String(meta.filename || '');
+    const oldExt = String(meta.ext || '');
+    const base = oldExt && name.toLowerCase().endsWith(oldExt.toLowerCase())
+        ? name.slice(0, name.length - oldExt.length)
+        : name;
+    meta.ext = detected;
+    if (base) meta.filename = base + detected;
+    return meta;
+}
+
+function toLrcName(name) {
+    const str = String(name || '');
+    const m = str.match(AUDIO_EXT_RE);
+    if (m) return str.slice(0, m.index) + '.lrc';
+    return str;
+}
+
 function pickMvBr(brs, targetBr, fallback) {
     const available = (brs || [])
         .map((b) => Number(b && b.br))
@@ -1342,10 +1386,14 @@ export class Downloader {
             writeGenre: meta.writeGenre !== false,
             writeCover: meta.writeCover !== false,
         };
-        if (meta.ext === '.flac') {
+        const ext = (await detectAudioExt(blob)) || meta.ext;
+        if (ext === '.flac') {
             return await addFlacTags(blob, payload);
         }
-        return await addMp3Tags(blob, payload);
+        if (ext === '.mp3') {
+            return await addMp3Tags(blob, payload);
+        }
+        return blob;
     }
 
     async downloadLyric(song) {
@@ -1563,6 +1611,7 @@ export class Downloader {
                 throw new Error('已取消');
             }
 
+            await applyDetectedExt(blob, meta);
             updateTrack({ status: 'tagging' });
             store.upsertDownloadTask(taskId, { phase: 'tagging' });
             const finalBlob = await this.writeTags(blob, meta);
@@ -1573,10 +1622,10 @@ export class Downloader {
                 const lrc = await this.fetchLyricText(song);
                 if (lrc) {
                     const lrcBlob = new Blob([lrc], { type: 'text/plain;charset=utf-8' });
-                    triggerDownload(lrcBlob, meta.filename.replace(/\.(mp3|flac)$/i, '.lrc'));
+                    triggerDownload(lrcBlob, toLrcName(meta.filename));
                     this._recordHistory(song, {
                         kind: 'lyric',
-                        filename: meta.filename.replace(/\.(mp3|flac)$/i, '.lrc'),
+                        filename: toLrcName(meta.filename),
                         bytes: lrcBlob.size,
                     });
                 }
@@ -1781,6 +1830,7 @@ export class Downloader {
                 throw new Error('已取消');
             }
 
+            await applyDetectedExt(blob, meta);
             updateTrack({ status: 'tagging' });
             store.upsertDownloadTask(taskId, { phase: 'tagging' });
             const finalBlob = await this.writeTags(blob, meta);
@@ -1798,7 +1848,7 @@ export class Downloader {
             if (withLyric) {
                 const lrc = await this.fetchLyricText(song);
                 if (lrc) {
-                    const lrcName = filename.replace(/\.(mp3|flac)$/i, '.lrc');
+                    const lrcName = toLrcName(filename);
                     const uniqueLrc = await pickUniqueFilename(dirHandle, lrcName);
                     const lrcHandle = await dirHandle.getFileHandle(uniqueLrc, { create: true });
                     const lrcWritable = await lrcHandle.createWritable();
@@ -2172,6 +2222,7 @@ export class Downloader {
                             throw new Error('已取消');
                         }
 
+                        await applyDetectedExt(blob, meta);
                         const finalBlob = await this.writeTags(blob, meta);
 
                         const targetDir = await resolveCategoryDir(dirHandle, song, dirCache);
@@ -2191,7 +2242,7 @@ export class Downloader {
                                 } else {
                                     lrcDir = targetDir;
                                 }
-                                const lrcName = filename.replace(/\.(mp3|flac)$/i, '.lrc');
+                                const lrcName = toLrcName(filename);
                                 const uniqueLrc = await pickUniqueFilename(lrcDir, lrcName, usedNames);
                                 const lrcHandle = await lrcDir.getFileHandle(uniqueLrc, { create: true });
                                 const lrcWritable = await lrcHandle.createWritable();
@@ -2670,6 +2721,7 @@ export class Downloader {
                         if (state.abortController.signal.aborted) {
                             throw new Error('已取消');
                         }
+                        await applyDetectedExt(blob, meta);
                         const finalBlob = await this.writeTags(blob, meta);
                         let lyric = null;
                         if (song._withLyric) {
@@ -2679,7 +2731,7 @@ export class Downloader {
                         if (lyric) {
                             this._recordHistory(song, {
                                 kind: 'lyric',
-                                filename: meta.filename.replace(/\.(mp3|flac)$/i, '.lrc'),
+                                filename: toLrcName(meta.filename),
                                 bytes: new Blob([lyric]).size,
                             });
                         }
@@ -2891,7 +2943,7 @@ export class Downloader {
                     zip.file(folder + filename, blob);
                 }
                 if (lyric) {
-                    const lrcName = filename.replace(/\.(mp3|flac)$/i, '.lrc');
+                    const lrcName = toLrcName(filename);
                     const lrcFolder = lyricMode === 'separate' ? '歌词/' : folder;
                     zip.file(lrcFolder + lrcName, lyric);
                 }
