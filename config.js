@@ -26,6 +26,7 @@ export const config = {
         artist: 'netease',
         user: 'netease',
         mv: 'netease',
+        simi: 'netease',
     },
 
     timeout: 15000,

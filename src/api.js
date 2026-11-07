@@ -701,6 +701,67 @@ class NeteaseAdapter {
             expi: item.expi ?? 0,
         };
     }
+
+    async simiSong(id, limit = 30) {
+        if (!id) return [];
+        const target = Math.max(20, limit);
+        const seen = new Set([String(id)]);
+        const result = [];
+
+        try {
+            const data = await this.request('/simi/song', { id });
+            for (const raw of data?.songs || []) {
+                const s = this.normalizeSong(raw);
+                if (!s || !s.id) continue;
+                if (seen.has(String(s.id))) continue;
+                seen.add(String(s.id));
+                result.push(s);
+            }
+        } catch {}
+
+        if (result.length >= target) return result.slice(0, limit);
+
+        let artistId = '';
+        let albumId = '';
+        try {
+            const songDetail = await this.request('/song/detail', { ids: id });
+            const detail = songDetail?.songs?.[0];
+            artistId = detail?.ar?.[0]?.id ? String(detail.ar[0].id) : '';
+            albumId = detail?.al?.id ? String(detail.al.id) : '';
+        } catch {}
+
+        if (artistId) {
+            try {
+                const artistHot = await this.request('/artists', { id: artistId, limit: 100 });
+                for (const raw of artistHot?.hotSongs || []) {
+                    const s = this.normalizeSong(raw);
+                    if (!s || !s.id) continue;
+                    if (seen.has(String(s.id))) continue;
+                    seen.add(String(s.id));
+                    result.push(s);
+                    if (result.length >= target) break;
+                }
+            } catch {}
+        }
+
+        if (result.length >= target) return result.slice(0, limit);
+
+        if (albumId) {
+            try {
+                const albumData = await this.request('/album', { id: albumId });
+                for (const raw of albumData?.songs || []) {
+                    const s = this.normalizeSong(raw);
+                    if (!s || !s.id) continue;
+                    if (seen.has(String(s.id))) continue;
+                    seen.add(String(s.id));
+                    result.push(s);
+                    if (result.length >= target) break;
+                }
+            } catch {}
+        }
+
+        return result.slice(0, limit);
+    }
 }
 
 export class Meting {
@@ -911,6 +972,13 @@ export class Meting {
             throw new Error('当前后端不支持 MV 地址');
         }
         return adapter.mvUrl(id, r);
+    }
+
+    async simiSong(id, limit = 30) {
+        if (!id) return [];
+        const adapter = this.pick('simi');
+        if (!adapter || typeof adapter.simiSong !== 'function') return [];
+        return adapter.simiSong(id, limit);
     }
 
     async fetchAllPlaylistTracks(id, totalCount) {

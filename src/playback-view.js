@@ -1,8 +1,9 @@
 import { el } from './dom.js';
-import { icon, shareSong, openShareCardModal, Toast, renderArtistInto, renderAlbumInto } from './components.js';
+import { icon, shareSong, openShareCardModal, Toast, renderArtistInto, renderAlbumInto, SongRow, EmptyState, LoadingState, ErrorState } from './components.js';
 import { loadLyric, findCurrentIndex } from './lyric.js';
 import { openDownloadOptionsModal, handleDownloadLyric } from './views.js';
 import { buildUrl } from './router.js';
+import { fetchWikiDetail } from './wiki.js';
 
 const SCROLL_DURATION = 280;
 const SCROLL_EASE = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)';
@@ -122,7 +123,377 @@ export function initPlaybackView(ctx) {
 
     applyLyricPrefs();
 
-    const rightEl = el('div', { class: 'playback-overlay__right' }, lyricEl, lyricPlaceholder, lyricToolsEl);
+    const PLAYBACK_TABS = [
+        { key: 'lyric', label: '歌词' },
+        { key: 'wiki', label: '歌曲百科' },
+        { key: 'playlists', label: '相关歌单' },
+        { key: 'simi', label: '相关推荐' },
+    ];
+    let activeTab = 'lyric';
+
+    const playbackTabsEl = el('div', { class: 'search-tabs playback-tabs' });
+    const playbackTabsNav = el('div', { class: 'search-tabs__nav' });
+    const playbackTabButtons = {};
+    for (const t of PLAYBACK_TABS) {
+        const btn = el('button', { class: 'search-tab', text: t.label, dataset: { key: t.key }, type: 'button' });
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setActiveTab(t.key);
+        });
+        playbackTabButtons[t.key] = btn;
+        playbackTabsNav.appendChild(btn);
+    }
+    playbackTabsEl.appendChild(playbackTabsNav);
+
+    const lyricPanel = el('div', { class: 'playback-panel-tab playback-panel-tab--lyric' }, lyricEl, lyricPlaceholder, lyricToolsEl);
+    const wikiPanel = el('div', { class: 'playback-panel-tab playback-panel-tab--wiki hidden' });
+    const playlistsPanel = el('div', { class: 'playback-panel-tab playback-panel-tab--playlists hidden' });
+    const simiPanel = el('div', { class: 'playback-panel-tab playback-panel-tab--simi hidden' });
+
+    const panelsEl = el('div', { class: 'playback-overlay__panels' }, lyricPanel, wikiPanel, playlistsPanel, simiPanel);
+    const rightEl = el('div', { class: 'playback-overlay__right' }, playbackTabsEl, panelsEl);
+
+    playbackTabButtons['lyric'].classList.add('is-active');
+    lyricToolsEl.classList.remove('hidden');
+
+    const wikiDetailCache = new Map();
+    let wikiToken = 0;
+
+    async function loadWikiDetail(song, target) {
+        if (!song || !song.id) return;
+        const which = target === 'playlists' ? 'playlists' : 'wiki';
+        const key = String(song.id);
+        const cached = wikiDetailCache.get(key);
+        if (cached && !cached.loading) {
+            if (which === 'playlists') renderPlaylistsPanel(song, cached);
+            else renderWikiPanel(song, cached);
+            return;
+        }
+        if (cached && cached.loading) {
+            if (which === 'playlists') renderPlaylistsPanel(song, { loading: true });
+            else renderWikiPanel(song, { loading: true });
+            return;
+        }
+        wikiDetailCache.set(key, { loading: true });
+        if (which === 'playlists') renderPlaylistsPanel(song, { loading: true });
+        else renderWikiPanel(song, { loading: true });
+        const token = ++wikiToken;
+        let detail;
+        try {
+            detail = await fetchWikiDetail(song.id);
+        } catch (e) {
+            detail = { error: (e && e.message) || '加载失败' };
+        }
+        if (token !== wikiToken) return;
+        const entry = { ...(detail || {}), loading: false };
+        wikiDetailCache.set(key, entry);
+        const cur = store.get().queue;
+        const curSong = cur.currentIndex >= 0 ? cur.tracks[cur.currentIndex] : null;
+        if (!curSong || String(curSong.id) !== key) return;
+        if (activeTab === 'playlists') renderPlaylistsPanel(song, entry);
+        else if (activeTab === 'wiki') renderWikiPanel(song, entry);
+    }
+
+    function formatPlaylistPlayCount(n) {
+        const num = Number(n) || 0;
+        if (num >= 100000000) return (num / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
+        if (num >= 10000) return (num / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+        return String(num);
+    }
+
+    function makePlaylistCard(pl) {
+        const card = el('div', { class: 'playback-playlist-card' });
+        const cover = el('div', { class: 'playback-playlist-cover' });
+        if (pl.pic) {
+            const img = el('img', { src: pl.pic, alt: '', loading: 'lazy' });
+            img.addEventListener('error', () => {
+                cover.innerHTML = '';
+                cover.appendChild(icon('music'));
+            });
+            cover.appendChild(img);
+        } else {
+            cover.appendChild(icon('music'));
+        }
+        card.appendChild(cover);
+        const info = el('div', { class: 'playback-playlist-info' });
+        info.appendChild(el('div', { class: 'playback-playlist-title', text: pl.title || '未知歌单' }));
+        if (pl.playCount > 0) {
+            info.appendChild(el('div', { class: 'playback-playlist-meta', text: '播放量 ' + formatPlaylistPlayCount(pl.playCount) }));
+        }
+        card.appendChild(info);
+        card.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!ctx || !ctx.searchActions || !ctx.searchActions.openDetail) return;
+            ctx.searchActions.openDetail('playlist', {
+                id: pl.id,
+                title: pl.title,
+                artist: '',
+                pic: pl.pic,
+                trackCount: 0,
+                description: '',
+            });
+            if (store.get().playbackOpen) {
+                store.update({ playbackOpen: false });
+            }
+        });
+        return card;
+    }
+
+    function renderPlaylistsPanel(song, entry) {
+        playlistsPanel.innerHTML = '';
+        const wrap = el('div', { class: 'playback-playlists' });
+        if (!entry || entry.loading) {
+            wrap.appendChild(LoadingState('正在加载歌单…'));
+            playlistsPanel.appendChild(wrap);
+            return;
+        }
+        if (entry.error) {
+            wrap.appendChild(ErrorState(entry.error, () => {
+                wikiDetailCache.delete(String(song.id));
+                loadWikiDetail(song, 'playlists');
+            }));
+            playlistsPanel.appendChild(wrap);
+            return;
+        }
+        const list = Array.isArray(entry.playlists) ? entry.playlists : [];
+        if (!list.length) {
+            wrap.appendChild(EmptyState('暂无相关歌单', 'list'));
+            playlistsPanel.appendChild(wrap);
+            return;
+        }
+        for (const pl of list) {
+            wrap.appendChild(makePlaylistCard(pl));
+        }
+        playlistsPanel.appendChild(wrap);
+    }
+
+    function renderWikiPanel(song, entry) {
+        wikiPanel.innerHTML = '';
+        const wrap = el('div', { class: 'playback-wiki' });
+        if (!entry || entry.loading) {
+            wrap.appendChild(LoadingState('正在加载百科…'));
+            wikiPanel.appendChild(wrap);
+            return;
+        }
+        if (entry.error) {
+            wrap.appendChild(ErrorState(entry.error, () => {
+                wikiDetailCache.delete(String(song.id));
+                loadWikiDetail(song);
+            }));
+            wikiPanel.appendChild(wrap);
+            return;
+        }
+
+        const awards = (Array.isArray(entry.awards) ? entry.awards : [])
+            .map((a) => {
+                if (typeof a === 'string') return { title: a, subtitles: [] };
+                if (!a) return null;
+                return { title: a.title || '', subtitles: Array.isArray(a.subtitles) ? a.subtitles : [] };
+            })
+            .filter((a) => a && (a.title || a.subtitles.length));
+
+        const hasFields = Array.isArray(entry.fields) && entry.fields.length;
+        const hasSections = Array.isArray(entry.sections) && entry.sections.length;
+        const hasBasic = entry.basic && (entry.basic.publishDate || entry.basic.company);
+        if (!hasFields && !hasSections && !hasBasic && !awards.length) {
+            wrap.appendChild(EmptyState('暂无百科信息', 'info'));
+            wikiPanel.appendChild(wrap);
+            return;
+        }
+
+        const head = el('div', { class: 'playback-wiki__head' });
+        head.appendChild(el('div', { class: 'playback-wiki__title', text: song.title || '未知歌曲' }));
+        const subParts = [];
+        if (song.artist) subParts.push(song.artist);
+        if (song.album) subParts.push(song.album);
+        if (subParts.length) {
+            head.appendChild(el('div', { class: 'playback-wiki__sub', text: subParts.join(' / ') }));
+        }
+        wrap.appendChild(head);
+
+        const fieldItems = [];
+        if (entry.basic && entry.basic.publishDate) fieldItems.push({ label: '发行日期', value: entry.basic.publishDate });
+        if (entry.basic && entry.basic.company) fieldItems.push({ label: '发行公司', value: entry.basic.company });
+        for (const f of entry.fields || []) {
+            if (!f) continue;
+            if (f.label === 'BPM') {
+                const n = Number(f.value);
+                let speedLabel = '';
+                if (Number.isFinite(n) && n > 0) {
+                    speedLabel = n < 80 ? '慢速' : (n < 120 ? '中速' : '快速');
+                }
+                fieldItems.push({ label: f.label, value: f.value, hint: speedLabel });
+            } else {
+                fieldItems.push({ label: f.label, value: f.value });
+            }
+        }
+
+        if (fieldItems.length) {
+            const list = el('div', { class: 'playback-wiki__grid' });
+            for (const item of fieldItems) {
+                const row = el('div', { class: 'playback-wiki__cell' });
+                row.appendChild(el('span', { class: 'playback-wiki__label', text: item.label }));
+                const raw = String(item.value == null ? '' : item.value);
+                const text = item.hint ? (raw + ' · ' + item.hint) : (raw || '-');
+                row.appendChild(el('span', { class: 'playback-wiki__value', text }));
+                list.appendChild(row);
+            }
+            wrap.appendChild(list);
+        }
+
+        if (awards.length) {
+            const aw = el('div', { class: 'playback-wiki__section' });
+            aw.appendChild(el('div', { class: 'playback-wiki__section-title', text: '获奖记录' }));
+            const list = el('div', { class: 'playback-wiki__awards' });
+            const STATUS_WORDS = ['提名', '获奖', '入围', '入选', '荣获'];
+            for (const a of awards) {
+                const item = el('div', { class: 'playback-wiki__award' });
+                let status = '';
+                const rest = [];
+                for (const st of a.subtitles) {
+                    if (!status && STATUS_WORDS.some((w) => st.includes(w))) status = st;
+                    else rest.push(st);
+                }
+                const topRow = el('div', { class: 'playback-wiki__award-row' });
+                topRow.appendChild(el('span', { class: 'playback-wiki__award-title', text: a.title || '奖项' }));
+                if (status) {
+                    topRow.appendChild(el('span', { class: 'playback-wiki__award-status', text: status }));
+                }
+                item.appendChild(topRow);
+                if (rest.length) {
+                    item.appendChild(el('div', { class: 'playback-wiki__award-detail', text: rest.join(' · ') }));
+                }
+                list.appendChild(item);
+            }
+            aw.appendChild(list);
+            wrap.appendChild(aw);
+        }
+
+        for (const sec of entry.sections || []) {
+            const secEl = el('div', { class: 'playback-wiki__section' });
+            if (sec.title) secEl.appendChild(el('div', { class: 'playback-wiki__section-title', text: sec.title }));
+            if (sec.text) secEl.appendChild(el('div', { class: 'playback-wiki__section-text', text: sec.text }));
+            if (secEl.children.length) wrap.appendChild(secEl);
+        }
+
+        wikiPanel.appendChild(wrap);
+    }
+
+    const simiCache = new Map();
+    let simiToken = 0;
+
+    async function loadSimi(song) {
+        if (!song || !song.id) return;
+        const key = String(song.id);
+        const cached = simiCache.get(key);
+        if (cached && !cached.loading) {
+            renderSimiPanel(song, cached);
+            return;
+        }
+        if (cached && cached.loading) return;
+        simiCache.set(key, { loading: true });
+        renderSimiPanel(song, { loading: true });
+        const token = ++simiToken;
+        let tracks = [];
+        let error = null;
+        try {
+            const result = await ctx.api.simiSong(song.id, 50);
+            tracks = (result || []).filter((t) => t && t.id && String(t.id) !== key);
+        } catch (e) {
+            error = (e && e.message) || '加载失败';
+        }
+        if (token !== simiToken) return;
+        const entry = { loading: false, tracks, error };
+        simiCache.set(key, entry);
+        const cur = store.get().queue;
+        const curSong = cur.currentIndex >= 0 ? cur.tracks[cur.currentIndex] : null;
+        if (!curSong || String(curSong.id) !== key) return;
+        renderSimiPanel(song, entry);
+    }
+
+    function renderSimiPanel(song, entry) {
+        simiPanel.innerHTML = '';
+        const wrap = el('div', { class: 'playback-simi' });
+        if (!entry || entry.loading) {
+            wrap.appendChild(LoadingState('正在加载推荐…'));
+            simiPanel.appendChild(wrap);
+            return;
+        }
+        if (entry.error) {
+            wrap.appendChild(ErrorState(entry.error, () => {
+                simiCache.delete(String(song.id));
+                loadSimi(song);
+            }));
+            simiPanel.appendChild(wrap);
+            return;
+        }
+        const tracks = entry.tracks || [];
+        if (!tracks.length) {
+            wrap.appendChild(EmptyState('暂无相关推荐', 'music'));
+            simiPanel.appendChild(wrap);
+            return;
+        }
+        const header = el('div', { class: 'playback-simi__header' });
+        header.appendChild(el('span', { class: 'playback-simi__title', text: '根据《' + (song.title || '未知歌曲') + '》推荐' }));
+        const playAllBtn = el('button', { class: 'ena-btn ena-btn--sm', type: 'button' }, icon('play', true), el('span', { text: '播放全部' }));
+        playAllBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            player.setQueue(tracks, 0, true);
+        });
+        header.appendChild(playAllBtn);
+        wrap.appendChild(header);
+
+        const list = el('div', { class: 'song-list playback-simi__list' });
+        for (const track of tracks) {
+            list.appendChild(SongRow(track, {
+                ctx,
+                selectable: false,
+                viewOverride: 'tile',
+                onPlay: (s) => player.playNow(s),
+                onPlayNext: (s) => {
+                    player.playNext(s);
+                    Toast('已设为下一首播放：' + (s && s.title ? s.title : ''), 'success', 1600);
+                },
+                onDownloadNow: (s) => openDownloadOptionsModal(s, ctx, 'now'),
+                onDownloadLyric: (s) => handleDownloadLyric(s, ctx),
+            }));
+        }
+        wrap.appendChild(list);
+        simiPanel.appendChild(wrap);
+    }
+
+    function setActiveTab(tab) {
+        if (!playbackTabButtons[tab]) return;
+        activeTab = tab;
+        for (const key of Object.keys(playbackTabButtons)) {
+            playbackTabButtons[key].classList.toggle('is-active', key === tab);
+        }
+        lyricPanel.classList.toggle('hidden', tab !== 'lyric');
+        wikiPanel.classList.toggle('hidden', tab !== 'wiki');
+        playlistsPanel.classList.toggle('hidden', tab !== 'playlists');
+        simiPanel.classList.toggle('hidden', tab !== 'simi');
+        lyricToolsEl.classList.toggle('hidden', tab !== 'lyric');
+
+        if (tab === 'lyric') {
+            requestAnimationFrame(() => {
+                updateSpacerHeight();
+                const row = lyricLines.children[currentLineIndex];
+                if (row) scrollLineIntoCenter(row, false);
+            });
+        } else if (tab === 'wiki') {
+            const q = store.get().queue;
+            const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+            if (song) loadWikiDetail(song, 'wiki');
+        } else if (tab === 'playlists') {
+            const q = store.get().queue;
+            const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+            if (song) loadWikiDetail(song, 'playlists');
+        } else if (tab === 'simi') {
+            const q = store.get().queue;
+            const song = q.currentIndex >= 0 ? q.tracks[q.currentIndex] : null;
+            if (song) loadSimi(song);
+        }
+    }
 
     const inner = el('div', { class: 'playback-overlay__inner' }, leftEl, rightEl);
 
@@ -412,6 +783,7 @@ export function initPlaybackView(ctx) {
     window.addEventListener('resize', handleTitleResize);
     let currentLineIndex = -1;
     let lyricLoading = false;
+    setActiveTab('lyric');
 
     function refreshLyricScroll() {
         if (currentLineIndex < 0) return;
@@ -893,6 +1265,9 @@ export function initPlaybackView(ctx) {
             renderArtistInto(artistEl, song, ctx, '未知歌手');
             renderAlbumInto(albumEl, song, ctx, '');
             loadCurrentLyric(song);
+            if (activeTab === 'wiki') loadWikiDetail(song, 'wiki');
+            else if (activeTab === 'playlists') loadWikiDetail(song, 'playlists');
+            else if (activeTab === 'simi') loadSimi(song);
             overlay.classList.remove('is-switching');
         }, 200);
     }
