@@ -2890,6 +2890,270 @@ function _openConditionSelectInner(ctx, options = {}) {
     });
 }
 
+function openQuickDownloadSettingsModal(ctx) {
+    const { store, config } = ctx;
+    const get = () => store.get().settings;
+
+    function patchSettings(patch) {
+        store.update({ settings: { ...get(), ...patch } });
+        store.persist();
+    }
+
+    const body = el('div', { class: 'download-settings-modal' });
+
+    {
+        const supported = supportsFileSystemAccess();
+        const group = el('div', { class: 'setting-group' });
+        group.appendChild(el('div', { class: 'setting-label', text: '下载方式' }));
+        const blobInput = el('input', { type: 'radio', name: 'quick-dl-mode' });
+        const streamInput = el('input', { type: 'radio', name: 'quick-dl-mode' });
+        if (!supported) streamInput.disabled = true;
+        const currentMode = get().downloadMode === 'stream' && supported ? 'stream' : 'blob';
+        blobInput.checked = currentMode === 'blob';
+        streamInput.checked = currentMode === 'stream';
+        blobInput.addEventListener('change', () => {
+            if (blobInput.checked) patchSettings({ downloadMode: 'blob' });
+        });
+        streamInput.addEventListener('change', () => {
+            if (streamInput.checked) patchSettings({ downloadMode: 'stream' });
+        });
+        group.appendChild(el('div', { class: 'ena-radio-group' },
+            el('label', { class: 'ena-radio' },
+                blobInput, el('span', { class: 'dot' }), el('span', { text: '内存缓存' })),
+            el('label', { class: 'ena-radio' },
+                streamInput, el('span', { class: 'dot' }), el('span', { text: '直接流式下载到本地' }))
+        ));
+        if (!supported) {
+            group.appendChild(el('div', {
+                class: 'setting-hint',
+                text: '当前浏览器不支持 File System Access API，只能使用内存缓存。',
+            }));
+        }
+        body.appendChild(group);
+    }
+
+    {
+        const group = el('div', { class: 'setting-group' });
+        group.appendChild(el('div', { class: 'setting-label', text: '本地目录' }));
+        const nameEl = el('div', { class: 'setting-dir-name', text: get().downloadDirName || '未选择目录' });
+        const pickBtn = el('button', { class: 'ena-btn ena-btn--sm', type: 'button', text: '选择目录' });
+        pickBtn.addEventListener('click', async () => {
+            if (!supportsFileSystemAccess()) {
+                Toast('当前浏览器不支持', 'warning', 1600);
+                return;
+            }
+            try {
+                const handle = await pickDownloadDir();
+                const name = handle.name || '';
+                patchSettings({ downloadDirName: name });
+                nameEl.textContent = name;
+                Toast('已选择目录：' + name, 'success', 1800);
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                Toast('选择目录失败：' + err.message, 'danger', 2600);
+            }
+        });
+        const clearBtn = el('button', { class: 'ena-btn ena-btn--sm', type: 'button', text: '清除目录' });
+        clearBtn.addEventListener('click', async () => {
+            await clearSavedDir();
+            patchSettings({ downloadDirName: '' });
+            nameEl.textContent = '未选择目录';
+            Toast('已清除本地目录', 'success', 1400);
+        });
+        group.appendChild(el('div', { class: 'setting-dir-row' }, nameEl, pickBtn, clearBtn));
+        body.appendChild(group);
+    }
+
+    {
+        const group = el('div', { class: 'setting-group' });
+        group.appendChild(el('div', { class: 'setting-label', text: '视频保存位置' }));
+        const defs = [
+            { id: 'same', label: '与音频同路径' },
+            { id: 'separate', label: '单独保存在 MV 子目录' },
+        ];
+        const opts = el('div', { class: 'ena-radio-group' });
+        for (const def of defs) {
+            const input = el('input', { type: 'radio', name: 'quick-dl-mv-dir' });
+            input.checked = (get().mvDirMode || 'same') === def.id;
+            input.addEventListener('change', () => {
+                if (input.checked) patchSettings({ mvDirMode: def.id });
+            });
+            opts.appendChild(el('label', { class: 'ena-radio' },
+                input, el('span', { class: 'dot' }), el('span', { text: def.label })));
+        }
+        group.appendChild(opts);
+        body.appendChild(group);
+    }
+
+    {
+        const group = el('div', { class: 'setting-group' });
+        const label = el('div', { class: 'setting-label', text: '下载线程数：' + get().downloadThreads });
+        const range = el('input', {
+            type: 'range',
+            class: 'ena-range',
+            min: '1',
+            max: '64',
+            step: '1',
+            value: String(get().downloadThreads),
+        });
+        range.addEventListener('input', () => {
+            label.textContent = '下载线程数：' + range.value;
+        });
+        range.addEventListener('change', () => {
+            patchSettings({ downloadThreads: Number(range.value) });
+        });
+        group.appendChild(label);
+        group.appendChild(range);
+        body.appendChild(group);
+    }
+
+    {
+        const group = el('div', { class: 'setting-group' });
+        const label = el('div', { class: 'setting-label', text: '同时下载数量：' + get().concurrency });
+        const range = el('input', {
+            type: 'range',
+            class: 'ena-range',
+            min: '1',
+            max: '10',
+            step: '1',
+            value: String(get().concurrency),
+        });
+        range.addEventListener('input', () => {
+            label.textContent = '同时下载数量：' + range.value;
+        });
+        range.addEventListener('change', () => {
+            patchSettings({ concurrency: Number(range.value) });
+        });
+        group.appendChild(label);
+        group.appendChild(range);
+        body.appendChild(group);
+    }
+
+    {
+        const group = el('div', { class: 'setting-group' });
+        group.appendChild(el('div', { class: 'setting-label', text: '命名格式' }));
+        const input = el('input', {
+            type: 'text',
+            class: 'ena-input setting-format-input',
+            placeholder: '{title} - {artist}',
+            value: get().namingFormat || '',
+        });
+        input.addEventListener('input', () => {
+            patchSettings({ namingFormat: input.value });
+        });
+        group.appendChild(input);
+        group.appendChild(el('div', {
+            class: 'setting-hint',
+            text: '可用占位符：{title} 歌曲名、{artist} 歌手名、{album} 专辑名',
+        }));
+        body.appendChild(group);
+    }
+
+    {
+        const group = el('div', { class: 'setting-group' });
+        group.appendChild(el('div', { class: 'setting-label', text: '批量下载文件名序号' }));
+        const cb = el('input', { type: 'checkbox' });
+        cb.checked = !!get().batchFilenameSeq;
+        const cbLabel = el('label', { class: 'ena-checkbox' },
+            cb, el('span', { class: 'box' }),
+            el('span', { text: '为批量下载的歌曲和歌词文件名添加序号' })
+        );
+        group.appendChild(el('div', { class: 'setting-checkboxes' }, cbLabel));
+        group.appendChild(el('div', { class: 'setting-sublabel', text: '序号格式' }));
+        const FORMATS = [
+            { id: '(n)', label: '(1)' },
+            { id: 'n.', label: '1.' },
+            { id: 'n)', label: '1)' },
+            { id: '[n]', label: '[1]' },
+            { id: 'n-', label: '1-' },
+        ];
+        const fmtOpts = el('div', { class: 'ena-radio-group' });
+        for (const fmt of FORMATS) {
+            const input = el('input', { type: 'radio', name: 'quick-dl-seq-format' });
+            input.checked = (get().batchFilenameSeqFormat || '(n)') === fmt.id;
+            input.addEventListener('change', () => {
+                if (input.checked) patchSettings({ batchFilenameSeqFormat: fmt.id });
+            });
+            fmtOpts.appendChild(el('label', { class: 'ena-radio' },
+                input, el('span', { class: 'dot' }), el('span', { text: fmt.label })));
+        }
+        cb.addEventListener('change', () => {
+            patchSettings({ batchFilenameSeq: cb.checked });
+            fmtOpts.classList.toggle('is-disabled', !cb.checked);
+        });
+        fmtOpts.classList.toggle('is-disabled', !cb.checked);
+        group.appendChild(fmtOpts);
+        body.appendChild(group);
+    }
+
+    {
+        const group = el('div', { class: 'setting-group' });
+        group.appendChild(el('div', { class: 'setting-label', text: '批量下载分类方式' }));
+        const defs = [
+            { id: 'none', label: '不分类' },
+            { id: 'artist', label: '按歌手分类' },
+            { id: 'album', label: '按专辑分类' },
+        ];
+        const opts = el('div', { class: 'ena-radio-group' });
+        for (const def of defs) {
+            const input = el('input', { type: 'radio', name: 'quick-dl-category' });
+            input.checked = (get().batchCategory || 'none') === def.id;
+            input.addEventListener('change', () => {
+                if (input.checked) patchSettings({ batchCategory: def.id });
+            });
+            opts.appendChild(el('label', { class: 'ena-radio' },
+                input, el('span', { class: 'dot' }), el('span', { text: def.label })));
+        }
+        group.appendChild(opts);
+        body.appendChild(group);
+    }
+
+    {
+        const group = el('div', { class: 'setting-group' });
+        group.appendChild(el('div', { class: 'setting-label', text: '歌词批量保存方式' }));
+        const defs = [
+            { id: 'same', label: '和对应歌曲同路径' },
+            { id: 'separate', label: '单独保存' },
+        ];
+        const opts = el('div', { class: 'ena-radio-group' });
+        for (const def of defs) {
+            const input = el('input', { type: 'radio', name: 'quick-dl-lyric' });
+            input.checked = (get().lyricSaveMode || 'same') === def.id;
+            input.addEventListener('change', () => {
+                if (input.checked) patchSettings({ lyricSaveMode: def.id });
+            });
+            opts.appendChild(el('label', { class: 'ena-radio' },
+                input, el('span', { class: 'dot' }), el('span', { text: def.label })));
+        }
+        group.appendChild(opts);
+        body.appendChild(group);
+    }
+
+    {
+        const group = el('div', { class: 'setting-group' });
+        group.appendChild(el('div', { class: 'setting-label', text: '代理' }));
+        const cb = el('input', { type: 'checkbox' });
+        cb.checked = !!get().downloadProxy;
+        cb.addEventListener('change', () => {
+            patchSettings({ downloadProxy: cb.checked });
+        });
+        group.appendChild(el('div', { class: 'setting-checkboxes' },
+            el('label', { class: 'ena-checkbox' },
+                cb, el('span', { class: 'box' }),
+                el('span', { text: '下载使用代理' })
+            )
+        ));
+        body.appendChild(group);
+    }
+
+    openModal({
+        title: '下载设置',
+        body,
+        showCancel: false,
+        confirmText: '完成',
+    });
+}
+
 export function DownloadsView(ctx) {
     const { store, player, downloader } = ctx;
     const root = el('div', { class: 'downloads-view' });
@@ -2914,6 +3178,16 @@ export function DownloadsView(ctx) {
     searchInputWrap.appendChild(searchIcon);
     searchInputWrap.appendChild(searchInput);
     searchWrap.appendChild(searchInputWrap);
+    const quickSettingsBtn = el('button', {
+        class: 'ena-btn ena-btn--icon',
+        type: 'button',
+        title: '下载设置',
+    }, icon('settings'));
+    quickSettingsBtn.addEventListener('click', () => {
+        openQuickDownloadSettingsModal(ctx);
+    });
+
+    toolbar.appendChild(quickSettingsBtn);
     toolbar.appendChild(searchWrap);
 
     const filterBtn = el('button', { class: 'ena-btn ena-btn--sm' }, icon('filter'), el('span', { text: '筛选' }));
