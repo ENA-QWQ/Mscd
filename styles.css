@@ -10827,4 +10827,126 @@ body.mv-standalone-open {
     .playback-wiki__award-detail {
         font-size: .76rem;
     }
+}
 
+.downloads-view .album-bundle {
+    grid-column: 1 / -1;
+}
+
+.downloads-view .album-bundle-row {
+    padding-left: 8px;
+}
+
+.downloads-view .album-bundle-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform .25s var(--ease-standard), color .25s ease;
+    z-index: 1;
+}
+
+.downloads-view .album-bundle-toggle::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--hover-bg);
+    transform: scale(0);
+    transform-origin: bottom left;
+    transition: transform .22s var(--ease-standard);
+    z-index: 0;
+    pointer-events: none;
+}
+
+.downloads-view .album-bundle-row:hover .album-bundle-toggle::before {
+    transform: scale(1);
+}
+
+.downloads-view .album-bundle-toggle svg {
+    position: relative;
+    z-index: 1;
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+.downloads-view .album-bundle-row:hover .album-bundle-toggle {
+    color: var(--text-secondary);
+}
+
+.downloads-view .album-bundle.is-expanded .album-bundle-toggle {
+    transform: rotate(90deg);
+}
+
+.downloads-view .album-bundle-row__meta {
+    color: var(--text-tertiary);
+}
+
+.downloads-view .album-bundle-row .song-title-row {
+    max-width: none;
+}
+
+.downloads-view .album-bundle__children {
+    display: grid;
+    grid-template-rows: 0fr;
+    overflow: clip;
+    margin-left: 12px;
+    transition: grid-template-rows .28s var(--ease-standard);
+    min-width: 0;
+}
+
+.downloads-view .album-bundle__children.is-open {
+    grid-template-rows: 1fr;
+}
+
+.downloads-view .album-bundle__children.is-open.is-settled {
+    overflow: visible;
+}
+
+.downloads-view .album-bundle__children-inner {
+    min-height: 0;
+    min-width: 0;
+    background-color: var(--bg-subtle);
+}
+
+.downloads-view .album-bundle__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px 0;
+}
+
+.downloads-view .album-bundle__child {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-left: 22px;
+}
+
+.downloads-view .album-bundle__child .song-title {
+    font-size: .78rem;
+}
+
+.downloads-view .album-bundle__child .song-artist {
+    font-size: .66rem;
+}
+
+.downloads-view .album-bundle__child .song-actions .song-action {
+    width: 24px;
+    height: 24px;
+}
+
+.downloads-view .album-bundle__child .song-actions .song-action svg {
+    width: 13px;
+    height: 13px;
+}

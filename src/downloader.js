@@ -555,7 +555,7 @@ async function fetchCoverAsBytes(coverUrl) {
     return promise;
 }
 
-async function addMp3Tags(blob, { title, artist, album, year, bpm, genre, coverUrl, writeTitle, writeArtist, writeAlbum, writeYear, writeBpm, writeGenre, writeCover }) {
+async function addMp3Tags(blob, { title, artist, album, year, bpm, genre, coverUrl, track, trackTotal, writeTitle, writeArtist, writeAlbum, writeYear, writeBpm, writeGenre, writeCover, writeTrack }) {
     if (typeof window.ID3Writer === 'undefined') return blob;
     try {
         const arrayBuffer = await blob.arrayBuffer();
@@ -599,6 +599,14 @@ async function addMp3Tags(blob, { title, artist, album, year, bpm, genre, coverU
             }
         }
 
+        if (writeTrack === true && track) {
+            const total = parseInt(trackTotal, 10);
+            const val = Number.isFinite(total) && total > 0 ? `${track}/${total}` : String(track);
+            try { writer.setFrame('TRCK', val); } catch (e) {
+                console.warn('[downloader] TRCK failed:', e);
+            }
+        }
+
         if (writeCover !== false && coverUrl) {
             const cover = await fetchCoverAsBytes(coverUrl);
             if (cover) {
@@ -623,7 +631,7 @@ async function addMp3Tags(blob, { title, artist, album, year, bpm, genre, coverU
     }
 }
 
-async function addFlacTags(blob, { title, artist, album, year, bpm, genre, coverUrl, writeTitle, writeArtist, writeAlbum, writeYear, writeBpm, writeGenre, writeCover }) {
+async function addFlacTags(blob, { title, artist, album, year, bpm, genre, coverUrl, track, trackTotal, writeTitle, writeArtist, writeAlbum, writeYear, writeBpm, writeGenre, writeCover, writeTrack }) {
     try {
         const arrayBuffer = await blob.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
@@ -663,6 +671,11 @@ async function addFlacTags(blob, { title, artist, album, year, bpm, genre, cover
         if (writeYear !== false && year) tagKv.DATE = String(year);
         if (writeBpm !== false && bpm) tagKv.BPM = String(bpm);
         if (writeGenre !== false && genre) tagKv.GENRE = String(genre);
+        if (writeTrack === true && track) {
+            tagKv.TRACKNUMBER = String(track);
+            const total = parseInt(trackTotal, 10);
+            if (Number.isFinite(total) && total > 0) tagKv.TOTALTRACKS = String(total);
+        }
 
         const commentData = buildVorbisComment('MSCD', tagKv);
 
@@ -795,6 +808,9 @@ async function getOrCreateSubdir(parentHandle, name, cache) {
 }
 
 async function resolveCategoryDir(rootHandle, song, cache) {
+    if (song && song._albumDir) {
+        return getOrCreateSubdir(rootHandle, song._albumDir, cache);
+    }
     if (song && song._kind === 'mv') {
         const mvMode = store.get().settings.mvDirMode || 'same';
         if (mvMode === 'separate') {
@@ -1265,6 +1281,22 @@ export class Downloader {
         const out = [];
         for (const song of songs) {
             if (!song) continue;
+            if (song._albumBundle && Array.isArray(song.tracks)) {
+                const albumDir = sanitizeFilename(song.album || song.title) || 'album';
+                for (const t of song.tracks) {
+                    if (!t) continue;
+                    const rawNo = Number(t._trackNo ?? t.trackNo);
+                    const trackNo = Number.isFinite(rawNo) && rawNo > 0 ? rawNo : null;
+                    out.push(...this.expandDownloadEntries([{
+                        ...t,
+                        _albumDir: albumDir,
+                        _trackNo: trackNo,
+                        _trackTotal: song.tracks.length,
+                        _seqIndex: trackNo || 0,
+                    }]));
+                }
+                continue;
+            }
             if (song._kind === 'mv') {
                 out.push(song);
                 continue;
@@ -1358,6 +1390,8 @@ export class Downloader {
             genre,
             cover: song.pic || '',
             kind: 'audio',
+            track: song._trackNo || null,
+            trackTotal: song._trackTotal || null,
             writeTitle: song._metaTitle !== false,
             writeArtist: song._metaArtist !== false,
             writeAlbum: song._metaAlbum !== false,
@@ -1365,6 +1399,7 @@ export class Downloader {
             writeBpm: song._metaBpm !== false,
             writeGenre: song._metaGenre !== false,
             writeCover: song._metaCover !== false,
+            writeTrack: song._metaTrack === true,
         };
     }
 
@@ -1378,6 +1413,8 @@ export class Downloader {
             bpm: meta.bpm,
             genre: meta.genre,
             coverUrl: meta.cover,
+            track: meta.track || null,
+            trackTotal: meta.trackTotal || null,
             writeTitle: meta.writeTitle !== false,
             writeArtist: meta.writeArtist !== false,
             writeAlbum: meta.writeAlbum !== false,
@@ -1385,6 +1422,7 @@ export class Downloader {
             writeBpm: meta.writeBpm !== false,
             writeGenre: meta.writeGenre !== false,
             writeCover: meta.writeCover !== false,
+            writeTrack: meta.writeTrack === true,
         };
         const ext = (await detectAudioExt(blob)) || meta.ext;
         if (ext === '.flac') {
@@ -1836,7 +1874,9 @@ export class Downloader {
             const finalBlob = await this.writeTags(blob, meta);
 
             let targetDir = dirHandle;
-            if (meta.kind === 'mv' && (store.get().settings.mvDirMode || 'same') === 'separate') {
+            if (song._albumDir) {
+                targetDir = await getOrCreateSubdir(dirHandle, song._albumDir, new Map());
+            } else if (meta.kind === 'mv' && (store.get().settings.mvDirMode || 'same') === 'separate') {
                 targetDir = await getOrCreateSubdir(dirHandle, 'MV', new Map());
             }
             const filename = await pickUniqueFilename(targetDir, meta.filename);
@@ -1849,8 +1889,8 @@ export class Downloader {
                 const lrc = await this.fetchLyricText(song);
                 if (lrc) {
                     const lrcName = toLrcName(filename);
-                    const uniqueLrc = await pickUniqueFilename(dirHandle, lrcName);
-                    const lrcHandle = await dirHandle.getFileHandle(uniqueLrc, { create: true });
+                    const uniqueLrc = await pickUniqueFilename(targetDir, lrcName);
+                    const lrcHandle = await targetDir.getFileHandle(uniqueLrc, { create: true });
                     const lrcWritable = await lrcHandle.createWritable();
                     await lrcWritable.write(lrc);
                     await lrcWritable.close();
@@ -1933,7 +1973,7 @@ export class Downloader {
             if (songs.length > 1) {
                 const allDownloads = store.get().downloads;
                 songs = songs.map((s) => {
-                    if (!s || !s.id) return s;
+                    if (!s || !s.id || s._albumBundle || s._albumDir) return s;
                     const idx = allDownloads.findIndex((d) => String(d.id) === String(s.id));
                     return idx >= 0 ? { ...s, _seqIndex: idx + 1 } : s;
                 });
@@ -2002,6 +2042,10 @@ export class Downloader {
                 _mvQuality: t._mvQuality,
                 _mvFallback: t._mvFallback,
                 _skipAudio: t._skipAudio,
+                _albumDir: t._albumDir || '',
+                _trackNo: t._trackNo || null,
+                _trackTotal: t._trackTotal || null,
+                _metaTrack: t._metaTrack === true,
                 _seqIndex: Number(t._seqIndex) || 0,
             }));
 
@@ -2055,6 +2099,10 @@ export class Downloader {
                 _mvQuality: song._mvQuality,
                 _mvFallback: song._mvFallback,
                 _skipAudio: !!song._skipAudio,
+                _albumDir: song._albumDir || '',
+                _trackNo: song._trackNo || null,
+                _trackTotal: song._trackTotal || null,
+                _metaTrack: song._metaTrack === true,
                 _seqIndex: Number(song._seqIndex) || 0,
                 status: 'queued',
                 bytes: 0,
@@ -2237,7 +2285,7 @@ export class Downloader {
                             if (lrc) {
                                 const lyricMode = store.get().settings.lyricSaveMode || 'same';
                                 let lrcDir;
-                                if (lyricMode === 'separate') {
+                                if (lyricMode === 'separate' && !song._albumDir) {
                                     lrcDir = await getOrCreateSubdir(dirHandle, '歌词', lyricDirCache);
                                 } else {
                                     lrcDir = targetDir;
@@ -2454,7 +2502,7 @@ export class Downloader {
             if (songs.length > 1) {
                 const allDownloads = store.get().downloads;
                 songs = songs.map((s) => {
-                    if (!s || !s.id) return s;
+                    if (!s || !s.id || s._albumBundle || s._albumDir) return s;
                     const idx = allDownloads.findIndex((d) => String(d.id) === String(s.id));
                     return idx >= 0 ? { ...s, _seqIndex: idx + 1 } : s;
                 });
@@ -2517,6 +2565,10 @@ export class Downloader {
                 _mvQuality: t._mvQuality,
                 _mvFallback: t._mvFallback,
                 _skipAudio: t._skipAudio,
+                _albumDir: t._albumDir || '',
+                _trackNo: t._trackNo || null,
+                _trackTotal: t._trackTotal || null,
+                _metaTrack: t._metaTrack === true,
                 _seqIndex: Number(t._seqIndex) || 0,
             }));
 
@@ -2571,6 +2623,10 @@ export class Downloader {
                 _mvQuality: song._mvQuality,
                 _mvFallback: song._mvFallback,
                 _skipAudio: !!song._skipAudio,
+                _albumDir: song._albumDir || '',
+                _trackNo: song._trackNo || null,
+                _trackTotal: song._trackTotal || null,
+                _metaTrack: song._metaTrack === true,
                 _seqIndex: Number(song._seqIndex) || 0,
                 status: 'queued',
                 bytes: 0,
@@ -2926,7 +2982,9 @@ export class Downloader {
             for (const { track, kind, blob, lyric, filename } of successful) {
                 let folder = '';
                 const isMv = track._kind === 'mv';
-                if (isMv && mvMode === 'separate') {
+                if (track._albumDir) {
+                    folder = track._albumDir + '/';
+                } else if (isMv && mvMode === 'separate') {
                     folder = 'MV/';
                 } else if (categoryMode === 'artist') {
                     const a = getMainArtist(track.artist);
@@ -2944,7 +3002,7 @@ export class Downloader {
                 }
                 if (lyric) {
                     const lrcName = toLrcName(filename);
-                    const lrcFolder = lyricMode === 'separate' ? '歌词/' : folder;
+                    const lrcFolder = lyricMode === 'separate' && !track._albumDir ? '歌词/' : folder;
                     zip.file(lrcFolder + lrcName, lyric);
                 }
             }

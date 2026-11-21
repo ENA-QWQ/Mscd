@@ -135,6 +135,8 @@ function createInitialState() {
             batchMetaBpm: false,
             batchMetaGenre: false,
             batchMetaCover: true,
+            batchMetaTrack: true,
+            albumBundleMerge: true,
             batchDownloadLyric: false,
             batchDownloadMv: false,
             batchLyricWithTranslation: false,

@@ -17,6 +17,7 @@ import {
     openModal,
     Dropdown,
     renderArtistInto,
+    makeActionButton,
 } from './components.js';
 import {
     supportsFileSystemAccess,
@@ -300,10 +301,12 @@ function openThreeTabDownloadModal(ctx, options) {
         hideMvTab = false,
         onlyMv = false,
         mvLevels = null,
+        albumBundle = null,
         onConfirm,
     } = options;
 
     let activeTab = onlyMv ? 'mv' : 'audio';
+    let albumBundleMerge = albumBundle ? initial.albumBundleMerge !== false : false;
     let downloadAudio = onlyMv ? false : initial.downloadAudio !== false;
     let audioQuality = initial.audioQuality ?? config.quality.download;
     let metaTitle = initial.metaTitle !== false;
@@ -313,6 +316,7 @@ function openThreeTabDownloadModal(ctx, options) {
     let metaBpm = initial.metaBpm === true;
     let metaGenre = initial.metaGenre === true;
     let metaCover = initial.metaCover !== false;
+    let metaTrack = albumBundle ? initial.metaTrack !== false : false;
     let downloadLyric = onlyMv ? false : !!initial.downloadLyric;
     let lyricWithTranslation = !!initial.lyricWithTranslation;
     let lyricDelay = Number(initial.lyricDelay) || 0;
@@ -378,6 +382,7 @@ function openThreeTabDownloadModal(ctx, options) {
 
     let audioQualityInputs = [];
     let audioMetaInputs = [];
+    let syncMetaTrackDisabled = () => {};
     let lyricTransInput = null;
     let lyricDelayInput = null;
     let mvQualityInputs = [];
@@ -405,6 +410,26 @@ function openThreeTabDownloadModal(ctx, options) {
         }
         panel.appendChild(qualityGroup);
 
+        let bundleInput = null;
+        if (albumBundle) {
+            panel.appendChild(el('div', { class: 'setting-sublabel', text: '下载方式' }));
+            bundleInput = el('input', { type: 'checkbox' });
+            bundleInput.checked = albumBundleMerge;
+            bundleInput.addEventListener('change', () => {
+                albumBundleMerge = bundleInput.checked;
+                syncMetaTrackDisabled();
+            });
+            panel.appendChild(el('label', { class: 'ena-checkbox' },
+                bundleInput,
+                el('span', { class: 'box' }),
+                el('span', { text: '合并为整专辑下载' })
+            ));
+            panel.appendChild(el('div', {
+                class: 'setting-hint',
+                text: '开启后整张专辑作为一组置于下载列表顶部，歌曲统一写入该专辑文件夹。',
+            }));
+        }
+
         panel.appendChild(el('div', { class: 'setting-sublabel', text: '写入的元数据' }));
 
         audioMetaInputs = [];
@@ -413,6 +438,7 @@ function openThreeTabDownloadModal(ctx, options) {
             { label: '歌手', get: () => metaArtist, set: (v) => { metaArtist = v; } },
             { label: '专辑', get: () => metaAlbum, set: (v) => { metaAlbum = v; } },
             { label: '年份', get: () => metaYear, set: (v) => { metaYear = v; } },
+            { label: '音轨号', get: () => metaTrack, set: (v) => { metaTrack = v; }, trackOnly: true },
             { label: 'BPM', get: () => metaBpm, set: (v) => { metaBpm = v; } },
             { label: '流派', get: () => metaGenre, set: (v) => { metaGenre = v; } },
             { label: '封面', get: () => metaCover, set: (v) => { metaCover = v; } },
@@ -421,6 +447,13 @@ function openThreeTabDownloadModal(ctx, options) {
         for (const def of metaDefs) {
             const input = el('input', { type: 'checkbox' });
             input.checked = def.get();
+            if (def.trackOnly) {
+                syncMetaTrackDisabled = () => {
+                    input.disabled = !!albumBundle && !albumBundleMerge;
+                    if (input.disabled) input.checked = true;
+                };
+                syncMetaTrackDisabled();
+            }
             input.addEventListener('change', () => def.set(input.checked));
             audioMetaInputs.push(input);
             metaGroup.appendChild(el('label', { class: 'ena-checkbox' },
@@ -597,6 +630,8 @@ function openThreeTabDownloadModal(ctx, options) {
                 metaBpm,
                 metaGenre,
                 metaCover,
+                metaTrack: albumBundle ? metaTrack : undefined,
+                albumBundleMerge: albumBundle ? albumBundleMerge : undefined,
                 downloadLyric,
                 lyricWithTranslation,
                 lyricDelay,
@@ -769,13 +804,14 @@ export async function openMvDownloadOptionsModal(song, ctx, mode = 'now') {
     });
 }
 
-export function openBatchAddModal(songs, ctx, mode) {
+export function openBatchAddModal(songs, ctx, mode, album = null) {
     const { store } = ctx;
     const settings = store.get().settings;
 
     openThreeTabDownloadModal(ctx, {
         title: mode === 'replace' ? '替换下载列表' : '添加到下载列表',
         confirmText: mode === 'replace' ? '替换' : '添加',
+        albumBundle: album,
         initial: {
             downloadAudio: settings.batchDownloadAudio,
             audioQuality: settings.downloadQuality,
@@ -786,6 +822,8 @@ export function openBatchAddModal(songs, ctx, mode) {
             metaBpm: settings.batchMetaBpm,
             metaGenre: settings.batchMetaGenre,
             metaCover: settings.batchMetaCover,
+            metaTrack: settings.batchMetaTrack,
+            albumBundleMerge: settings.albumBundleMerge,
             downloadLyric: settings.batchDownloadLyric,
             lyricWithTranslation: settings.batchLyricWithTranslation,
             lyricDelay: settings.batchLyricDelay,
@@ -803,9 +841,11 @@ export function openBatchAddModal(songs, ctx, mode) {
                     batchMetaArtist: r.metaArtist,
                     batchMetaAlbum: r.metaAlbum,
                     batchMetaYear: r.metaYear,
+                    batchMetaTrack: r.metaTrack === true,
                     batchMetaBpm: r.metaBpm,
                     batchMetaGenre: r.metaGenre,
                     batchMetaCover: r.metaCover,
+                    albumBundleMerge: r.albumBundleMerge !== false,
                     batchDownloadLyric: r.downloadLyric,
                     batchLyricWithTranslation: r.lyricWithTranslation,
                     batchLyricDelay: r.lyricDelay,
@@ -816,7 +856,7 @@ export function openBatchAddModal(songs, ctx, mode) {
             });
             store.persist();
 
-            const prepared = songs.map((s) => ({
+            const prepared = songs.map((s, i) => ({
                 ...s,
                 _historyRecord: r.historyRecord !== false,
                 _quality: r.audioQuality,
@@ -827,6 +867,9 @@ export function openBatchAddModal(songs, ctx, mode) {
                 _metaBpm: r.metaBpm,
                 _metaGenre: r.metaGenre,
                 _metaCover: r.metaCover,
+                _metaTrack: r.metaTrack === true,
+                _trackNo: Number(s.trackNo) > 0 ? Number(s.trackNo) : i + 1,
+                _trackTotal: songs.length,
                 _withLyric: r.downloadLyric,
                 _lyricWithTranslation: r.lyricWithTranslation,
                 _lyricDelay: r.lyricDelay,
@@ -836,6 +879,27 @@ export function openBatchAddModal(songs, ctx, mode) {
                 _mvQuality: r.mvQuality,
                 _mvFallback: r.mvFallback,
             }));
+
+            if (album && r.albumBundleMerge) {
+                const bundleId = 'album-bundle:' + album.id;
+                const downloads = store.get().downloads.filter((d) => d.id !== bundleId);
+                downloads.unshift({
+                    _kind: 'album',
+                    _albumBundle: true,
+                    id: bundleId,
+                    title: album.title || '未知专辑',
+                    artist: album.artist || '',
+                    album: album.title || '',
+                    pic: album.pic || '',
+                    _historyRecord: r.historyRecord !== false,
+                    tracks: prepared,
+                });
+                store.update({ downloads });
+                store.persist();
+                store.clearSelection();
+                Toast('已添加整专辑下载：' + (album.title || '未知专辑'), 'success', 1600);
+                return;
+            }
 
             if (mode === 'replace') {
                 store.update({ downloads: prepared });
@@ -1408,7 +1472,9 @@ export function SearchView(ctx) {
                 Toast('暂无可下载的歌曲', 'warning', 1600);
                 return;
             }
-            openBatchAddModal(detail.tracks, ctx, 'append');
+            openBatchAddModal(detail.tracks, ctx, 'append', detail.kind === 'album'
+                ? { id: detail.id, title: detail.title, artist: detail.artist, pic: detail.pic }
+                : null);
         });
 
         const infoChildren = [];
@@ -3263,6 +3329,8 @@ export function DownloadsView(ctx) {
     let lastFilter = null;
     let lastWikiMap = null;
     let gestures = null;
+    let lastExpandedBundles = '';
+    const expandedBundles = new Set();
 
     async function startDownloadAll() {
         const downloads = store.get().downloads;
@@ -3340,6 +3408,7 @@ export function DownloadsView(ctx) {
             _metaBpm: r.metaBpm,
             _metaGenre: r.metaGenre,
             _metaCover: r.metaCover,
+            _metaTrack: r.metaTrack === true,
             _withLyric: r.downloadLyric,
             _lyricWithTranslation: r.lyricWithTranslation,
             _lyricDelay: r.lyricDelay,
@@ -3362,6 +3431,7 @@ export function DownloadsView(ctx) {
             metaBpm: song._metaBpm,
             metaGenre: song._metaGenre,
             metaCover: song._metaCover,
+            metaTrack: song._metaTrack === true,
             downloadLyric: song._withLyric || song._lyricOnly,
             lyricWithTranslation: song._lyricWithTranslation,
             lyricDelay: song._lyricDelay,
@@ -3373,17 +3443,17 @@ export function DownloadsView(ctx) {
 
     function openEditModal(song) {
         const settings = store.get().settings;
+        const isBundle = song._albumBundle && Array.isArray(song.tracks);
         openThreeTabDownloadModal(ctx, {
             title: '编辑下载设置',
             confirmText: '保存',
             initial: initialFromSong(song, settings),
             onConfirm: (r) => {
-                const downloads = store.get().downloads.map((d) =>
-                    d.id === song.id ? applyResultToSong(d, r) : d
-                );
-                store.update({ downloads });
+                store.update({
+                    downloads: isBundle ? applyBundleEditToDownload(song, r) : applyEditToDownload(song, r),
+                });
                 store.persist();
-                Toast('已更新下载设置', 'success', 1400);
+                Toast(isBundle ? '已更新整组设置（' + song.tracks.length + ' 首已同步）' : '已更新下载设置', 'success', 1400);
             },
         });
     }
@@ -3410,6 +3480,169 @@ export function DownloadsView(ctx) {
         });
     }
 
+    function applyEditToDownload(song, r) {
+        return store.get().downloads.map((d) => {
+            if (d._albumBundle && Array.isArray(d.tracks)) {
+                if (d.id === song.id) {
+                    return {
+                        ...d,
+                        _historyRecord: r.historyRecord !== false,
+                        tracks: d.tracks.map((t) => applyResultToSong(t, r)),
+                    };
+                }
+                if (d.tracks.some((t) => t.id === song.id)) {
+                    return {
+                        ...d,
+                        tracks: d.tracks.map((t) => (t.id === song.id ? applyResultToSong(t, r) : t)),
+                    };
+                }
+                return d;
+            }
+            return d.id === song.id ? applyResultToSong(d, r) : d;
+        });
+    }
+
+    function applyBundleEditToDownload(bundle, r) {
+        return store.get().downloads.map((d) => {
+            if (d.id !== bundle.id || !d._albumBundle || !Array.isArray(d.tracks)) return d;
+            return {
+                ...d,
+                _historyRecord: r.historyRecord !== false,
+                tracks: d.tracks.map((t) => applyResultToSong(t, r)),
+            };
+        });
+    }
+
+    function removeSong(song) {
+        const downloads = [...store.get().downloads];
+        const bi = downloads.findIndex(
+            (d) => d._albumBundle && Array.isArray(d.tracks) && d.tracks.some((t) => t.id === song.id)
+        );
+        if (bi >= 0) {
+            const tracks = downloads[bi].tracks.filter((t) => t.id !== song.id);
+            if (tracks.length) {
+                downloads[bi] = { ...downloads[bi], tracks };
+            } else {
+                expandedBundles.delete(downloads[bi].id);
+                downloads.splice(bi, 1);
+            }
+        } else {
+            const i = downloads.findIndex((d) => d.id === song.id);
+            if (i >= 0) downloads.splice(i, 1);
+        }
+        store.update({ downloads });
+        store.persist();
+    }
+
+    function makeSongHandlers(song) {
+        return {
+            ctx,
+            selectable: false,
+            onPlay: () => player.playNow(song),
+            onPlayNext: () => {
+                player.playNext(song);
+                Toast(`已设为下一首播放：${song.title}`, 'success', 1600);
+            },
+            onEdit: () => openEditModal(song),
+            onDownloadNow: () => startDownloadOne(song),
+            onDownloadLyric: (s) => handleDownloadLyric(s, ctx),
+            contentBadges: songContentBadges(song),
+            onRemove: () => removeSong(song),
+        };
+    }
+
+    function renderBundleRow(bundle, visibleTracks) {
+        const expanded = expandedBundles.has(bundle.id);
+        const row = el('div', {
+            class: 'song-row album-bundle-row',
+            dataset: { id: bundle.id },
+        });
+        row.__song = bundle;
+
+        const toggle = el('span', { class: 'album-bundle-toggle' }, icon('chevron-right'));
+
+        const actionsEl = el('div', { class: 'song-actions' });
+        actionsEl.appendChild(makeActionButton('download', '下载整专辑', false, () => startDownloadOne(bundle)));
+        actionsEl.appendChild(makeActionButton('edit', '编辑整组设置', false, () => openEditModal(bundle)));
+        actionsEl.appendChild(makeActionButton('trash', '移除整组', true, () => removeSong(bundle)));
+
+        row.appendChild(toggle);
+        row.appendChild(
+            el('div', { class: 'song-info' },
+                el('div', { class: 'song-title-row' },
+                    el('span', { class: 'song-title', text: bundle.title || '未知专辑' })
+                ),
+                el('div', { class: 'song-artist-row' },
+                    el('span', {
+                        class: 'song-artist album-bundle-row__meta',
+                        text: `整专辑 · ${bundle.tracks.length} 首`,
+                    })
+                )
+            )
+        );
+        row.appendChild(actionsEl);
+
+        const wrap = el('div', { class: 'album-bundle' + (expanded ? ' is-expanded' : '') });
+        wrap.appendChild(row);
+
+        const children = el('div', {
+            class: 'album-bundle__children' + (expanded ? ' is-open is-settled' : ''),
+        });
+        const inner = el('div', { class: 'album-bundle__children-inner' });
+        const list = el('div', { class: 'album-bundle__list' });
+        for (const track of visibleTracks) {
+            const childRow = SongRow(track, {
+                ...makeSongHandlers(track),
+                viewOverride: 'list',
+            });
+            childRow.classList.add('album-bundle__child');
+            list.appendChild(childRow);
+        }
+        inner.appendChild(list);
+        children.appendChild(inner);
+        wrap.appendChild(children);
+
+        row.addEventListener('click', (e) => {
+            if (e.target.closest('.song-actions')) return;
+            toggleBundle(bundle, wrap, children);
+        });
+        return wrap;
+    }
+
+    function toggleBundle(bundle, wrap, children) {
+        if (expandedBundles.has(bundle.id)) {
+            expandedBundles.delete(bundle.id);
+            children.classList.remove('is-settled');
+            requestAnimationFrame(() => {
+                if (!expandedBundles.has(bundle.id)) {
+                    children.classList.remove('is-open');
+                    wrap.classList.remove('is-expanded');
+                }
+            });
+            return;
+        }
+
+        expandedBundles.add(bundle.id);
+        wrap.classList.add('is-expanded');
+        children.classList.add('is-open');
+
+        let settled = false;
+        const settle = () => {
+            if (settled) return;
+            settled = true;
+            if (children.classList.contains('is-open')) {
+                children.classList.add('is-settled');
+            }
+        };
+        const onEnd = (e) => {
+            if (e.target !== children || e.propertyName !== 'grid-template-rows') return;
+            children.removeEventListener('transitionend', onEnd);
+            settle();
+        };
+        children.addEventListener('transitionend', onEnd);
+        setTimeout(settle, 320);
+    }
+
     function render() {
         const state = store.get();
         const search = state.downloadsSearch || '';
@@ -3429,13 +3662,15 @@ export function DownloadsView(ctx) {
 
         const filter = state.filter?.downloads || null;
 
+        const expandedKey = [...expandedBundles].sort().join(',');
         if (
             state.downloads === lastDownloads &&
             search === lastSearch &&
             page === lastPage &&
             perPage === lastPerPage &&
             filter === lastFilter &&
-            state.wikiMap === lastWikiMap
+            state.wikiMap === lastWikiMap &&
+            expandedKey === lastExpandedBundles
         ) return;
 
         lastDownloads = state.downloads;
@@ -3444,6 +3679,7 @@ export function DownloadsView(ctx) {
         lastPerPage = perPage;
         lastFilter = filter;
         lastWikiMap = state.wikiMap;
+        lastExpandedBundles = expandedKey;
 
         songListEl.innerHTML = '';
         paginationHost.innerHTML = '';
@@ -3457,7 +3693,10 @@ export function DownloadsView(ctx) {
         }
 
         let filtered = search
-            ? state.downloads.filter((s) => matchSearch(s, search))
+            ? state.downloads.filter((s) =>
+                s._albumBundle
+                    ? matchSearch(s, search) || (s.tracks || []).some((t) => matchSearch(t, search))
+                    : matchSearch(s, search))
             : state.downloads;
 
         if (filter) {
@@ -3466,8 +3705,12 @@ export function DownloadsView(ctx) {
                 queue: state.queue.tracks,
                 wikiMap: state.wikiMap,
             });
-            filtered = filtered.filter((s, idx) => evaluate(filter, s, { ...filterCtx, index: idx }));
+            filtered = filtered.filter((s, idx) =>
+                s._albumBundle ? true : evaluate(filter, s, { ...filterCtx, index: idx }));
         }
+
+        const bundles = filtered.filter((s) => s._albumBundle);
+        const plainSongs = filtered.filter((s) => !s._albumBundle);
 
         if (!filtered.length) {
             const emptyEl = EmptyState('没有匹配的歌曲', 'search');
@@ -3477,16 +3720,31 @@ export function DownloadsView(ctx) {
             return;
         }
 
-        const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+        const seqNumbers = new Map();
+        let seq = 0;
+        for (const d of state.downloads) {
+            if (d._albumBundle) continue;
+            seq += 1;
+            seqNumbers.set(d.id, seq);
+        }
+
+        const totalPages = Math.max(1, Math.ceil(plainSongs.length / perPage));
         const currentPage = Math.min(Math.max(1, page), totalPages);
         const start = (currentPage - 1) * perPage;
-        const slice = filtered.slice(start, start + perPage);
+        const slice = plainSongs.slice(start, start + perPage);
 
-        store.setVisibleTracks(slice);
+        const visibleTracks = [...bundles.flatMap((b) => (search ? (b.tracks || []).filter((t) => matchSearch(t, search)) : (b.tracks || []))), ...slice];
+        store.setVisibleTracks(visibleTracks);
         store.setAllTracks(state.downloads);
         store.setFilteredTracks(filtered);
 
-        const downloadsAll = state.downloads;
+        for (const bundle of bundles) {
+            const visibleInner = search
+                ? (bundle.tracks || []).filter((t) => matchSearch(t, search))
+                : (bundle.tracks || []);
+            songListEl.appendChild(renderBundleRow(bundle, visibleInner));
+        }
+
         for (const song of slice) {
             const row = SongRow(song, {
                 ctx,
@@ -3502,18 +3760,12 @@ export function DownloadsView(ctx) {
                 onDownloadNow: () => startDownloadOne(song),
                 onDownloadLyric: (s) => handleDownloadLyric(s, ctx),
                 contentBadges: songContentBadges(song),
-                onRemove: () => {
-                    const downloads = [...store.get().downloads];
-                    const i = downloads.indexOf(song);
-                    if (i >= 0) downloads.splice(i, 1);
-                    store.update({ downloads });
-                    store.persist();
-                },
+                onRemove: () => removeSong(song),
             });
-            const realIndex = downloadsAll.indexOf(song);
-            if (realIndex >= 0) row.dataset.index = String(realIndex);
-            if (realIndex >= 0 && !row.querySelector('.song-index')) {
-                const idxEl = el('span', { class: 'song-index', text: String(realIndex + 1) });
+            const realIndex = seqNumbers.get(song.id);
+            if (realIndex != null) row.dataset.index = String(realIndex - 1);
+            if (realIndex != null && !row.querySelector('.song-index')) {
+                const idxEl = el('span', { class: 'song-index', text: String(realIndex) });
                 const checkbox = row.querySelector('.song-select');
                 const ref = checkbox || row.firstElementChild;
                 if (ref) ref.insertAdjacentElement('afterend', idxEl);
@@ -3525,7 +3777,12 @@ export function DownloadsView(ctx) {
         if (!gestures) {
             gestures = attachListGestures(songListEl, {
                 kind: 'downloads',
-                canReorder: () => !search && !filter,
+                canReorder: () => {
+                    const cur = store.get();
+                    return !(cur.downloadsSearch || '')
+                        && !cur.filter?.downloads
+                        && !cur.downloads.some((d) => d._albumBundle);
+                },
             });
         }
 

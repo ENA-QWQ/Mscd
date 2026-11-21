@@ -111,6 +111,7 @@ function normalizeSong(raw) {
         pic: raw.pic ?? raw.cover ?? '',
         lrc: raw.lrc ?? '',
         duration: raw.duration ?? 0,
+        trackNo: Number.isFinite(Number(raw.no)) && Number(raw.no) > 0 ? Number(raw.no) : null,
         mv: raw.mv != null ? String(raw.mv) : (raw.mvid != null ? String(raw.mvid) : ''),
     };
 }
