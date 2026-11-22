@@ -3339,8 +3339,21 @@ export function DownloadsView(ctx) {
             return;
         }
 
+        let expandedCount = 0;
+        try {
+            expandedCount = downloader.expandDownloadEntries(downloads).length;
+        } catch {
+            expandedCount = downloads.length;
+        }
+        if (!expandedCount) {
+            Toast('没有可下载的内容，请检查歌曲的下载设置', 'warning', 2400);
+            return;
+        }
+
         const quality = store.get().settings.downloadQuality;
         const mode = store.get().settings.downloadMode;
+
+        Toast(`已开始下载 ${expandedCount} 个任务，可在任务面板查看进度`, 'info', 2400);
 
         try {
             if (mode === 'stream') {
@@ -3377,6 +3390,7 @@ export function DownloadsView(ctx) {
 
         try {
             if (expanded.length >= 2) {
+                Toast(`已开始下载 ${expanded.length} 个任务，可在任务面板查看进度`, 'info', 2400);
                 if (mode === 'stream') {
                     await downloader.downloadBatchToDisk([song], quality);
                 } else {
